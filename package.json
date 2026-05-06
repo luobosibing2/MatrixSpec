@@ -1,0 +1,23 @@
+{
+  "name": "matspec-community",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MatSpec methodology, templates, and CLI workflow tools.",
+  "bin": {
+    "matspec": "./bin/matspec.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "files": [
+    "bin",
+    "src",
+    "templates",
+    "docs",
+    "scripts"
+  ],
+  "license": "MIT"
+}
