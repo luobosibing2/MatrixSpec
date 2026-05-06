@@ -132,6 +132,27 @@ process.stdout.write(JSON.stringify({ result }));
 `;
 }
 
+function opencodeMockScript() {
+  return `
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+if (process.env.MOCK_CALLS_FILE) fs.appendFileSync(process.env.MOCK_CALLS_FILE, args.join("\\u0000") + "\\n", "utf8");
+if (process.env.MOCK_FAIL === "1") process.exit(7);
+if (process.env.MOCK_EMPTY === "1") process.exit(0);
+const previousCalls = process.env.MOCK_CALLS_FILE && fs.existsSync(process.env.MOCK_CALLS_FILE)
+  ? fs.readFileSync(process.env.MOCK_CALLS_FILE, "utf8").split("\\n").filter(Boolean).length
+  : 0;
+const prompt = fs.readFileSync(0, "utf8");
+const isSpec = previousCalls > 1 || prompt.includes("Generated design.md") || prompt.includes("spec.md");
+const text = isSpec
+  ? "# Mock opencode SPEC\\n\\nDerived from design by mock opencode.\\n\\n## 1. Component Purpose\\nMock spec.\\n\\n## 2. Domain Terminology\\nMock terms.\\n\\n## 3. Actors and Boundaries\\nMock boundaries.\\n\\n## 4. DFX Constraints\\nMock DFX.\\n\\n## 5. Core Capabilities\\nMock capabilities.\\n\\n## 6. Data Constraints\\nMock data constraints.\\n"
+  : "# Mock opencode Design\\n\\nModule path: src/auth\\n\\n## 1. Design Overview\\nMock design.\\n\\n## 2. System Architecture\\nMock architecture.\\n\\n## 3. Data Model\\nMock data.\\n\\n## 4. Interface Design\\nMock interfaces.\\n\\n## 5. Core Flow Design\\nMock flow.\\n\\n## 6. Algorithm Design\\nMock algorithms.\\n\\n## 7. Caching Design\\nMock cache.\\n\\n## 8. Error Handling Design\\nMock errors.\\n\\n## 9. Observability\\nMock observability.\\n\\n## 10. Security Design\\nMock security.\\n";
+process.stdout.write(JSON.stringify({ type: "step_start", part: { type: "step-start" } }) + "\\n");
+process.stdout.write(JSON.stringify({ type: "text", part: { type: "text", text, metadata: { openai: { phase: "final_answer" } } } }) + "\\n");
+process.stdout.write(JSON.stringify({ type: "step_finish", part: { type: "step-finish" } }) + "\\n");
+`;
+}
+
 function writeProjectFile(root, file, content = "") {
   const target = path.join(root, file);
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -520,19 +541,33 @@ test("scan ignores monorepo package artifacts without hiding source build module
   assert.equal(scan.primaryExtension, ".ts");
 });
 
-test("generate rejects unimplemented opencode runner without creating a run", () => {
+test("external opencode runner writes staged design and spec artifacts", () => {
   const root = tempProject();
-  json(run(["init", root, "--integration", "none", "--json"]));
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  const callsFile = path.join(binDir, "calls.txt");
+  makeMockRunner(binDir, "opencode", opencodeMockScript());
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
 
-  const result = run(["--path", root, "generate", "--runner", "opencode", "--json"]);
-  assert.equal(result.status, 1);
-  assert.equal(result.stderr, "");
-  const payload = JSON.parse(result.stdout);
-  assert.equal(payload.ok, false);
-  assert.equal(payload.code, "RUNNER_NOT_IMPLEMENTED");
-  assert.equal(payload.runner, "opencode");
-  assert.ok(payload.next.includes("matspec generate --runner auto"));
-  assert.equal(fs.readdirSync(path.join(root, ".matspec-cli/runs")).filter((entry) => entry !== "latest.json").length, 0);
+  const generated = json(
+    run(["--path", root, "generate", "--runner", "opencode", "--mode", "direct", "--json"], {
+      env: mockRunnerEnv(binDir, { MOCK_CALLS_FILE: callsFile })
+    })
+  );
+  const runDir = path.join(root, ".matspec-cli/runs", generated.runId);
+  const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
+  assert.equal(manifest.generationMode, "direct");
+  assert.equal(manifest.runner, "opencode");
+  assert.equal(manifest.provider, "opencode");
+  assert.equal(manifest.model, null);
+  assert.equal(manifest.logs.external, "logs/external.json");
+  assert.match(fs.readFileSync(path.join(runDir, "design.md"), "utf8"), /Mock opencode Design/);
+  assert.match(fs.readFileSync(path.join(runDir, "spec.md"), "utf8"), /Derived from design by mock opencode/);
+  const calls = fs.readFileSync(callsFile, "utf8");
+  assert.match(calls, /run/);
+  assert.match(calls, /--format/);
+  assert.match(calls, /json/);
+  assert.match(calls, /--dir/);
 });
 
 test("generate returns JSON on stdout when project is not initialized", () => {
@@ -603,6 +638,22 @@ test("runner auto selects mock claude when codex is unavailable", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "manifest.json"), "utf8"));
   assert.equal(manifest.runner, "claude");
   assert.equal(manifest.provider, "claude");
+  assert.equal(manifest.generationMode, "react");
+  assert.equal(manifest.generationReason, "module_first_pipeline");
+  assert.ok(manifest.artifacts.modules.length > 0);
+});
+
+test("runner auto selects mock opencode when codex and claude are unavailable", () => {
+  const root = tempProject();
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  makeMockRunner(binDir, "opencode", opencodeMockScript());
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
+
+  const generated = json(run(["--path", root, "generate", "--json"], { env: mockRunnerEnv(binDir) }));
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "manifest.json"), "utf8"));
+  assert.equal(manifest.runner, "opencode");
+  assert.equal(manifest.provider, "opencode");
   assert.equal(manifest.generationMode, "react");
   assert.equal(manifest.generationReason, "module_first_pipeline");
   assert.ok(manifest.artifacts.modules.length > 0);

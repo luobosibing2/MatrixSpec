@@ -95,6 +95,12 @@ OpenSpec 类工具很适合轻量增量变更，但如果没有恢复当前系�
 matspec integration install all
 ```
 
+`generate --runner auto` 会优先复用本机已登录的工具：
+
+```text
+codex -> claude -> opencode -> deterministic stub
+```
+
 支持仓库级：
 
 - opencode commands

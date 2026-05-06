@@ -93,14 +93,15 @@ async function promptDefaultRunner(externalAgents) {
   const choices = ["auto"];
   if (externalAgents.codex.available) choices.push("codex");
   if (externalAgents.claude.available) choices.push("claude");
+  if (externalAgents.opencode.available) choices.push("opencode");
 
   console.log(style("matspec init", "title"));
   console.log("Choose the default documentation generation tool. matspec generate will use this choice later.");
   console.log("");
-  console.log("  auto   Recommended: codex -> claude -> deterministic stub");
+  console.log("  auto   Recommended: codex -> claude -> opencode -> deterministic stub");
   if (choices.includes("codex")) console.log("  codex  Use the locally authenticated Codex CLI");
   if (choices.includes("claude")) console.log("  claude Use the locally authenticated Claude Code CLI");
-  if (externalAgents.opencode.available) console.log("  opencode detected, but the generate runner is not implemented yet");
+  if (choices.includes("opencode")) console.log("  opencode Use the locally authenticated opencode CLI");
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -113,7 +114,7 @@ async function promptDefaultRunner(externalAgents) {
 
 function validateDefaultRunner(defaultRunner, externalAgents = null, options = {}) {
   if (!defaultRunner) return null;
-  if (["codex", "claude"].includes(defaultRunner) && externalAgents && !externalAgents[defaultRunner]?.available) {
+  if (["codex", "claude", "opencode"].includes(defaultRunner) && externalAgents && !externalAgents[defaultRunner]?.available) {
     return {
       ok: false,
       code: "RUNNER_NOT_FOUND",
@@ -122,21 +123,12 @@ function validateDefaultRunner(defaultRunner, externalAgents = null, options = {
       next: isZh(options) ? ["matspec init --default-runner auto", `安装并登录 ${defaultRunner} 后重试`] : ["matspec init --default-runner auto", `Install and authenticate ${defaultRunner}, then retry`]
     };
   }
-  if (["auto", "codex", "claude"].includes(defaultRunner)) return null;
-  if (defaultRunner === "opencode") {
-    return {
-      ok: false,
-      code: "RUNNER_NOT_IMPLEMENTED",
-      runner: defaultRunner,
-      message: tr(options, "The opencode generate runner is not implemented yet. Choose auto, codex, or claude.", "当前 generate runner 暂未实现 opencode，请选择 auto、codex 或 claude。"),
-      next: ["matspec init --default-runner auto"]
-    };
-  }
+  if (["auto", "codex", "claude", "opencode"].includes(defaultRunner)) return null;
   return {
     ok: false,
     code: "RUNNER_NOT_IMPLEMENTED",
     runner: defaultRunner,
-    message: tr(options, `Unsupported default runner: ${defaultRunner}. Use auto, codex, or claude.`, `不支持的默认生成工具：${defaultRunner}。请使用 auto、codex 或 claude。`),
+    message: tr(options, `Unsupported default runner: ${defaultRunner}. Use auto, codex, claude, or opencode.`, `不支持的默认生成工具：${defaultRunner}。请使用 auto、codex、claude 或 opencode。`),
     next: ["matspec init --default-runner auto"]
   };
 }
@@ -330,9 +322,8 @@ Options:
   --json                                machine-readable JSON output
 
 Notes:
-  No API key is required by default. auto reuses authenticated local Codex/Claude CLIs first.
+  No API key is required by default. auto reuses authenticated local Codex/Claude/opencode CLIs first.
   If no local tool is available, MatSpec falls back to the deterministic stub.
-  The opencode runner is not implemented yet.
 `;
 }
 
@@ -375,8 +366,7 @@ function helpZh() {
   --json                                输出机器可读 JSON
 
 说明：
-  默认不需要 API key。auto 会优先复用本机已登录的 Codex/Claude CLI；
+  默认不需要 API key。auto 会优先复用本机已登录的 Codex/Claude/opencode CLI；
   没有可用本地工具时会 fallback 到 deterministic stub。
-  opencode runner 当前未实现。
 `;
 }

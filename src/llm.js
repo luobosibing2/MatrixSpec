@@ -14,16 +14,7 @@ export function resolveGenerationStrategy(paths, options = {}, env = process.env
     };
   }
 
-  if (runner === "opencode") {
-    return {
-      ok: false,
-      code: "RUNNER_NOT_IMPLEMENTED",
-      runner,
-      message: "The opencode runner is not implemented yet.",
-      next: ["matspec generate --runner auto", "matspec generate --runner codex", "matspec generate --runner claude"]
-    };
-  }
-  if (!["auto", "codex", "claude"].includes(runner)) {
+  if (!["auto", "codex", "claude", "opencode"].includes(runner)) {
     return {
       ok: false,
       code: "RUNNER_NOT_IMPLEMENTED",
@@ -104,6 +95,7 @@ function selectGenerationMode({ requestedMode }) {
 function defaultExternalModel(runner) {
   if (runner === "codex") return "gpt-5.3-codex-spark";
   if (runner === "claude") return "claude-sonnet-4-6";
+  if (runner === "opencode") return null;
   return null;
 }
 
@@ -114,7 +106,7 @@ function fallbackExternalModel(runner) {
 
 function selectRunner(requestedRunner, env) {
   if (requestedRunner === "auto") {
-    for (const candidate of ["codex", "claude"]) {
+    for (const candidate of ["codex", "claude", "opencode"]) {
       const executable = findExecutable(candidate, env);
       if (executable) return { ok: true, runner: candidate, executable };
     }
