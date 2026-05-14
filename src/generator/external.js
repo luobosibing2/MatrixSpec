@@ -347,7 +347,24 @@ function snapshotWorkspace(root, allowedRunDir) {
 }
 
 function fileHash(file) {
-  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+  const stats = fs.statSync(file);
+  if (stats.size <= 256 * 1024) {
+    return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+  }
+  const fd = fs.openSync(file, "r");
+  const hash = crypto.createHash("sha256");
+  const buffer = Buffer.alloc(256 * 1024);
+  try {
+    let position = 0;
+    while (position < stats.size) {
+      const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, position);
+      hash.update(buffer.subarray(0, bytesRead));
+      position += bytesRead;
+    }
+    return hash.digest("hex");
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function isAllowedRunPath(file, allowedRunDir) {
