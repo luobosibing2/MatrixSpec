@@ -110,7 +110,8 @@ export function runRunnerTask({ paths, run, executable, strategy, task, prompt }
     attemptLogs.push(commandLog);
 
     if (result.error || result.status !== 0) {
-      lastFailure = failure("EXTERNAL_RUNNER_FAILED", `External runner failed: ${strategy.runner} ${task}`, {
+      const runnerError = parseRunnerError(result.stdout || "", result.stderr || "");
+      lastFailure = failure(runnerError.code, runnerError.message || `External runner failed: ${strategy.runner} ${task}`, {
         runner: strategy.runner,
         task,
         status: result.status,
@@ -168,11 +169,11 @@ function buildArgs({ paths, strategy, outputFile }) {
     "--output-format",
     "json",
     "--max-turns",
-    "3",
+    "1",
     "--permission-mode",
     "plan",
-    "--tools",
-    "Read,Grep,Glob"
+    "--disallowedTools",
+    "Read,Grep,Glob,Bash,Edit,Write,Task,WebSearch,WebFetch,NotebookEdit"
   ];
 }
 
@@ -234,10 +235,69 @@ function parseOutput({ strategy, task, stdout, outputFile }) {
   };
 }
 
+// Tight-enough to avoid false positives like "token limit exceeded" (context-length, not quota)
+// or "rate calculation failed". 429 status always wins; this regex is only a textual fallback.
+const RATE_LIMIT_PHRASE = /\b(rate[\s-]?limit(ed)?|hit (your )?limit|quota|too many requests)\b/i;
+
+function parseRunnerError(stdout, stderr = "") {
+  const fallback = { code: "EXTERNAL_RUNNER_FAILED", message: "" };
+  const event = extractRunnerErrorEvent(String(stdout || "").trim()) || extractRunnerErrorEvent(String(stderr || "").trim());
+  if (!event) return fallback;
+  const message = String(event.result || event.error?.message || event.message || "").trim();
+  const status = event.api_error_status || event.status;
+  if (status === 429 || (status !== 200 && RATE_LIMIT_PHRASE.test(message))) {
+    return {
+      code: "EXTERNAL_RUNNER_RATE_LIMITED",
+      message: message ? `External runner rate limited: ${message}` : "External runner rate limited."
+    };
+  }
+  if (message) return { code: "EXTERNAL_RUNNER_FAILED", message: `External runner returned an error: ${message}` };
+  return fallback;
+}
+
+function extractRunnerErrorEvent(trimmed) {
+  if (!trimmed) return null;
+  // claude -p --output-format json normally returns a single JSON object on success.
+  // On error / multi-turn, the stdout can degrade to JSONL events. Try the single-object
+  // shape first, then scan lines from the end so the last terminal *error* event wins.
+  try {
+    const json = JSON.parse(trimmed);
+    if (isErrorEvent(json)) return json;
+  } catch {
+    // fall through to JSONL scan
+  }
+  const lines = trimmed.split(/\r?\n/);
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (isErrorEvent(event)) return event;
+  }
+  return null;
+}
+
+function isErrorEvent(event) {
+  // Gate on explicit error markers only. parseRunnerError is invoked after the runner exits
+  // non-zero, but stdout can still contain a bare "result" event from a partial success;
+  // treating that as an error would misclassify the failure mode.
+  if (!event || typeof event !== "object") return false;
+  return (
+    event.is_error === true ||
+    Boolean(event.api_error_status) ||
+    event.status === 429 ||
+    Boolean(event.error)
+  );
+}
+
 function buildDesignPrompt(scan, plan, runner) {
   const templates = readFullTemplates();
   return `You are the MatSpec documentation generation runner (${runner}).
-Read and analyze the repository only.
+Use only the repository scan context in this prompt.
 Do not modify any files.
 Do not call git apply.
 Do not write to matspec/specs.
@@ -442,6 +502,8 @@ function nextForError(code) {
       return ["matspec generate --runner auto", "Confirm the matching CLI is installed and authenticated"];
     case "EXTERNAL_RUNNER_FAILED":
       return ["Inspect logs/*stdout.log and logs/*stderr.log under the run directory", "matspec generate --runner auto"];
+    case "EXTERNAL_RUNNER_RATE_LIMITED":
+      return ["Wait for the runner quota to reset", "matspec generate --runner auto"];
     case "EXTERNAL_RUNNER_EMPTY_OUTPUT":
     case "EXTERNAL_RUNNER_UNPARSEABLE_OUTPUT":
       return ["Inspect logs/*stdout.log and logs/*stderr.log under the run directory", "Confirm the runner's final output has a Markdown heading"];

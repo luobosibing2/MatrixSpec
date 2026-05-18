@@ -47,6 +47,26 @@ export function slugify(input) {
     .toLowerCase();
 }
 
+/**
+ * Filesystem-safe slug for module artifact filenames (e.g. `modules/<slug>.md`,
+ * `logs/prompts/modules/<slug>.md`). Maps `.`, empty, and whitespace-only inputs to
+ * "project-root" so the project-root fallback module has a stable name on disk.
+ *
+ * Prefer this over `slugify` for any module-derived filename — they have different rules
+ * (slugify keeps `.`, retains certain delimiters; moduleSlug strips everything that is not
+ * a-z 0-9 down to a single `-`). Use `slugify` for display strings, change-log slugs, etc.
+ */
+export function moduleSlug(modulePath) {
+  const raw = String(modulePath || "").trim();
+  if (raw === "" || raw === ".") return "project-root";
+  return (
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "project-root"
+  );
+}
+
 export function nowStamp(date = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}`;

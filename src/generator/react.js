@@ -1,9 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fakeCompletion } from "../llm.js";
-import { ensureDir, rel, slugify, writeJson } from "../util.js";
+import { ensureDir, moduleSlug, rel, writeJson } from "../util.js";
 import { createWorkspaceGuard, runRunnerTask } from "./external.js";
 import { commonOutputRules, readFullTemplates, specBlackBoxRules } from "./templates.js";
+import { MODULE_PROMPT_LIMITS, limitedContext, limitedLines } from "./limits.js";
+
+const {
+  MAX_MODULE_FILES_IN_PROMPT,
+  MAX_MODULE_TREE_LINES,
+  MAX_MODULE_README_CONTEXT_CHARS,
+  MAX_MODULE_DOCS_CONTEXT_CHARS
+} = MODULE_PROMPT_LIMITS;
 
 export function runReactGeneration({ paths, run, scan, plan, strategy, progress = null }) {
   const modulesDir = path.join(run.dir, "modules");
@@ -16,7 +24,8 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
   const guard = isFake ? null : createWorkspaceGuard(paths, run);
   const moduleResults = [];
   for (const [index, module] of plan.modules.entries()) {
-    const slug = `${slugify(module.path) || "project-root"}.md`;
+    const moduleArtifact = moduleSlug(module.path);
+    const slug = `${moduleArtifact}.md`;
     progress?.(`Module ${index + 1}/${plan.modules.length}: ${module.name} (${module.path})`);
     const prompt = buildModulePrompt(scan, module);
     const promptFile = path.join(modulePromptsDir, slug);
@@ -33,7 +42,7 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
           paths,
           run,
           strategy,
-          task: `module-${slugify(module.path) || "project-root"}`,
+          task: `module-${moduleArtifact}`,
           prompt
         });
     if (!result.ok && !result.text) return result;
@@ -155,10 +164,11 @@ function externalCompletion({ paths, run, strategy, task, prompt }) {
 function buildModulePrompt(scan, module) {
   const moduleFiles = scan.includedFiles.filter((file) => module.path === "." || file === module.path || file.startsWith(`${module.path}/`));
   const moduleTree = buildTree(moduleFiles);
-  const readmeContext = scan.readmeFiles.map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n");
-  const docsContext = scan.docsFiles.map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n");
+  const readmeContext = limitedContext(scan.readmeFiles, MAX_MODULE_README_CONTEXT_CHARS);
+  const docsContext = limitedContext(scan.docsFiles, MAX_MODULE_DOCS_CONTEXT_CHARS);
   return `You are the MatSpec module documentation runner.
 Task: generate an intermediate module design document for later design.md synthesis.
+Use only the repository scan context in this prompt. Do not call tools or request additional repository reads.
 
 ${commonOutputRules()}
 
@@ -172,10 +182,11 @@ Path: ${module.path}
 Description: ${module.description}
 
 Module files:
-${moduleFiles.slice(0, 40).map((file) => `- ${file}`).join("\n") || "- none"}
+${moduleFiles.slice(0, MAX_MODULE_FILES_IN_PROMPT).map((file) => `- ${file}`).join("\n") || "- none"}
+${moduleFiles.length > MAX_MODULE_FILES_IN_PROMPT ? `\n... ${moduleFiles.length - MAX_MODULE_FILES_IN_PROMPT} more files omitted from prompt` : ""}
 
 Module tree:
-${moduleTree || "(empty)"}
+${limitedLines(moduleTree, MAX_MODULE_TREE_LINES) || "(empty)"}
 
 README context:
 ${readmeContext || "(none)"}
