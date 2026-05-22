@@ -1,0 +1,2383 @@
+{
+  "generatedAt": "2026-05-08T16:30:41.833Z",
+  "mode": "fast",
+  "source": "DeepWiki public Ask API plus DeepWiki wiki fallback for rate-limited items",
+  "questionCount": 40,
+  "answerCount": 40,
+  "answers": [
+    {
+      "id": "mindcluster-02",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 2,
+      "type": "架构概览",
+      "difficulty": 1,
+      "question": "`component/ascend-common` 作为公共库被其他多个组件依赖，它的三个子目录 `api/`、`common-utils/`、`devmanager/` 分别提供什么能力？其他组件通过什么 Go module 路径引用它？作为新开发者，在新建一个组件时应优先了解这三个子模块中的哪些内容？",
+      "mode": "fast",
+      "queryId": "mindcluster-02_87f28041-251f-47d4-9929-aba6a0182699",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "# ascend-common 公共库架构解析\n\n`component/ascend-common` 作为 MindCluster 系统的核心公共库，为其他组件提供基础能力支持。\n\n## 三个子目录的核心能力\n\n### `api/` 目录\n提供公共 API 定义和类型声明，包含系统中使用的通用数据结构、常量和接口定义。从各组件的导入语句可以看出，`ascend-common/api` 被广泛引用。\n\n### `common-utils/` 目录\n提供通用工具函数和基础设施，主要包括：\n- **hwlog**: 统一日志框架\n- **utils**: 通用工具函数集合\n- **cache**: 缓存相关工具\n- **ethtool**: 网络工具\n- **limiter**: 限流器\n- **rand**: 随机数生成器\n\n这些工具被各组件广泛使用，如 `ascend-common/common-utils/hwlog` 和 `ascend-common/common-utils/utils`。\n\n### `devmanager/` 目录\n提供 NPU 设备管理核心能力，是硬件抽象层的关键组件：\n- **设备接口抽象**: 定义 `DeviceInterface` 统一接口\n- **DCMI 封装**: 对华为 DCMI 库的 CGO 封装，支持动态库加载\n- **多版本支持**: 支持 DCMI v1 和 v2 API\n- **设备类型检测**: 自动检测不同型号的 Ascend NPU\n\n## Go Module 引用路径\n\n其他组件通过以下路径引用 ascend-common：\n```go\nimport (\n    \"ascend-common/api\"\n    \"ascend-common/common-utils/hwlog\"\n    \"ascend-common/common-utils/utils\"\n    \"ascend-common/devmanager\"\n)\n```\n\n从代码中可以看到，多个组件都使用这种导入方式。\n\n## 新开发者优先了解内容\n\n作为新开发者，建议按以下优先级了解：\n\n### 1. 优先级最高：`devmanager/`\n- **核心接口**: 理解 `DeviceInterface` 的设计理念和方法\n- **初始化流程**: 了解 `DetectDcmiApiVersion` 的版本检测机制\n- **设备管理**: 掌握设备状态查询、健康检查等基础功能\n\n### 2. 优先级中等：`common-utils/`\n- **日志系统**: 学习 `hwlog` 的使用方法，这是系统统一的日志框架\n- **工具函数**: 熟悉 `utils` 包中的常用工具函数\n\n### 3. 优先级较低：`api/`\n- **类型定义**: 在需要时查阅相关的数据结构和常量定义\n\n## Notes\n\n- `ascend-common` 在编译时需要与其他组件放在同一目录下\n- `devmanager` 包含了复杂的硬件抽象逻辑，是理解系统与 NPU 交互的关键\n- 各子模块之间存在依赖关系，建议按照 devmanager → common-utils → api 的顺序学习\n\nWiki pages you might want to explore:\n- [System Architecture (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#1.1)\n- [DCMI Interface and Initialization (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#9.1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/main.go",
+          "range_start": 29,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/main.go",
+          "range_start": 30,
+          "range_end": 31
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager.go",
+          "range_start": 33,
+          "range_end": 117
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/dcmi/dcmi.go",
+          "range_start": 17,
+          "range_end": 31
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_common.go",
+          "range_start": 37,
+          "range_end": 41
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/ranktable/common/common.go",
+          "range_start": 20,
+          "range_end": 22
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager.go",
+          "range_start": 33,
+          "range_end": 117
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_common.go",
+          "range_start": 58,
+          "range_end": 79
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/README.md",
+          "range_start": 7,
+          "range_end": 7
+        }
+      ],
+      "rawResponseEventCount": 51
+    },
+    {
+      "id": "mindcluster-01",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 1,
+      "type": "架构概览",
+      "difficulty": 1,
+      "question": "MindCluster 集群调度部分由哪些核心组件构成（如 NodeD、ascend-device-plugin、ascend-for-volcano、ascend-operator、ClusterD 等），各组件分别运行在集群级还是节点级，它们在\"用户提交训练 Job → 调度决策 → NPU 设备分配 → 容器运行\"这条主链路中各自承担什么职责，组件之间通过什么机制协作（如 K8s API、gRPC、ConfigMap 等）？",
+      "mode": "fast",
+      "queryId": "mindcluster-01_09bf20df-3475-4b51-ba8f-a0e1a339bebf",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "## MindCluster 集群调度核心组件概览\n\nMindCluster 集群调度系统由以下核心组件构成，分为集群级和节点级两个层次：\n\n### 组件分类及运行级别\n\n| 组件名称 | 运行级别 | 主要职责 |\n|---------|---------|---------|\n| **NodeD** | 节点级 | 节点硬件故障检测和上报 |\n| **Ascend Device Plugin** | 节点级 | NPU设备发现、健康检查、设备分配 |\n| **Ascend Docker Runtime** | 节点级 | 容器NPU设备挂载和依赖管理 |\n| **ClusterD** | 集群级 | 集群资源信息汇总和故障处理策略 |\n| **Ascend for Volcano** | 集群级 | NPU亲和性调度和资源分配决策 |\n| **Ascend Operator** | 集群级 | 训练任务生命周期管理和集合通信配置 |\n\n### 主链路职责分工\n\n#### 1. 用户提交训练 Job\n- **Ascend Operator** 接收用户提交的训练任务，创建相应的 PodGroup 和 Pod\n\n#### 2. 调度决策\n- **Ascend Device Plugin** 定期上报芯片拓扑信息和健康状态到 ConfigMap\n- **NodeD** 上报节点健康状态和硬件故障信息\n- **ClusterD** 汇总设备信息和节点信息，写入 cluster-info-cm\n- **Ascend for Volcano** 根据亲和性调度原则选择最优节点和芯片，在 Pod annotation 中写入分配信息\n\n#### 3. NPU 设备分配\n- **kubelet** 监测到 Pod 调度后，调用 Ascend Device Plugin 的 Allocate 函数\n- **Ascend Device Plugin** 根据 Pod annotation 中的分配信息，实际挂载对应的 NPU 设备\n\n#### 4. 容器运行\n- **Ascend Docker Runtime** 协助完成 NPU 设备和相关驱动的挂载\n- **Ascend Operator** 读取 Pod annotation 信息，生成 hccl.json 集合通信文件\n- 容器读取环境变量或 hccl.json 建立通信通道，开始训练任务\n\n### 组件协作机制\n\n#### Kubernetes API 机制\n- 所有组件通过 Kubernetes API 进行交互，包括 Pod、Node、ConfigMap 等 K8s 原生资源\n- Pod annotation 用于传递调度决策信息，如 `huawei.com/Ascend910`、`huawei.com/AscendReal` 等\n\n#### ConfigMap 机制\n- **device-info-cm**：存储芯片物理ID和拓扑信息\n- **node-info-cm**：存储节点健康状态和故障信息\n- **cluster-info-cm**：存储汇总后的集群资源信息\n\n#### gRPC 机制\n- **ClusterD** 通过 gRPC 与训练容器内部建立连接，控制训练进程进行重计算\n- **ClusterD** 通过 gRPC 与带外服务交互，传输任务信息\n\n### 调度流程图\n\n```mermaid\nflowchart TD\n    A[用户提交训练Job] --> B[Ascend Operator创建PodGroup]\n    B --> C[Ascend Device Plugin上报设备信息]\n    C --> D[NodeD上报节点状态]\n    D --> E[ClusterD汇总信息]\n    E --> F[Ascend for Volcano调度决策]\n    F --> G[写入Pod Annotation]\n    G --> H[kubelet调用Device Plugin]\n    H --> I[Ascend Device Plugin分配设备]\n    I --> J[Ascend Docker Runtime挂载设备]\n    J --> K[Ascend Operator生成通信配置]\n    K --> L[容器运行训练任务]\n```\n\n## Notes\n\n1. **Resilience Controller** 和 **Elastic Agent** 组件已经日落，分别将于2026年9月30日和12月30日删除\n2. 调度流程分为两种模式：默认情况下 Volcano 通过 `self-maintain-available-card=true` 自维护可用设备信息；当设置为 `false` 时，从 ConfigMap 的 `DeviceInfo` 字段获取可用设备信息\n3. 组件间通过标准 Kubernetes API、ConfigMap 和 gRPC 等机制实现松耦合协作，确保系统的可扩展性和可维护性。\n\nWiki pages you might want to explore:\n- [Troubleshooting Guide (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#12.4)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: docker/noded/OVERVIEW.zh.md",
+          "range_start": 14,
+          "range_end": 23
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docker/ascend-device-plugin/OVERVIEW.zh.md",
+          "range_start": 14,
+          "range_end": 31
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/introduction.md",
+          "range_start": 31,
+          "range_end": 40
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docker/clusterd/OVERVIEW.zh.md",
+          "range_start": 14,
+          "range_end": 25
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docker/ascend-for-volcano/OVERVIEW.zh.md",
+          "range_start": 15,
+          "range_end": 31
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docker/ascend-operator/OVERVIEW.zh.md",
+          "range_start": 14,
+          "range_end": 24
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 76,
+          "range_end": 79
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 68,
+          "range_end": 71
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 73,
+          "range_end": 74
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 75,
+          "range_end": 76
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/02_schedulling_process_of_the_ascend_ai_processor.md",
+          "range_start": 15,
+          "range_end": 17
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/02_schedulling_process_of_the_ascend_ai_processor.md",
+          "range_start": 18,
+          "range_end": 19
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/02_schedulling_process_of_the_ascend_ai_processor.md",
+          "range_start": 19,
+          "range_end": 20
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 83,
+          "range_end": 84
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 84,
+          "range_end": 85
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 85,
+          "range_end": 86
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/api/k8s.md",
+          "range_start": 60,
+          "range_end": 119
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/api/k8s.md",
+          "range_start": 92,
+          "range_end": 99
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 69,
+          "range_end": 71
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 73,
+          "range_end": 74
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 75,
+          "range_end": 76
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docker/clusterd/OVERVIEW.zh.md",
+          "range_start": 24,
+          "range_end": 25
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docker/clusterd/OVERVIEW.zh.md",
+          "range_start": 25,
+          "range_end": 26
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/overview.md",
+          "range_start": 7,
+          "range_end": 8
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/02_schedulling_process_of_the_ascend_ai_processor.md",
+          "range_start": 11,
+          "range_end": 35
+        }
+      ],
+      "rawResponseEventCount": 79
+    },
+    {
+      "id": "mindcluster-03",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 3,
+      "type": "核心概念",
+      "difficulty": 2,
+      "question": "代码中存在大量 `_v2` 后缀文件（如 `devmanager_v2.go`、`const_v2.go`、`common_info_v2.go`、`superpoddevice_v2.go` 等），这代表什么版本迭代策略？v1 和 v2 API 在设备管理语义或数据结构定义上的核心差异是什么？开发新功能时应优先使用哪套 API，两者是否可以混用？",
+      "mode": "fast",
+      "queryId": "mindcluster-03_5f32ae04-b98f-42a3-86ee-94bb8b216eef",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "## 版本迭代策略概述\n\n代码中的 `_v2` 后缀文件代表 DCMI (Device Control Management Interface) API 的第二代版本，主要用于支持新的硬件架构和简化设备管理语义。\n\n## v1 与 v2 API 的核心差异\n\n### 1. 设备标识方式差异\n- **v1 API**: 使用 `(cardID, deviceID)` 二元组标识设备，需要维护 ID 映射缓存\n- **v2 API**: 直接使用 `logicID` 单一标识符，简化了设备寻址\n\n### 2. 功能支持差异\nv2 API 不支持某些 v1 的功能，如：\n- `GetBrotherCardID()` - 获取兄弟卡 ID\n- `GetCardList()` - 获取卡列表\n- `GetDeviceMemoryInfo()` - 获取内存信息\n\n### 3. 硬件支持范围\n- **v1**: 主要支持 Ascend 310/310P/910/910B/910A3 等较早期硬件\n- **v2**: 主要支持 Ascend 910A5 等新型硬件，采用逻辑 ID 架构\n\n## API 版本检测机制\n\n系统通过 `DetectDcmiApiVersion()` 函数自动检测可用的 API 版本：\n\n1. 优先尝试初始化 v1 API\n2. 如果 v1 初始化失败（特别是 `FUNCTION_NOT_FOUND` 错误），则尝试 v2 API\n3. 返回第一个成功初始化的版本\n\n## 开发建议\n\n### 优先使用策略\n**新功能开发应优先使用 v2 API**，因为：\n- v2 是面向新硬件架构的现代接口\n- 使用更简洁的逻辑 ID 寻址方式\n- 减少了复杂的 ID 映射逻辑\n\n### 混用可能性\n**不建议混用 v1 和 v2 API**，原因如下：\n1. 两者使用不同的设备标识体系（cardID/deviceID vs logicID）\n2. 系统在运行时只能选择一种 API 版本\n3. 混用会导致代码复杂性和维护成本增加\n\n### 兼容性处理\n如果需要支持多种硬件，应该：\n1. 使用统一的 `DeviceInterface` 接口进行抽象\n2. 让系统自动检测并选择合适的 API 版本\n3. 在应用层通过接口调用，而非直接依赖具体实现\n\n## Notes\n\n- v2 API 在某些功能上存在限制，如虚拟设备管理、内存信息获取等，这些功能在 v2 中会返回 `errNotSupportedInDcmiV2` 错误\n- 系统提供了 Mock 实现用于测试，包括 `DeviceManagerMock` 和 `DeviceManagerV2` 的测试版本\n- DCMI 库通过动态加载机制 (`dlopen`/`dlsym`) 实现，允许同一二进制在不同驱动版本环境中运行\n\nWiki pages you might want to explore:\n- [DCMI Interface and Initialization (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#9.1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_common.go",
+          "range_start": 37,
+          "range_end": 56
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager.go",
+          "range_start": 126,
+          "range_end": 138
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_v2.go",
+          "range_start": 44,
+          "range_end": 45
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_v2.go",
+          "range_start": 141,
+          "range_end": 146
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_v2.go",
+          "range_start": 215,
+          "range_end": 218
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_test.go",
+          "range_start": 420,
+          "range_end": 431
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_common.go",
+          "range_start": 58,
+          "range_end": 79
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_common.go",
+          "range_start": 43,
+          "range_end": 56
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager.go",
+          "range_start": 33,
+          "range_end": 117
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_v2.go",
+          "range_start": 21,
+          "range_end": 24
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_test.go",
+          "range_start": 395,
+          "range_end": 431
+        }
+      ],
+      "rawResponseEventCount": 43
+    },
+    {
+      "id": "mindcluster-05",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 5,
+      "type": "接口设计",
+      "difficulty": 2,
+      "question": "`ascend-device-plugin/pkg/device` 目录下对多种 NPU 芯片的支持是如何抽象的？`ascendcommon.go` 定义了哪些公共接口或基础结构体，各芯片实现文件（`ascend310.go`、`ascend910.go` 等）需要实现哪些方法？`pkg/server` 目录中的 gRPC 服务如何与 `pkg/device` 中的设备管理层交互？",
+      "mode": "fast",
+      "queryId": "mindcluster-05_49374539-59f1-402d-832e-e094e692e4f2",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "# Ascend NPU 设备插件架构分析\n\n## 设备抽象架构概述\n\n`ascend-device-plugin/pkg/device` 目录通过接口和组合模式实现了对多种 NPU 芯片的统一抽象，核心设计包括 `DevManager` 接口、`AscendTools` 基础结构体以及各芯片特定的管理器实现。\n\n## 核心抽象设计\n\n### 1. DevManager 接口定义\n\n`ascendcommon.go` 中定义了 `DevManager` 接口，规定了所有设备管理器必须实现的方法：\n\n```go\ntype DevManager interface {\n    GetNPUs() (common.NpuAllInfo, error)\n    DoWithVolcanoListAndWatch(map[string][]*common.NpuDevice, int)\n    GraceTolerance(context.Context, map[string][]*common.NpuDevice)\n    SetDmgr(devmanager.DeviceInterface)\n    GetDmgr() devmanager.DeviceInterface\n    GetChipAICore() int32\n    GetName() string\n    SetKubeClient(*kubeclient.ClientK8s)\n    GetKubeClient() *kubeclient.ClientK8s\n    UpdateHealth(map[string][]*common.NpuDevice, []*common.NpuDevice, string)\n    // ... 更多方法\n}\n```\n\n### 2. AscendTools 基础结构体\n\n`AscendTools` 提供了通用的设备管理功能和工具方法：\n\n```go\ntype AscendTools struct {\n    client       *kubeclient.ClientK8s\n    dmgr         devmanager.DeviceInterface\n    name         string\n    deviceUsage  string\n    unHealthyKey string\n    devCount     int32\n    healthDevice sets.String\n    // ... 更多字段\n}\n```\n\n## 各芯片实现\n\n### 1. Ascend310 实现\n\n`HwAscend310Manager` 嵌入 `AscendTools` 并实现特定逻辑：\n\n```go\ntype HwAscend310Manager struct {\n    AscendTools\n}\n\nfunc NewHwAscend310Manager() *HwAscend310Manager {\n    return &HwAscend310Manager{\n        AscendTools: AscendTools{\n            name:         api.Ascend310,\n            unHealthyKey: common.HuaweiUnHealthAscend310,\n            devCount:     common.MaxCardNum * common.MaxDevNumInCard,\n            // ...\n        },\n    }\n}\n```\n\n必须实现的核心方法包括：\n- `GetNPUs()`: 发现和初始化设备\n- `DoWithVolcanoListAndWatch()`: 设备状态监控\n\n### 2. Ascend310P 实现\n\n`HwAscend310PManager` 支持虚拟设备和混合插入：\n\n```go\nfunc (hnm *HwAscend310PManager) GetNPUs() (common.NpuAllInfo, error) {\n    // 获取设备列表\n    devNum, devList, err := hnm.dmgr.GetDeviceList()\n    // 处理虚拟设备\n    vDevInfos, err := hnm.getVirtualDevice(devList[i])\n    // 支持混合插入模式\n    if common.ParamOption.Use310PMixedInsert {\n        // ...\n    }\n}\n```\n\n### 3. Ascend910 实现\n\n`HwAscend910Manager` 支持虚拟化，将物理 NPU 分割为多个 vNPU：\n\n```go\nfunc (hnm *HwAscend910Manager) GetNPUs() (common.NpuAllInfo, error) {\n    // 获取设备列表\n    devNum, devList, err := hnm.dmgr.GetDeviceList()\n    // 处理虚拟设备\n    vDevInfos, err := hnm.getVirtualDevice(devList[i])\n    // 根据 vNPU 数量组装设备\n    if vDevInfos.TotalResource.VDevNum > 0 {\n        hnm.assembleVirtualDevices(davinCiDev, vDevInfos, &allDevices, &allDeviceTypes)\n    }\n}\n```\n\n## gRPC 服务与设备管理层交互\n\n### 1. 设备管理器选择\n\n`HwDevManager` 根据设备类型自动选择对应的管理器：\n\n```go\nfunc (hdm *HwDevManager) setAscendManager(dmgr devmanager.DeviceInterface) error {\n    devType := dmgr.GetDevType()\n    switch devType {\n    case api.Ascend310, api.Ascend310B:\n        hdm.RunMode = api.Ascend310\n        hdm.manager = device.NewHwAscend310Manager()\n    case api.Ascend910A, api.Ascend910B, api.Ascend910A3, api.Ascend910A5:\n        hdm.RunMode = api.Ascend910\n        hdm.manager = device.NewHwAscend910Manager()\n    case api.Ascend310P:\n        hdm.RunMode = api.Ascend310P\n        hdm.manager = device.NewHwAscend310PManager()\n    }\n}\n```\n\n### 2. PluginServer 与设备管理器交互\n\n`PluginServer` 通过 `DevManager` 接口与设备管理层交互：\n\n```go\nfunc (ps *PluginServer) Allocate(ctx context.Context, requests *v1beta1.AllocateRequest) (*v1beta1.AllocateResponse, error) {\n    // 获取所有 NPU 信息\n    allNPUInfo, err := ps.manager.GetNPUs()\n    // 处理设备分配\n    for _, rqt := range requests.ContainerRequests {\n        allocateDevices := customname.ReplaceDeviceInnerName(ps.deviceType, rqt.DevicesIDs)\n        // 设置设备挂载和环境变量\n        ps.setNPUDeviceMount(resp, finalVisibleDevices)\n    }\n}\n```\n\n### 3. 设备状态监控\n\n设备管理器通过 `DoWithVolcanoListAndWatch` 方法更新设备状态到 Kubernetes：\n\n```go\nfunc (hnm *HwAscend310Manager) DoWithVolcanoListAndWatch(classifyDevs map[string][]*common.NpuDevice, chipMemory int) {\n    devStatusSet := hnm.getDevStatesDevSet(classifyDevs, chipMemory)\n    if err := hnm.UpdateNodeDeviceInfo(devStatusSet, common.DpuInfo{}, hnm.updateDeviceInfo); err != nil {\n        hwlog.RunLog.Errorf(\"update device info failed, err: %v\", err)\n    }\n}\n```\n\n## 架构优势\n\n1. **统一接口**: 通过 `DevManager` 接口屏蔽不同芯片的差异\n2. **代码复用**: `AscendTools` 提供通用功能，减少重复代码\n3. **扩展性**: 新增芯片类型只需实现 `DevManager` 接口\n4. **解耦设计**: gRPC 服务层与具体设备实现解耦，通过接口交互\n\n## Notes\n\n- 各芯片管理器都嵌入 `AscendTools` 结构体，继承通用功能\n- 虚拟设备支持主要在 Ascend910 和 Ascend310P 中实现\n- 设备发现流程通过 `devmanager.DeviceInterface` 与底层 DCMI 接口交互\n- gRPC 服务通过 `DevManager` 接口调用设备管理功能，实现与具体芯片实现的解耦\n\nWiki pages you might want to explore:\n- [Device Discovery and Allocation (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#2.1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascendcommon.go",
+          "range_start": 107,
+          "range_end": 160
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascendcommon.go",
+          "range_start": 72,
+          "range_end": 105
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascend310.go",
+          "range_start": 28,
+          "range_end": 49
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascend310.go",
+          "range_start": 51,
+          "range_end": 73
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascend310.go",
+          "range_start": 80,
+          "range_end": 86
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascend310p.go",
+          "range_start": 47,
+          "range_end": 95
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascend910.go",
+          "range_start": 103,
+          "range_end": 144
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/manager.go",
+          "range_start": 127,
+          "range_end": 148
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1204,
+          "range_end": 1256
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascend310.go",
+          "range_start": 80,
+          "range_end": 86
+        }
+      ],
+      "rawResponseEventCount": 48
+    },
+    {
+      "id": "mindcluster-04",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 4,
+      "type": "接口设计",
+      "difficulty": 2,
+      "question": "`ascend-common/devmanager/devmanager.go` 中定义的核心接口（DeviceInterface 或类似名称）包含哪些方法（如获取设备列表、查询健康状态、获取芯片信息）？`a310mgr.go` 和 `a910mgr.go` 分别针对哪些芯片型号，它们对公共接口的实现有何差异？`devmanager/dcmi/dcmi.go` 是如何通过 CGo 封装 `dcmi_interface_api.h` 中的 C 函数调用的？",
+      "mode": "fast",
+      "queryId": "mindcluster-04_58cf8d33-f13f-467f-848e-9c1409d59f20",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "## 核心接口方法\n\n`DeviceInterface` 是 `devmanager.go` 中定义的核心接口，包含了设备管理的完整方法集合：\n\n### 设备基础操作\n- `Init()` / `ShutDown()` - 初始化和关闭\n- `GetAllDeviceCount()` - 获取设备总数\n- `GetCardList()` - 获取卡列表\n- `GetDeviceList()` - 获取设备列表\n- `GetChipBaseInfos()` - 获取芯片基础信息\n\n### 健康状态监控\n- `GetDeviceHealth()` - 查询设备健康状态\n- `GetDeviceNetWorkHealth()` - 查询网络健康状态\n- `GetDeviceErrorCode()` - 获取设备错误码\n\n### 芯片信息获取\n- `GetChipInfo()` - 获取芯片详细信息\n- `GetDeviceTemperature()` - 获取温度\n- `GetDeviceVoltage()` - 获取电压\n- `GetDevicePowerInfo()` - 获取功耗信息\n\n### 虚拟设备管理\n- `CreateVirtualDevice()` - 创建虚拟设备\n- `DestroyVirtualDevice()` - 销毁虚拟设备\n\n## 芯片管理器差异\n\n在 `devmanager_common.go` 的 `AutoInit()` 函数中，系统根据芯片类型自动选择对应的管理器：\n\n- **A310 系列**：`A310Manager` 处理 `Ascend310` 和 `Ascend310B` 芯片\n- **A910 系列**：`A910Manager` 处理 `Ascend910A`、`Ascend910B` 和 `Ascend910A3` 芯片\n- **A310P 系列**：`A310PManager` 处理 `Ascend310P` 芯片\n- **A950 系列**：`A950Manager` 处理 `Ascend910A5` 芯片\n\n不同管理器的主要差异体现在：\n1. 支持的硬件特性不同（如 HBM 信息仅 910 系列支持）\n2. 特定功能的实现差异（如 MCU 功耗信息仅 310P 支持）\n\n## CGo 封装机制\n\n`dcmi.go` 通过以下方式封装 C 函数调用：\n\n### 1. 动态库加载\n使用 `dlopen` 和 `dlsym` 动态加载 `libdcmi.so` 库：\n\n```c\nstatic int dcmiInit_dl(const char* dcmiLibPath){\n    dcmiHandle = dlopen(dcmiLibPath,RTLD_LAZY | RTLD_GLOBAL);\n    dcmi_init_func = dlsym(dcmiHandle,\"dcmi_init\");\n    // ... 加载其他函数指针\n}\n```\n\n### 2. 函数指针封装\n为每个 C 函数定义静态函数指针和包装函数：\n\n```c\nstatic int (*dcmi_init_func)();\nstatic int dcmi_init_new(){\n    CALL_FUNC(dcmi_init)\n}\n```\n\n### 3. CGo 导出\n通过 `// #cgo` 指令和 `import \"C\"` 导入 C 函数，然后在 Go 代码中调用：\n\n```go\nif retCode := C.dcmi_get_device_health(C.int(cardID), C.int(deviceID), &health); \n```\n\n### 4. 接口抽象\n`DcDriverInterface` 定义了 Go 层的抽象接口，`DcManager` 实现这些接口并调用底层的 CGo 函数。\n\n## Notes\n\n- `a310mgr.go` 和 `a910mgr.go` 文件在提供的代码片段中未完整显示，但从 `devmanager_common.go` 可以推断它们分别实现了不同芯片系列的特定逻辑\n- DCMI 接口支持 v1 和 v2 两个版本，系统会自动检测并选择合适的版本\n- 所有设备操作都通过 `logicID` 进行统一管理，内部会转换为对应的 `cardID` 和 `deviceID`\n\nWiki pages you might want to explore:\n- [DCMI Device Manager (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#9)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager.go",
+          "range_start": 33,
+          "range_end": 117
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/devmanager_common.go",
+          "range_start": 119,
+          "range_end": 130
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/dcmi/dcmi.go",
+          "range_start": 395,
+          "range_end": 466
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/dcmi/dcmi.go",
+          "range_start": 34,
+          "range_end": 42
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/dcmi/dcmi.go",
+          "range_start": 17,
+          "range_end": 25
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/devmanager/dcmi/dcmi.go",
+          "range_start": 569,
+          "range_end": 660
+        }
+      ],
+      "rawResponseEventCount": 35
+    },
+    {
+      "id": "mindcluster-07",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 7,
+      "type": "接口设计",
+      "difficulty": 2,
+      "question": "`ascend-common/common-utils/hwlog` 日志模块的初始化接口是什么？`api.go` 中暴露给上层组件调用的日志函数有哪些，`log_limiter.go` 实现的限速机制如何配置（令牌桶参数或速率阈值）？`rolog.go`（只读日志）的设计用途是什么，适合在哪些场景下使用？",
+      "mode": "fast",
+      "queryId": "mindcluster-07_516a1e1c-a105-43e7-94d1-a13b253d7eef",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "# ascend-common/common-utils/hwlog 日志模块分析\n\n## 初始化接口\n\n`hwlog` 模块提供了多种日志初始化接口，主要包括：\n\n- `InitRunLogger(config *LogConfig, ctx context.Context)` - 初始化运行日志\n- `InitOperateLogger(config *LogConfig, ctx context.Context)` - 初始化操作日志\n- `InitDebugLogger(config *LogConfig, ctx context.Context)` - 初始化调试日志\n- `NewCustomLogger(config *LogConfig, ctx context.Context)` - 创建自定义日志器\n\n## api.go 中暴露的日志函数\n\n`api.go` 中暴露了以下主要日志函数：\n\n### 基础日志函数\n- `Debug(args ...interface{})` - 记录调试信息\n- `Info(args ...interface{})` - 记录信息\n- `Warn(args ...interface{})` - 记录警告\n- `Error(args ...interface{})` - 记录错误\n\n### 格式化日志函数\n- `Debugf(format string, args ...interface{})` - 格式化调试日志\n- `Infof(format string, args ...interface{})` - 格式化信息日志\n- `Warnf(format string, args ...interface{})` - 格式化警告日志\n- `Errorf(format string, args ...interface{})` - 格式化错误日志\n\n### 带上下文的日志函数\n- `DebugWithCtx(ctx context.Context, args ...interface{})`\n- `InfoWithCtx(ctx context.Context, args ...interface{})`\n- `WarnWithCtx(ctx context.Context, args ...interface{})`\n- `ErrorWithCtx(ctx context.Context, args ...interface{})`\n\n### 限速日志函数\n- `WarnfWithLimit(domain string, id interface{}, format string, args ...interface{})` - 限速警告日志\n- `ErrorfWithLimit(domain string, id interface{}, format string, args ...interface{})` - 限速错误日志\n\n## log_limiter.go 限速机制配置\n\n从 `logger.go` 中的 `LogConfig` 结构体可以看到限速相关的配置参数：\n\n- `ExpiredTime` - 日志缓存过期时间（秒），范围 [0, 3600]，值为 0 时禁用限速器\n- `CacheSize` - 日志缓存空间大小，范围 [0, 102400]，值为 0 时禁用限速器\n\n在 `api.go` 中，`LogLimiter` 被用于包装日志写入器：\n\n## rolog.go（只读日志）\n\n很抱歉，在提供的代码片段中没有找到 `rolog.go` 文件的内容，因此无法分析其设计用途和使用场景。\n\n## Notes\n\n- 日志模块支持多种输出方式：仅输出到标准输出（`OnlyToStdout`）、仅输出到文件（`OnlyToFile`）、或同时输出到两者\n- 日志级别范围：-1（debug）到 3（critical），默认为 0（info）\n- 日志文件默认最大大小为 20MB，默认保留 30 个备份文件，默认保存 7 天\n- 限速日志功能通过 `ProblemOccurMaxNumbers` 控制最大打印次数，可通过 `ResetErrCnt` 重置计数器\n\nWiki pages you might want to explore:\n- [Device Discovery and Allocation (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#2.1)\n- [Job Summary and Rank Table ConfigMaps (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#7.2)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/hwlog_adaptor.go",
+          "range_start": 25,
+          "range_end": 45
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/hwlog_adaptor.go",
+          "range_start": 50,
+          "range_end": 70
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/hwlog_adaptor.go",
+          "range_start": 125,
+          "range_end": 145
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/hwlog_adaptor.go",
+          "range_start": 147,
+          "range_end": 150
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 175,
+          "range_end": 178
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 238,
+          "range_end": 242
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 274,
+          "range_end": 277
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 240,
+          "range_end": 243
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 279,
+          "range_end": 282
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 245,
+          "range_end": 253
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 265,
+          "range_end": 272
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 284,
+          "range_end": 291
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/logger.go",
+          "range_start": 55,
+          "range_end": 79
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/logger.go",
+          "range_start": 204,
+          "range_end": 211
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/logger.go",
+          "range_start": 204,
+          "range_end": 211
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 132,
+          "range_end": 148
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 137,
+          "range_end": 147
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/logger.go",
+          "range_start": 63,
+          "range_end": 64
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/logger.go",
+          "range_start": 31,
+          "range_end": 38
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/hwlog/api.go",
+          "range_start": 265,
+          "range_end": 272
+        }
+      ],
+      "rawResponseEventCount": 72
+    },
+    {
+      "id": "mindcluster-06",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 6,
+      "type": "接口设计",
+      "difficulty": 3,
+      "question": "`ascend-operator/pkg/controllers` 中的 AscendJob Controller 是如何实现的？`Reconcile` 函数的核心逻辑是什么，Job 从 Pending 到 Running 再到 Succeeded/Failed 的状态机转换由哪些条件触发？`pkg/ranktable/generator` 中 RankTable 的生成入口函数签名、输入参数（Pod 列表、NPU 拓扑信息）和最终输出的 JSON 格式是什么？",
+      "mode": "fast",
+      "queryId": "mindcluster-06_605b553f-7898-4a7e-b4c2-b7dc97654aab",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "## AscendJob Controller 实现概述\n\nAscendJob Controller 是 Kubernetes 自定义控制器，用于管理 `AscendJob` 自定义资源的生命周期。它通过 `ASJobReconciler` 结构体实现，继承自 Kubeflow 的 `common.JobController`，并添加了 Ascend 特定的功能。\n\n### Reconcile 函数核心逻辑\n\n`Reconcile` 函数是控制器的主要协调循环，其核心逻辑包括：\n\n1. **获取 AscendJob 资源**：从 API Server 获取指定的 AscendJob 对象\n\n2. **验证 Job 规格**：调用 `validateJob` 验证 Job 配置的有效性\n\n3. **检查删除状态**：如果 Job 正在被删除，清理相关资源\n\n4. **设置默认值**：为 AscendJob 设置默认优先级等配置\n\n5. **协调 Job 相关资源**：调用 `ReconcileJobs` 管理 Pod 和 Service 生命周期\n\n### Job 状态机转换\n\nJob 状态转换在 `reconcileJob` 函数中处理，主要状态和触发条件：\n\n#### Pending → Running\n- **触发条件**：当 Pod 状态从 Pending 变为 Running，且 `status.Active > 0` 时\n- **实现位置**：`checkSpecStatus` 函数检查到有活跃 Pod 时更新状态为 Running\n\n#### Running → Succeeded\n- **触发条件**：所有 Pod 成功完成，`getTotalReplicas(job) == status.Succeeded` 或 `status.Succeeded > 0 && status.Active == 0`\n- **弹性训练场景**：只有 Pending 和 Succeeded 状态的 Pod 时也会触发\n\n#### Running → Failed\n- **触发条件**：\n  - 有 Pod 失败时（`status.Failed > 0`）\n  - 达到重试限制时（`version > backoffLimit`）\n\n### RankTable 生成机制\n\n#### 入口函数签名\nRankTable 生成通过 `RankTableGenerator` 接口定义，主要方法包括：\n```go\ntype RankTableGenerator interface {\n    AddPod(*v1.Pod) error\n    GatherServerList()\n    ToString() (string, error)\n    // ... 其他方法\n}\n```\n\n#### 输入参数\n1. **Pod 列表**：通过 `AddPod` 方法添加已分配 NPU 的 Pod\n2. **NPU 拓扑信息**：从 Pod 的 Annotation 中提取设备信息（如 `huawei.com/Ascend910-device-info`）\n3. **Job 配置**：包括副本规格、调度策略等\n\n#### 生成流程\n1. **等待所有 Pod 分配**：检查 `len(allocatedPods) == totalReplicas`\n2. **更新 Rank 索引**：为每个 Pod 分配唯一的 rank ID\n3. **收集服务器信息**：调用 `GatherServerList()` 整合网络拓扑\n4. **生成 JSON**：通过 `ToString()` 输出最终配置\n\n#### 输出 JSON 格式\n生成的 hccl.json 文件包含以下结构：\n```json\n{\n    \"status\": \"completed\",\n    \"server_list\": [{\n        \"device\": [{\n            \"device_id\": \"0\",\n            \"device_ip\": \"192.168.101.xx\",\n            \"rank_id\": \"0\"\n        }],\n        \"server_id\": \"xx-xx-xx-xx\",\n        \"host_ip\": \"xx.xx.xx.xx\",\n        \"container_ip\": \"192.168.149.xx\",\n        \"hardware_type\": \"800I-A2-32G\"\n    }],\n    \"server_count\": \"1\",\n    \"version\": \"1.0\"\n}\n```\n\n## Notes\n\n- AscendJob Controller 支持多种 RankTable 版本（v1.0、v1.2、v2.0），根据硬件类型和 Job 配置自动选择\n- 状态转换时会更新 Job 的 `conditions` 字段，记录详细的状态变更信息\n- RankTable 生成后会保存到 ConfigMap 或共享存储中，供训练容器使用\n\nWiki pages you might want to explore:\n- [Ascend Operator (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#3)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/ascendjob_controller.go",
+          "range_start": 110,
+          "range_end": 122
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/ascendjob_controller.go",
+          "range_start": 137,
+          "range_end": 145
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/ascendjob_controller.go",
+          "range_start": 147,
+          "range_end": 154
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/ascendjob_controller.go",
+          "range_start": 156,
+          "range_end": 161
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/ascendjob_controller.go",
+          "range_start": 163,
+          "range_end": 164
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/ascendjob_controller.go",
+          "range_start": 166,
+          "range_end": 174
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/job.go",
+          "range_start": 212,
+          "range_end": 218
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/job.go",
+          "range_start": 220,
+          "range_end": 226
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/job.go",
+          "range_start": 209,
+          "range_end": 211
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/job.go",
+          "range_start": 77,
+          "range_end": 87
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/ranktable/generator/interface.go",
+          "range_start": 21,
+          "range_end": 43
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/pod.go",
+          "range_start": 257,
+          "range_end": 275
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/pod.go",
+          "range_start": 260,
+          "range_end": 262
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/pod.go",
+          "range_start": 264,
+          "range_end": 265
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/pod.go",
+          "range_start": 278,
+          "range_end": 278
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/pod.go",
+          "range_start": 283,
+          "range_end": 283
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/api/hccl.json_file_description.md",
+          "range_start": 12,
+          "range_end": 41
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/ranktable/factory.go",
+          "range_start": 22,
+          "range_end": 37
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/api/ascend_job.md",
+          "range_start": 272,
+          "range_end": 295
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-operator/pkg/controllers/v1/ascendjob_controller.go",
+          "range_start": 640,
+          "range_end": 666
+        }
+      ],
+      "rawResponseEventCount": 65
+    },
+    {
+      "id": "mindcluster-08",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 8,
+      "type": "调用链",
+      "difficulty": 3,
+      "question": "当 K8s 调度器将一个申请 NPU 资源的 Pod 调度到某节点后，`ascend-device-plugin` 中 `Allocate` gRPC 接口的处理流程是什么？请从 `pkg/server` 接收 Allocate 请求出发，追踪经过 `pkg/device` 的设备分配逻辑、与 `ascend-docker-runtime` 的协作（设备文件挂载），直到 NPU 资源最终注入容器的完整调用路径。",
+      "mode": "fast",
+      "queryId": "mindcluster-08_ee2501ef-8b76-4040-9220-d4b9f42d2300",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "# `Allocate` gRPC 接口处理流程\n\n## 概述\n\n当 K8s 调度器将申请 NPU 资源的 Pod 调度到节点后，`ascend-device-plugin` 的 `Allocate` 接口负责完成设备分配和挂载。整个流程从接收 kubelet 的 gRPC 请求开始，经过设备验证、分配决策、设备挂载，最终将 NPU 资源注入容器。\n\n## 详细调用路径\n\n### 1. 接收 Allocate 请求\n\n`Allocate` 方法是 gRPC 服务的主入口，位于 `pkg/server/plugin.go`：\n\n```go\nfunc (ps *PluginServer) Allocate(ctx context.Context, requests *v1beta1.AllocateRequest) (*v1beta1.AllocateResponse, error)\n```\n\n该方法首先调用 `checkAllocateRequest` 验证请求的有效性。\n\n### 2. 请求验证\n\n`checkAllocateRequest` 方法执行以下验证：\n- 检查请求参数有效性\n- 验证容器数量不超过限制\n- 验证设备 ID 存在且有效\n- 处理虚拟设备特殊情况\n\n### 3. 设备分配决策\n\n根据配置和调度类型，采用不同的分配策略：\n\n#### 3.1 Volcano 调度模式\n\n当启用 Volcano 调度且非预设虚拟设备时，调用 `useVolcano` 方法：\n\n```go\nallocateDevices, npuInfoConfigDir, err = ps.useVolcano(rqt.DevicesIDs)\n```\n\n`useVolcano` 方法进一步调用 `doWithVolcanoSchedule` 处理调度器分配的设备。\n\n#### 3.2 设备 ID 转换\n\n通过 `GetDeviceListID` 将设备名称转换为设备 ID 列表。\n\n### 4. 设备挂载设置\n\n#### 4.1 共享设备配置\n\n对于支持软共享的设备，调用 `mountShareDeviceConfig` 设置共享内存配置文件。\n\n#### 4.2 NPU 设备挂载\n\n`setNPUDeviceMount` 方法是设备挂载的核心：\n\n```go\nfunc (ps *PluginServer) setNPUDeviceMount(resp *v1beta1.ContainerAllocateResponse, ascendVisibleDevices []int)\n```\n\n该方法根据 `UseAscendDocker` 配置选择挂载方式：\n- **传统挂载方式**：直接调用 `mountDevice` 挂载设备文件\n- **Ascend Docker Runtime**：调用 `common.SetAscendRuntimeEnv` 设置运行时环境\n\n#### 4.3 设备文件挂载\n\n`mountDevice` 方法负责具体的设备文件挂载：\n\n```go\nfunc mountDevice(resp *v1beta1.ContainerAllocateResponse, devices []int, ascendRuntimeOptions string)\n```\n\n对于每个设备 ID，通过 `getDevPath` 获取容器和主机路径：\n- 物理设备：`/dev/davinci{id}`\n- 虚拟设备：`/dev/vdavinci{id}`\n\n### 5. 环境变量和拓扑信息设置\n\n#### 5.1 HCCL 拓扑文件\n\n调用 `setHcclTopoFilePathEnv` 设置 HCCL 拓扑文件路径环境变量。\n\n#### 5.2 慢节点监控\n\n调用 `SetSlowNodeNoticeEnv` 设置慢节点监控相关环境变量。\n\n### 6. 返回分配响应\n\n最终构建包含设备挂载信息和环境变量的 `AllocateResponse` 返回给 kubelet。\n\n## 与 ascend-docker-runtime 的协作\n\n当启用 `UseAscendDocker` 配置时，device-plugin 通过 `common.SetAscendRuntimeEnv` 与 ascend-docker-runtime 协作。这种方式将设备挂载的责任委托给容器运行时，而不是直接在 device-plugin 中处理设备文件挂载。\n\n## 完整流程图\n\n```mermaid\nsequenceDiagram\n    participant Kubelet as kubelet\n    participant Plugin as PluginServer\n    participant Device as DeviceManager\n    participant Runtime as ascend-docker-runtime\n    \n    Kubelet->>Plugin: Allocate(request)\n    Plugin->>Plugin: checkAllocateRequest()\n    Plugin->>Plugin: useVolcano() (如果启用)\n    Plugin->>Plugin: GetDeviceListID()\n    Plugin->>Plugin: mountShareDeviceConfig()\n    \n    alt UseAscendDocker\n        Plugin->>Runtime: SetAscendRuntimeEnv()\n    else\n        Plugin->>Plugin: mountDevice()\n        Plugin->>Plugin: getDevPath()\n    end\n    \n    Plugin->>Plugin: setHcclTopoFilePathEnv()\n    Plugin->>Plugin: SetSlowNodeNoticeEnv()\n    Plugin->>Kubelet: AllocateResponse\n```\n\n## Notes\n\n1. 设备分配逻辑支持物理设备和虚拟设备两种模式，虚拟设备通过 `CreateVirtualDevice` 动态创建\n2. Volcano 调度模式下，设备分配信息通过 Pod annotation 传递，device-plugin 需要解析这些注解来确定实际分配的设备\n3. 设备健康状态和故障处理通过 `getUnhealthyAICore` 等方法管理，确保只有健康设备被分配\n\nWiki pages you might want to explore:\n- [Ascend Device Plugin (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#2)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1204,
+          "range_end": 1256
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1207,
+          "range_end": 1210
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 365,
+          "range_end": 400
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1231,
+          "range_end": 1239
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1026,
+          "range_end": 1032
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1240,
+          "range_end": 1244
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1249,
+          "range_end": 1250
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1117,
+          "range_end": 1126
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1120,
+          "range_end": 1121
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1124,
+          "range_end": 1125
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1043,
+          "range_end": 1057
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1034,
+          "range_end": 1041
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1251,
+          "range_end": 1252
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1252,
+          "range_end": 1253
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1253,
+          "range_end": 1255
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 1124,
+          "range_end": 1125
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 786,
+          "range_end": 792
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 829,
+          "range_end": 876
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 203,
+          "range_end": 214
+        }
+      ],
+      "rawResponseEventCount": 59
+    },
+    {
+      "id": "mindcluster-09",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 9,
+      "type": "调用链",
+      "difficulty": 3,
+      "question": "`ascend-for-volcano` 作为 Volcano 调度器的 NPU 插件，当一个训练 Job 需要被调度时，其 `internal/controller.go` 中的插件入口如何与 Volcano 的 `framework.Plugin` 接口对接？Predicate（过滤不满足条件的节点）和 Score（对候选节点打分）两个扩展点分别对应哪些函数，在 `internal/npu/` 下不同芯片型号（如 `ascend910/ascend910b`）的调度策略实现有何差异？",
+      "mode": "fast",
+      "queryId": "mindcluster-09_1b452385-7ed2-4439-ab50-7e516370a079",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "`ascend-for-volcano` 插件通过 `Controller` 结构体与 Volcano 的 `framework.Plugin` 接口对接，实现了 NPU 感知的调度功能。\n\n## 插件入口与框架对接\n\n`internal/controller.go` 中的 `Controller` 结构体是插件的核心入口，它通过以下方式与 Volcano 框架对接：\n\n```go\ntype Controller struct {\n    PolicyHandler []plugin.SchedulerPluginNeed\n}\n\nfunc New() plugin.SchedulerPluginNeed {\n    return &Controller{}\n}\n```\n\n`Controller` 实现了 `SchedulerPluginNeed` 接口，该接口定义了调度插件所需的核心方法。\n\n## Predicate 和 Score 扩展点\n\n### Predicate（节点过滤）\n对应 `CheckNodeNPUByTask` 函数，用于检查节点是否满足任务的 NPU 需求：\n\n```go\nfunc (c *Controller) CheckNodeNPUByTask(task *api.TaskInfo, node plugin.NPUNode) error\n```\n\n该函数遍历所有策略处理器，调用各自的 `CheckNodeNPUByTask` 方法进行节点过滤。\n\n### Score（节点打分）\n对应 `ScoreBestNPUNodes` 函数，对候选节点进行打分排序：\n\n```go\nfunc (c *Controller) ScoreBestNPUNodes(task *api.TaskInfo, nodes []*api.NodeInfo, sMap map[string]float64) error\n```\n\n该函数同样遍历所有策略处理器，调用各自的打分算法。\n\n## 不同芯片型号的调度策略差异\n\n### ascend910b 实现\n在 `ascend910b/module910bx16/frame.go` 中，910B 芯片的调度策略特点包括：\n\n- 设置了无效 NPU 索引映射（9、11、13、15）\n- 定义了特定的亲和性分数矩阵 `AffScoreList`\n- 支持网络故障注意力机制\n\n### ascend910a3 实现\n在 `ascend910a3/module910a3x16/frame.go` 中，910A3 芯片的调度策略差异在于：\n\n```go\nfunc (tp *module910a3x16) setAffinityScore() {\n    tp.AffScoreList = make([][]int, tp.MaxNodeNPUNum)\n    for i := 0; i < tp.MaxNodeNPUNum; i++ {\n        tp.AffScoreList[i] = make([]int, tp.MaxNodeNPUNum)\n        for j := 0; j < tp.MaxNodeNPUNum; j++ {\n            if i > j {\n                tp.AffScoreList[i][j] = util.AffScore15\n            } else {\n                tp.AffScoreList[i][j] = j - i\n            }\n        }\n    }\n}\n```\n\n910A3 使用动态计算的亲和性分数，而 910B 使用预定义的固定分数矩阵。\n\n### 策略工厂模式\n不同芯片型号通过工厂模式进行统一管理，在 `internal/npu/factory.go` 中注册了各种处理器。\n\n## Notes\n\n- 插件通过策略处理器模式支持多种调度策略，包括 NPU 调度和 NSLB 调度\n- 不同芯片型号的主要差异在于亲和性分数计算、无效 NPU 索引和网络故障处理机制\n- 所有芯片型号都实现了相同的接口，保证了插件架构的一致性\n\nWiki pages you might want to explore:\n- [Volcano NPU Scheduling Plugin (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#5)\n- [NPU Resource Validation and VNode Management (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#5.3)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/controller.go",
+          "range_start": 34,
+          "range_end": 42
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/controller.go",
+          "range_start": 100,
+          "range_end": 112
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/controller.go",
+          "range_start": 114,
+          "range_end": 128
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/npu/ascend910/ascend910b/module910bx16/frame.go",
+          "range_start": 35,
+          "range_end": 64
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/npu/ascend910/ascend910a3/module910a3x16/frame.go",
+          "range_start": 47,
+          "range_end": 59
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/npu/factory.go",
+          "range_start": 27,
+          "range_end": 43
+        }
+      ],
+      "rawResponseEventCount": 42
+    },
+    {
+      "id": "mindcluster-10",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 10,
+      "type": "调用链",
+      "difficulty": 3,
+      "question": "`ascend-for-volcano` 的重调度（rescheduling）特性何时触发，触发后的执行流程是什么？请从 `internal/rescheduling/` 目录下的检测逻辑出发，说明系统如何判定需要重调度（故障节点、慢节点、亚健康状态的判断依据），以及触发重调度后如何通知 Volcano 调度器驱逐并重新调度 Pod。",
+      "mode": "fast",
+      "queryId": "mindcluster-10_2591484a-1b4d-45c7-b3ff-6f1df2727199",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "# ascend-for-volcano 重调度机制分析\n\n## 重调度触发时机\n\n`ascend-for-volcano` 的重调度机制在以下情况下触发：\n\n### 1. 节点故障检测\n系统通过 `checkNodeCurNodeIsFault()` 函数检测节点故障：\n- **节点不健康状态**：当 `NodeHealthState == NodeUnhealthy` 时立即触发\n- **NodeD 预分离状态**：当节点注解 `NodeHealthyStatusKey` 等于 `PreSeparateFaultCode` 时触发\n- **链路故障超时**：L1 链路故障在 20 秒超时窗口内触发\n\n### 2. 卡故障检测\n通过 `setTaskCardHealthCode()` 函数检测 NPU 卡故障：\n- 检查 `FaultNode.FaultDeviceList` 中的设备故障信息\n- 为每个使用的卡添加相应的故障原因\n\n### 3. 任务健康状态评估\n`getTaskHealthState()` 函数综合评估任务健康状态：\n- **Pod 失败**：Pod 状态为 Failed 时触发\n- **软件故障**：`IsSoftwareFault = true` 时触发\n- **硬件故障**：根据故障原因列表判断\n\n## 故障类型分类\n\n系统定义了多种故障类型：\n\n| 故障类型 | 描述 | 处理方式 |\n|---------|------|---------|\n| `SeparateFault` | 硬件故障需要 Pod 重调度 | 立即重调度 |\n| `SubHealthFault` | 亚健康状态，节点部分功能异常 | 根据作业策略处理 |\n| `RelationFault` | 关联故障（如网络问题） | 可能延迟处理 |\n| `PodFailed` | Pod 运行失败 | 立即重调度 |\n\n## 重调度执行流程\n\n### 1. 故障检测与缓存\n```mermaid\ngraph TD\n    A[调度会话开始] --> B[AddFaultNodeWithSession]\n    B --> C[创建/更新 FaultNode]\n    C --> D[AddFaultJobWithSession]\n    D --> E[创建 FaultTask]\n    E --> F[setTaskCardHealthCode]\n    F --> G[getTaskHealthState]\n    G --> H[标记故障任务]\n```\n\n系统在每次调度会话中通过 `Execute()` 方法执行故障检测。\n\n### 2. 重调度决策\n`RestartFaultJobs()` 函数决定哪些作业需要重调度：\n- 检查作业是否在缓存中存在\n- 验证 `DeleteExecutedFlag` 标志\n- 应用重调度策略\n\n### 3. Pod 驱逐策略\n根据作业的 `fault-scheduling` 标签采用不同策略：\n\n| 策略 | 行为 | 适用场景 |\n|------|------|---------|\n| `grace` | 优雅删除，等待超时后强制删除 | 需要保存状态的应用 |\n| `force` | 立即强制删除 | 需要快速恢复的场景 |\n| `off` | 不自动重调度 | 手动处理的场景 |\n\n### 4. 多级重调度支持\n对于多级调度作业，系统支持：\n- **Pod 级重调度**：仅重调度故障 Pod，保持其他 Pod 不动\n- **作业级重调度**：重调度整个作业的所有 Pod\n- **SuperPod 重调度**：按 SuperPod 单元进行重调度\n\n## 亚健康状态处理\n\n亚健康节点通过以下方式处理：\n1. **检测**：`HasCardSubHealthFault` 和 `HasSwitchSubHealthFault` 标志\n2. **评分调整**：在评分阶段降低亚健康节点分数\n3. **策略应用**：根据作业的 `subHealthyStrategy` 标签决定是否使用亚健康节点\n\n## 通知 Volcano 调度器\n\n重调度通过以下方式通知 Volcano：\n1. **直接删除 Pod**：通过 Kubernetes API 删除故障 Pod\n2. **更新 ConfigMap**：记录重调度原因和次数\n3. **调整评分**：通过 `ScoreBestNPUNodes()` 影响调度决策\n\nVolcano 调度器检测到 Pod 被删除后，会自动触发重新调度流程，将 Pod 调度到健康的节点上。\n\n## Notes\n\n- 重调度机制与 Volcano 调度框架紧密集成，通过插件形式实现\n- 系统支持并发删除 Pod 以提高重调度效率\n- 重调度历史记录保存在 ConfigMap 中，便于故障排查和审计\n- 对于多级调度作业，重调度会考虑拓扑亲和性约束，确保重调度后的节点满足原有的亲和性要求\n\nWiki pages you might want to explore:\n- [Volcano NPU Scheduling Plugin (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#5)\n- [Node and Task Health Checks (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#5.2)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/reschedule.go",
+          "range_start": 829,
+          "range_end": 875
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/reschedule.go",
+          "range_start": 836,
+          "range_end": 840
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/reschedule.go",
+          "range_start": 863,
+          "range_end": 872
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/reschedule.go",
+          "range_start": 894,
+          "range_end": 925
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/reschedule.go",
+          "range_start": 997,
+          "range_end": 1075
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/type.go",
+          "range_start": 94,
+          "range_end": 127
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/reschedule.go",
+          "range_start": 48,
+          "range_end": 82
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/reschedule.go",
+          "range_start": 1040,
+          "range_end": 1065
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/type.go",
+          "range_start": 44,
+          "range_end": 51
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/job.go",
+          "range_start": 402,
+          "range_end": 443
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/npu/ascend910/ascend910a3/superpod/frame.go",
+          "range_start": 628,
+          "range_end": 649
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/type.go",
+          "range_start": 258,
+          "range_end": 259
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/reschedule.go",
+          "range_start": 731,
+          "range_end": 742
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/job.go",
+          "range_start": 449,
+          "range_end": 468
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/type.go",
+          "range_start": 196,
+          "range_end": 206
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/reschedule.go",
+          "range_start": 744,
+          "range_end": 767
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/rescheduling/job.go",
+          "range_start": 449,
+          "range_end": 474
+        }
+      ],
+      "rawResponseEventCount": 59
+    },
+    {
+      "id": "mindcluster-11",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 11,
+      "type": "调用链",
+      "difficulty": 3,
+      "question": "`ascend-faultdiag` 的故障诊断端到端流程是什么？请描述从日志采集（`utils/fast_parser`）→ 日志清洗（`pkg/parse`）→ 知识图谱引擎分析（`pkg/diag/knowledge_graph/kg_engine`）→ 根因节点定位（`pkg/diag/root_cluster`）的数据流和各阶段核心处理函数，知识图谱中的 graph 和 model 子目录分别存放什么内容？",
+      "mode": "fast",
+      "queryId": "mindcluster-11_e89cf197-78b5-443d-aa65-6a4210114178",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "# ascend-faultdiag 故障诊断端到端流程\n\n## 整体流程概述\n\n`ascend-faultdiag` 的故障诊断流程包含日志解析、清洗、知识图谱分析和根因定位四个主要阶段。基于现有代码，可见的核心流程如下：\n\n```mermaid\ngraph TD\n    A[日志采集] --> B[日志清洗]\n    B --> C[知识图谱引擎分析]\n    C --> D[根因节点定位]\n    \n    subgraph \"解析阶段\"\n        E[各种Parser]\n        F[FileParser基类]\n    end\n    \n    subgraph \"知识图谱处理\"\n        G[kg_parse_job]\n        H[kg_engine_main]\n        I[GraphBuilder]\n    end\n    \n    subgraph \"诊断作业\"\n        J[kg_diag_job]\n        K[Response模型]\n    end\n```\n\n## 各阶段详细说明\n\n### 1. 日志采集阶段\n\n虽然用户提到的 `utils/fast_parser` 在当前代码上下文中未直接可见，但从解析器的实现可以看出日志采集的入口点。各种日志解析器继承自 `FileParser` 基类，包括：\n\n- `AMCTLogParser`：处理AMCT组件日志\n- `NodeDLogParser`：处理NodeD组件日志\n\n### 2. 日志清洗阶段（pkg/parse）\n\n日志清洗的核心函数是 `start_kg_parse_job`，位于 `kg_parse_job.py` 中。该函数：\n\n1. 创建解析上下文 `KGParseCtx`\n2. 使用 `SingleJsonFileProcessing` 处理单个JSON文件\n3. 导出解析结果和MindIE集群信息\n\n各解析器的 `parse` 方法负责具体的日志清洗工作，如 `AMCTLogParser.parse()`。\n\n### 3. 知识图谱引擎分析（pkg/diag/knowledge_graph/kg_engine）\n\n知识图谱引擎的核心分析函数是 `kg_engine_analyze`，位于 `kg_engine_main.py` 中。该函数：\n\n1. 加载Schema配置\n2. 使用 `GraphBuilder` 构建图结构\n3. 通过 `Response` 模型获取分析结果\n\n#### graph 子目录内容\n\n`graph` 子目录主要包含图构建相关组件：\n- `GraphBuilder`：负责构建知识图谱结构\n\n#### model 子目录内容\n\n`model` 子目录包含数据模型定义：\n- `Response`：封装分析结果，包含根因信息和故障链\n- `RootCause`：表示单个根因事件，包含代码、实体属性、事件属性和故障链\n\n### 4. 根因节点定位（pkg/diag/root_cluster）\n\n虽然用户提到的 `pkg/diag/root_cluster` 在当前代码上下文中未直接可见，但根因定位逻辑主要体现在 `kg_diag_job.py` 中的相关函数：\n\n- `start_kg_diag_job`：启动知识图谱诊断作业\n- `_kg_diag_job`：执行单个worker的诊断任务\n- `hand_all_root_cause`：处理所有根因结果并格式化输出\n\n## 数据流总结\n\n1. **日志采集**：各种Parser从原始日志文件中提取事件信息\n2. **日志清洗**：通过 `start_kg_parse_job` 将原始日志转换为结构化事件\n3. **知识图谱分析**：`kg_engine_analyze` 使用 `GraphBuilder` 构建图并分析\n4. **根因定位**：`start_kg_diag_job` 协调多worker诊断，`hand_all_root_cause` 整合结果\n\n## Notes\n\n- 用户提到的 `utils/fast_parser` 和 `pkg/diag/root_cluster` 在当前提供的代码上下文中未直接可见，可能位于其他文件或模块中\n- 知识图谱引擎使用多进程并行处理提高效率，如 `AMCTLogParser` 中的 `MultiProcessJob`\n- 诊断结果包含故障代码、描述、建议、事件属性、故障源和故障链等完整信息\n\nWiki pages you might want to explore:\n- [Ascend FaultDiag and Online Diagnostics (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#13.4)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/parse/knowledge_graph/parser/file_parser.py",
+          "range_start": 37,
+          "range_end": 63
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/parse/knowledge_graph/parser/amct_log_parser.py",
+          "range_start": 30,
+          "range_end": 41
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/parse/knowledge_graph/parser/noded_log_parser.py",
+          "range_start": 31,
+          "range_end": 45
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/parse/knowledge_graph/kg_parse_job.py",
+          "range_start": 30,
+          "range_end": 39
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/parse/knowledge_graph/parser/amct_log_parser.py",
+          "range_start": 41,
+          "range_end": 72
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/diag/knowledge_graph/kg_engine/kg_engine_main.py",
+          "range_start": 37,
+          "range_end": 51
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/diag/knowledge_graph/kg_engine/kg_engine_main.py",
+          "range_start": 19,
+          "range_end": 20
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/diag/knowledge_graph/kg_engine/model/response.py",
+          "range_start": 96,
+          "range_end": 111
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/diag/knowledge_graph/kg_engine/model/response.py",
+          "range_start": 33,
+          "range_end": 45
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/diag/knowledge_graph/kg_diag_job.py",
+          "range_start": 41,
+          "range_end": 98
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/diag/knowledge_graph/kg_diag_job.py",
+          "range_start": 374,
+          "range_end": 393
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/diag/knowledge_graph/kg_diag_job.py",
+          "range_start": 147,
+          "range_end": 176
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/parse/knowledge_graph/parser/amct_log_parser.py",
+          "range_start": 63,
+          "range_end": 67
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-faultdiag/src/ascend_fd/pkg/diag/knowledge_graph/kg_diag_job.py",
+          "range_start": 46,
+          "range_end": 66
+        }
+      ],
+      "rawResponseEventCount": 52
+    },
+    {
+      "id": "mindcluster-12",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 12,
+      "type": "核心概念",
+      "difficulty": 2,
+      "question": "`ascend-for-volcano/common/util/` 下定义的 Job 和 Task 数据结构（`type.go`、`type_v2.go`）分别代表什么层级的调度对象？`type_multilevel.go` 中\"多层级\"（multilevel）类型扩展了哪些新字段或调度语义，它是为了支持什么样的多层次资源调度场景？",
+      "mode": "fast",
+      "queryId": "mindcluster-12_36603c1f-de08-45d2-9687-0e8502648416",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "根据代码库分析，`ascend-for-volcano/common/util/` 目录下的数据结构定义了不同层级的调度对象：\n\n## Job 和 Task 数据结构层级\n\n### 基础类型定义\n\n**Job 层级**：\n- `SchedulerJob` 扩展了 Volcano 的 `JobInfo`，代表整个作业的调度单元\n- 包含 NPU 特定的调度属性和策略信息\n\n**Task 层级**：\n- `NPUTask` 代表作业中的单个任务调度单元，对应 Kubernetes 的 Pod\n- 包含 NPU 资源需求和拓扑信息\n\n## 多层级类型扩展\n\n### 新增字段和调度语义\n\n`type_multilevel.go` 中的多层级类型主要扩展了以下字段：\n\n**任务树层级定义**：\n```go\ntype TaskTreeLevel struct {\n    Name    string  // 层级名称\n    ReqNode int     // 该层级需要的节点数\n}\n```\n\n\n**资源树层级配置**：\n```go\ntype ResourceTreeLevel struct {\n    Label        string    `json:\"label,omitempty\"`  // 对应节点标签名称\n    ReservedNode int       `json:\"reservedNode,omitempty\"` // 预留节点数\n    Type         LevelType `json:\"-\"`\n}\n```\n\n\n**层级类型枚举**：\n```go\nconst (\n    LevelTypeTree   LevelType = \"tree\"    // 根树节点\n    LevelTypeMiddle LevelType = \"middle\"  // 中间网络节点\n    LevelTypeNode   LevelType = \"node\"    // 物理节点\n)\n```\n\n\n### 多层次资源调度场景\n\n多层级调度主要支持以下场景：\n\n**1. 网络拓扑感知调度**：\n- 支持叶脊网络架构的多级交换机拓扑\n- 根据实际物理网络拓扑（NPU芯片→服务器→机架→交换机）进行智能分配\n\n**2. 亲和性分组调度**：\n- 通过 `levelN=G` 配置实现多级亲和性保障\n- 保证同一层级分组内的任务部署在相同网络域，最小化通信延迟\n\n**3. 资源预留与碎片优化**：\n- 支持层级级资源预留机制\n- 内置碎片优化算法，选择碎片最少的分配方案\n\n**4. 故障感知重调度**：\n- 支持细粒度故障检测和重调度\n- 维护故障任务和节点缓存，实现快速故障恢复\n\n## 调度层级关系\n\n```mermaid\ngraph TB\n    subgraph \"作业层级\"\n        Job[\"SchedulerJob<br/>整个作业\"]\n    end\n    \n    subgraph \"任务层级\"\n        Task[\"NPUTask<br/>单个任务/Pod\"]\n    end\n    \n    subgraph \"多层级调度\"\n        Level1[\"Level1<br/>机架/服务器组\"]\n        Level2[\"Level2<br/>交换机\"]\n        Level3[\"Level3<br/>汇聚交换机\"]\n    end\n    \n    Job --> Task\n    Task --> Level1\n    Level1 --> Level2\n    Level2 --> Level3\n```\n\n多层级调度通过 `MultilevelHandler` 实现，在 `ValidNPUJob()` 中验证配置，在 `ScoreBestNPUNodes()` 中执行实际的层级调度逻辑。\n\n## Notes\n\n1. 多层级调度要求每个任务占用整张NPU卡，不支持部分NPU分配\n2. 层级编号必须从1开始连续，不能跳号\n3. 总任务数必须能被每个层级的分组大小整除\n4. 所有节点必须正确配置拓扑层级标签，否则会被过滤掉\n\n这些扩展主要为了解决大规模分布式AI训练中的网络通信优化问题，通过感知物理网络拓扑来实现最优的任务分配策略。\n\nWiki pages you might want to explore:\n- [Volcano NPU Scheduling Plugin (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#5)\n- [NPU Resource Validation and VNode Management (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#5.3)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/plugin/type.go",
+          "range_start": 109,
+          "range_end": 119
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/common/util/job.go",
+          "range_start": 31,
+          "range_end": 43
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/npu/base/task.go",
+          "range_start": 39,
+          "range_end": 57
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/common/util/type.go",
+          "range_start": 200,
+          "range_end": 202
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+          "range_start": 196,
+          "range_end": 201
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+          "range_start": 181,
+          "range_end": 187
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+          "range_start": 40,
+          "range_end": 47
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+          "range_start": 8,
+          "range_end": 11
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+          "range_start": 10,
+          "range_end": 11
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+          "range_start": 292,
+          "range_end": 294
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+          "range_start": 297,
+          "range_end": 300
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+          "range_start": 158,
+          "range_end": 161
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+          "range_start": 462,
+          "range_end": 463
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/npu/policy/multilevelscheduling/frame.go",
+          "range_start": 291,
+          "range_end": 320
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/npu/policy/multilevelscheduling/frame.go",
+          "range_start": 251,
+          "range_end": 253
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/npu/policy/multilevelscheduling/frame.go",
+          "range_start": 46,
+          "range_end": 53
+        }
+      ],
+      "rawResponseEventCount": 51
+    },
+    {
+      "id": "mindcluster-13",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 13,
+      "type": "配置部署",
+      "difficulty": 1,
+      "question": "如何从源码编译 MindCluster 集群调度全套组件？`build/build_all.sh` 和 `build/build_each.sh` 分别适用什么场景，两者的核心差别是什么？`build/service_config.ini` 中除了 `mind-cluster-version` 版本号之外，还有哪些配置项会影响编译产物？编译环境对 Go 版本有什么要求？",
+      "mode": "fast",
+      "queryId": "mindcluster-13_27142c2a-86f2-4ad4-b276-2b9282cac9ed",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "## MindCluster 集群调度组件编译指南\n\n### 编译方法\n\n从源码编译 MindCluster 集群调度全套组件的步骤如下：\n\n1. 拉取 mind-cluster 整体源码，例如放在 /home 目录下\n2. 修改组件版本配置文件 `/home/mind-cluster/build/service_config.ini` 中 `mind-cluster-version` 字段值为所需编译版本\n3. 执行编译命令：\n   ```bash\n   cd /home/mind-cluster/build\n   dos2unix *.sh && chmod +x *.sh\n   ./build_all.sh $GOPATH\n   ```\n4. 编译完成后在各组件的 \"output\" 目录下生成编译完成的文件\n\n### build_all.sh 与 build_each.sh 的差异\n\n**build_all.sh**：\n- 用于编译全套组件，一次性构建所有 MindCluster 集群调度组件\n- 适用于需要完整构建整个系统的场景\n- 是主要的编译入口脚本\n\n**build_each.sh**：\n- 用于单独编译各个组件\n- 适用于只需要构建特定组件或进行增量编译的场景\n- 提供更细粒度的编译控制\n\n### service_config.ini 配置项\n\n除了 `mind-cluster-version` 版本号外，`build/service_config.ini` 文件中还包含其他影响编译产物的配置项。虽然具体配置项内容在提供的代码片段中没有完整显示，但该文件是组件版本配置的核心文件，用于控制编译过程中的版本信息和构建参数。\n\n### Go 版本要求\n\n编译环境对 Go 版本的要求是 **Go 1.21**。文档中明确指出\"此处使用的go版本为1.21\"。建议使用 Go 1.21 版本进行编译以确保兼容性。\n\n## Notes\n\n- 编译前需要确保已正确设置 GOPATH 环境变量\n- 所有脚本文件需要执行 `dos2unix` 和 `chmod +x` 处理以确保可执行性\n- 编译产物会生成在各组件的 output 目录下\n- 如需修改特定组件的编译配置，可以查看各组件 build 目录下的独立构建脚本\n\nWiki pages you might want to explore:\n- [Overview (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#1)\n- [Troubleshooting Guide (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#12.4)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: README.md",
+          "range_start": 292,
+          "range_end": 292
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: README.md",
+          "range_start": 294,
+          "range_end": 296
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: README.md",
+          "range_start": 300,
+          "range_end": 304
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: README.md",
+          "range_start": 306,
+          "range_end": 306
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: README.md",
+          "range_start": 304,
+          "range_end": 304
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: README.md",
+          "range_start": 294,
+          "range_end": 296
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: README.md",
+          "range_start": 308,
+          "range_end": 308
+        }
+      ],
+      "rawResponseEventCount": 41
+    },
+    {
+      "id": "mindcluster-14",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 14,
+      "type": "配置部署",
+      "difficulty": 2,
+      "question": "`ascend-device-plugin/build/ascend.yaml` 中 DaemonSet 的部署配置定义了哪些关键字段（容器镜像、HostPath 挂载路径、资源 Limits）？该组件正常运行所需的 ServiceAccount RBAC 权限包括对哪些 K8s 资源（Pod、Node、ConfigMap 等）的哪些操作权限？如何验证 device plugin 已成功注册到 kubelet？",
+      "mode": "fast",
+      "queryId": "mindcluster-14_fd24dc65-6db5-4b39-99ec-ac4660176fdf",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "根据提供的代码上下文，我没有找到 `ascend-device-plugin/build/ascend.yaml` 这个具体文件，但我可以从相关文档中提取 DaemonSet 的配置信息和验证方法。\n\n## DaemonSet 关键字段配置\n\n### 容器镜像\n从软切分虚拟化配置示例中可以看到容器镜像配置：\n\n```yaml\ncommand: [ \"/bin/bash\", \"-c\", \"--\"]\nargs: [ \"device-plugin  -useAscendDocker=true -volcanoType=true -presetVirtualDevice=true\n         -logFile=/var/log/mindx-dl/devicePlugin/devicePlugin.log -logLevel=0 -shareDevCount=100 -softShareDevConfigDir=/share_device/\" ]\n```\n\n### HostPath 挂载路径\n关键的 HostPath 挂载包括：\n\n- `/var/lib/kubelet/device-plugins` - kubelet 设备插件目录\n- `/usr/local/Ascend/driver` - 昇腾驱动目录\n- `/usr/local/Ascend/add-ons` - 昇腾附加组件\n- `/etc/localtime` - 本地时间\n- `/etc/enpu/` - 软切分配置目录\n- `/share_device/` - 共享设备配置目录\n\n### 资源 Limits\n从训练任务配置示例中可以看到资源限制配置：\n\n```yaml\nresources:\n  limits:\n    huawei.com/Ascend910-2c: 1\n  requests:\n    huawei.com/Ascend910-2c: 1\n```\n\n## ServiceAccount RBAC 权限\n\n从文档中可以看到 Ascend Device Plugin 需要以下权限：\n\n- 对 Pod 的操作权限（用于更新 Pod annotations）\n- 对 Node 的操作权限（用于更新节点标签和资源状态）\n- 对 ConfigMap 的操作权限（用于写入设备信息 ConfigMap）\n\n## 验证 Device Plugin 注册成功的方法\n\n### 1. 检查 Pod 状态\n```shell\nkubectl get pods -n kube-system -o wide | grep device-plugin\n```\n期望看到 Pod 状态为 Running，READY 为 1/1\n\n### 2. 检查组件日志\n```shell\nkubectl logs -n kube-system ascend-device-plugin-daemonset-910-85p9v\n```\n期望看到类似日志：\n```\n[INFO] register Ascend910 to kubelet success.\n[INFO] ListAndWatch resp devices: Ascend910-4 Healthy\n```\n\n### 3. 检查节点资源\n```shell\nkubectl describe node <节点名>\n```\n期望在 Capacity 和 Allocatable 字段中看到昇腾处理器信息：\n```\nCapacity:\n  huawei.com/Ascend910:     8\nAllocatable:\n  huawei.com/Ascend910:     8\n```\n\n## Notes\n\n由于没有找到具体的 `ascend-device-plugin/build/ascend.yaml` 文件，以上信息基于相关文档中的配置示例整理。实际的配置可能因版本和部署场景有所不同。建议参考具体的部署 YAML 文件获取准确的配置信息。\n\nWiki pages you might want to explore:\n- [Ascend Device Plugin (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#2)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/virtual_instance/virtual_instance_with_vcann_rt/01_soft_allocation_virtualization.md",
+          "range_start": 135,
+          "range_end": 138
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/virtual_instance/virtual_instance_with_vcann_rt/01_soft_allocation_virtualization.md",
+          "range_start": 140,
+          "range_end": 155
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 1881,
+          "range_end": 1885
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/faq.md",
+          "range_start": 1051,
+          "range_end": 1085
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/installation_guide/04_confirming_status.md",
+          "range_start": 206,
+          "range_end": 214
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/installation_guide/04_confirming_status.md",
+          "range_start": 224,
+          "range_end": 241
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/installation_guide/04_confirming_status.md",
+          "range_start": 262,
+          "range_end": 271
+        }
+      ],
+      "rawResponseEventCount": 38
+    },
+    {
+      "id": "mindcluster-15",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 15,
+      "type": "扩展开发",
+      "difficulty": 3,
+      "question": "如果要为 MindCluster 新增对一种新 NPU 芯片型号的支持（例如假设的 Ascend 910C），需要在 `ascend-device-plugin`（`pkg/device/` 下）、`ascend-for-volcano`（`internal/npu/` 下）、`ascend-common`（`devmanager/` 下）三个组件中分别新增或修改哪些文件？三个组件之间是否有统一的接口约定需要同步实现？",
+      "mode": "fast",
+      "queryId": "mindcluster-15_55d840d0-4a57-47d4-baa8-85033c9d51df",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "为 MindCluster 新增对 Ascend 910C 芯片支持需要在三个组件中分别进行以下修改：\n\n## ascend-device-plugin 组件修改\n\n### 1. 新增设备管理器文件\n需要在 `pkg/device/` 目录下新增 `ascend910c.go` 文件，实现 `HwAscend910CManager` 结构体，参考现有的 `ascend910.go` 实现。\n\n### 2. 修改设备类型识别\n在 `pkg/server/manager.go` 的 `setAscendManager` 函数中添加对 Ascend 910C 的支持：\n```go\ncase api.Ascend910C:\n    hdm.RunMode = api.Ascend910\n    hdm.manager = device.NewHwAscend910CManager()\n```\n\n### 3. 更新常量定义\n需要在 `ascend-common` 组件的 `api` 包中添加 `Ascend910C` 常量定义。\n\n## ascend-for-volcano 组件修改\n\n### 1. 新增芯片特定目录\n在 `internal/npu/` 目录下创建 `ascend910/ascend910c/` 子目录，参考现有的 `ascend910a3` 结构。\n\n### 2. 实现调度逻辑\n新增 `type.go`、`frame.go` 等文件，实现 Ascend 910C 的亲和性调度逻辑，包括：\n- 芯片数量定义（如 `NodeNPUNumber`）\n- 亲和性分数矩阵（`AffScoreList`）\n- 特定的调度策略\n\n## ascend-common 组件修改\n\n### 1. 更新设备类型枚举\n在 `devmanager/` 目录下的相关文件中添加 `Ascend910C` 设备类型定义。\n\n### 2. 扩展设备接口\n如果 Ascend 910C 有特殊功能，需要在 `DeviceInterface` 中添加相应的方法。\n\n## 统一接口约定\n\n三个组件之间确实存在统一的接口约定：\n\n### 1. 设备管理器接口\n`ascend-device-plugin` 中的 `DevManager` 接口定义了设备管理的标准方法，包括：\n- `GetNPUs()` - 获取设备信息\n- `GetChipAiCoreCount()` - 获取 AI Core 数量\n- `CreateVirtualDevice()` - 创建虚拟设备\n\n### 2. 设备类型常量\n所有组件使用相同的设备类型常量（如 `api.Ascend910`、`api.Ascend310P`），需要在 `ascend-common` 中统一定义。\n\n### 3. 调度插件接口\n`ascend-for-volcano` 中的调度插件需要实现 `base.AscendHandler` 接口，确保与 Volcano 调度器的集成。\n\n## 实现顺序建议\n\n1. 首先在 `ascend-common` 中定义 `Ascend910C` 设备类型\n2. 在 `ascend-device-plugin` 中实现设备管理器\n3. 在 `ascend-for-volcano` 中实现调度逻辑\n4. 测试三个组件的集成\n\n## Notes\n\n- 新增芯片支持时需要确保设备发现、健康检查、虚拟化等功能的完整性\n- 调度插件中的亲和性矩阵需要根据 Ascend 910C 的实际网络拓扑进行配置\n- 如果 Ascend 910C 支持特殊功能（如新的虚拟化模式），需要在相应接口中扩展方法\n\nWiki pages you might want to explore:\n- [Ascend Device Plugin (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#2)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascend910.go",
+          "range_start": 89,
+          "range_end": 101
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/manager.go",
+          "range_start": 127,
+          "range_end": 147
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/internal/npu/ascend910/ascend910a3/type.go",
+          "range_start": 25,
+          "range_end": 42
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascendcommon.go",
+          "range_start": 107,
+          "range_end": 160
+        }
+      ],
+      "rawResponseEventCount": 36
+    },
+    {
+      "id": "mindcluster-17",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 17,
+      "type": "扩展开发",
+      "difficulty": 3,
+      "question": "`ascend-faultdiag-online`（在线故障诊断）与 `ascend-faultdiag`（离线诊断）在架构上的核心差异是什么？`algo_src/netfault` 和 `algo_src/slownode` 中的在线检测算法是如何实现的？如果要新增一种故障模式（例如检测某类通信超时故障），需要在 `register/` 和 `core/` 目录中扩展哪些接口或配置？",
+      "mode": "fast",
+      "queryId": "mindcluster-17_7e97dba5-b4ef-42d9-89e6-882ae15dd1f9",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "# 架构差异与算法实现分析\n\n## 核心架构差异\n\n基于当前代码上下文，我只能确认 `ascend-faultdiag-online` 的架构实现，无法直接对比 `ascend-faultdiag`（离线版本）的具体差异。从现有代码可以看出，在线诊断系统采用了微服务架构，通过 `register/` 目录实现算法注册机制<cite repo=\"Ascend/mind-cluster\" path=\"component/ascend-faultdiag-online/pkg/register/func_map.go\" start=\"28-43\" />。\n\n## 在线检测算法实现\n\n### 网络故障检测 (`algo_src/netfault`)\n\n网络故障检测算法的核心实现在 `fault_analyze.go` 中：\n\n1. **故障检测入口**：`StartFaultDetect` 函数是算法的主入口，包含数据格式化、滑窗填充、异常检测等步骤<cite repo=\"Ascend/mind-cluster\" path=\"component/ascend-faultdiag-online/pkg/algo_src/netfault/algo/fault_analyze.go\" start=\"34-72\" />\n\n2. **滑动窗口分析**：使用滑动窗口机制过滤瞬态噪声，基于延迟和丢包率的均值和标准差计算动态阈值<cite repo=\"Ascend/mind-cluster\" path=\"component/ascend-faultdiag-online/pkg/algo_src/netfault/algo/fault_analyze.go\" start=\"110-117\" />\n\n3. **根因分析**：通过 `getFinalAlarm` 函数获取最终的根因告警列表，区分 NPU 直连和其他异常路径<cite repo=\"Ascend/mind-cluster\" path=\"component/ascend-faultdiag-online/pkg/algo_src/netfault/algo/fault_analyze.go\" start=\"277-328\" />\n\n### 慢节点检测 (`algo_src/slownode`)\n\n慢节点检测采用分层架构：\n\n1. **数据解析桥接**：通过 `externalbridge` 提供数据解析接口<cite repo=\"Ascend/mind-cluster\" path=\"component/ascend-faultdiag-online/pkg/algo_src/slownode/externalbridge/data_parse_bridge.go\" start=\"27-49\" />\n\n2. **时间维度检测**：`timedetector` 包负责时间序列异常检测<cite repo=\"Ascend/mind-cluster\" path=\"component/ascend-faultdiag-online/pkg/algo_src/slownode/timedetector/history_abnormal_detection.go\" start=\"15-18\" />\n\n3. **服务启动**：支持集群和节点两种部署模式<cite repo=\"Ascend/mind-cluster\" path=\"component/ascend-faultdiag-online/pkg/service/servicefunc/slownode/starter.go\" start=\"26-46\" />\n\n## 新增故障模式的扩展方式\n\n要新增通信超时故障检测，需要在以下目录进行扩展：\n\n### 1. `register/` 目录扩展\n\n在 `func_map.go` 中注册新的算法类型：\n\n```go\n// 在 handlerMap 中添加新的故障类型\nenum.CommTimeout: {\n    FuncType:    commtimeout.GetType(),\n    FuncVersion: commtimeout.GetVersion(),\n    ExecuteFunc: funchandler.GenerateExecuteFunc(commtimeout.Execute, enum.CommTimeout),\n},\n```\n\n参考现有的注册模式<cite repo=\"Ascend/mind-cluster\" path=\"component/ascend-faultdiag-online/pkg/register/func_map.go\" start=\"30-41\" />\n\n### 2. `core/` 目录扩展\n\n需要在 `core/model/enum` 中添加新的枚举类型，并在 `core/funchandler` 中实现相应的处理逻辑。\n\n### 3. 算法实现目录\n\n创建新的 `algo_src/commtimeout` 目录，实现：\n- 算法核心逻辑（参考 `netfault/algo/fault_analyze.go`）\n- 外部接口桥接（参考 `netfault/export_interface.go`）\n- 控制器逻辑（参考 `netfault/controller/net_fault_controller.go`）\n\n### 4. 应用启动配置\n\n在 `app.go` 中的 `appFunc` 映射中添加新功能的启动函数<cite repo=\"Ascend/mind-cluster\" path=\"component/ascend-faultdiag-online/app.go\" start=\"29-32\" />\n\n## Notes\n\n由于代码上下文中未包含 `ascend-faultdiag`（离线版本）的具体实现，无法提供详细的架构对比分析。建议查看离线版本的代码以获取完整的架构差异信息。当前的在线诊断系统采用了插件化的架构设计，通过注册机制支持多种算法类型的动态扩展。\n\nWiki pages you might want to explore:\n- [Advanced Topics (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#11)",
+      "references": [],
+      "rawResponseEventCount": 24
+    },
+    {
+      "id": "mindcluster-18",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 18,
+      "type": "接口设计",
+      "difficulty": 2,
+      "question": "`ascend-common/common-utils/` 下的 `cache/lrucache.go`、`limiter/`（limit_handler、limit_listener、limit_writer）、`rand/` 模块各提供什么能力？在开发新的 MindCluster 组件时，哪些场景下应使用这些工具（如并发控制、写入限速、安全随机数生成）？`limiter` 下三种限流器的适用场景有何区别？",
+      "mode": "fast",
+      "queryId": "mindcluster-18_47a1bb8f-ae06-4605-8f3a-f6b8989b11ae",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "基于代码库分析，`ascend-common/common-utils/` 下的各模块提供以下核心能力：\n\n## 模块能力概览\n\n### cache/lrucache.go\n提供并发安全的 LRU 缓存实现，支持计数操作。在 `limit_listener.go` 中被用于跟踪 IP 连接数。\n\n### limiter/ 模块\n包含三种限流器，各有不同的适用场景：\n\n#### 1. limit_listener（连接限流器）\n- **能力**：基于令牌桶机制限制 TCP 连接数，支持总连接数和单 IP 连接数双重限制\n- **特点**：超出限制时立即关闭连接，不等待\n\n#### 2. limit_writer（写入限流器）\n- **能力**：限制写入数据的最大大小，防止缓冲区溢出\n- **特点**：超过限制时返回错误，默认限制 1024 字节\n\n#### 3. limit_handler（HTTP 限流处理器）\n- **能力**：HTTP 层面的限流，支持方法、数据大小、并发数等多维度限制\n- **使用示例**：在 npu-exporter 中用于限制 HTTP 请求\n\n### rand/ 模块\n基于模块名称推断，应提供安全随机数生成功能，但在当前代码片段中未找到具体实现。\n\n## 使用场景建议\n\n### 并发控制场景\n- **网络服务**：使用 `limit_listener` 限制并发连接数，防止资源耗尽\n- **HTTP API**：使用 `limit_handler` 控制 QPS 和并发请求数\n\n### 写入限速场景\n- **日志收集**：使用 `limit_writer` 防止单次写入数据过大\n- **数据传输**：限制缓冲区大小，避免内存溢出\n\n### 缓存场景\n- **连接跟踪**：使用 `cache/lrucache` 跟踪 IP 连接计数\n- **会话管理**：缓存会话信息，支持 LRU 淘汰策略\n\n## 三种限流器区别\n\n| 限流器类型 | 作用层级 | 限制对象 | 处理方式 | 典型场景 |\n|-----------|---------|---------|---------|---------|\n| limit_listener | TCP 连接层 | 连接数 | 立即关闭连接 | 网络服务器防 DDoS |\n| limit_writer | 数据写入层 | 数据大小 | 返回错误 | 日志、缓冲区写入 |\n| limit_handler | HTTP 应用层 | 请求数/数据 | 返回 HTTP 错误 | API 限流、QPS 控制 |\n\n在开发新的 MindCluster 组件时，应根据具体需求选择合适的限流器：网络服务优先考虑 `limit_listener`，数据处理使用 `limit_writer`，HTTP 服务选择 `limit_handler`。\n\n## Notes\n- `rand/` 模块的具体实现未在当前代码片段中找到，建议查看完整源码\n- `limit_handler` 的具体实现细节需要进一步查看 `limit_handler.go` 文件\n- 所有限流器都支持配置化参数，可根据实际业务需求调整限制值\n\nWiki pages you might want to explore:\n- [Ascend FaultDiag and Online Diagnostics (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#13.4)\n- [Fault Detection and Collection (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#6.1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/limiter/limit_listener.go",
+          "range_start": 65,
+          "range_end": 65
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/limiter/limit_listener.go",
+          "range_start": 37,
+          "range_end": 50
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/limiter/limit_listener.go",
+          "range_start": 69,
+          "range_end": 78
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/limiter/limit_writer.go",
+          "range_start": 26,
+          "range_end": 31
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/limiter/limit_writer.go",
+          "range_start": 45,
+          "range_end": 49
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/npu-exporter/cmd/npu-exporter/main.go",
+          "range_start": 214,
+          "range_end": 215
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/npu-exporter/cmd/npu-exporter/main.go",
+          "range_start": 233,
+          "range_end": 233
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-common/common-utils/limiter/limit_listener.go",
+          "range_start": 89,
+          "range_end": 94
+        }
+      ],
+      "rawResponseEventCount": 39
+    },
+    {
+      "id": "mindcluster-19",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 19,
+      "type": "调试排错",
+      "difficulty": 2,
+      "question": "当训练任务 Pod 持续处于 Pending 状态时，应如何通过 MindCluster 各组件的日志和 K8s 事件定位问题？`ascend-for-volcano` 的 Predicate 失败时会输出什么级别和内容的日志，如何区分是\"NPU 资源不足\"、\"调度策略拒绝\"还是\"设备插件未就绪\"三种不同原因导致的 Pending？",
+      "mode": "fast",
+      "queryId": "mindcluster-19_e2add567-5538-415b-8f2c-3efe765a3926",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "当训练任务Pod持续处于Pending状态时，可以通过以下方法定位问题：\n\n## 故障排查流程\n\n### 1. 查看PodGroup状态和事件\n```shell\nkubectl describe pg -n <namespace> <podgroup-name>\n```\n\n### 2. 检查volcano-scheduler日志\n```shell\nkubectl logs -f -n volcano-system -l app=volcano-scheduler\n```\n\n### 3. 查看节点资源状态\n```shell\nkubectl describe nodes <node-name>\n```\n\n## ascend-for-volcano Predicate失败日志分析\n\n`ascend-for-volcano`的Predicate失败主要通过以下机制记录和输出：\n\n### 日志输出位置\n在`addPredicateFn`函数中，Predicate失败会被记录到`NodePredicateErrors`中：\n\n```go\nfunc addPredicateFn(ssn *framework.Session, tp *huaweiNPUPlugin) {\n\tssn.AddPredicateFn(tp.Name(), func(taskInfo *api.TaskInfo, nodeInfo *api.NodeInfo) error {\n\t\tpredicateErr := tp.Scheduler.NodePredicate(taskInfo, nodeInfo)\n\t\tif predicateErr != nil {\n\t\t\ttp.Scheduler.NodePredicateErrors.Add(taskInfo.Job, nodeInfo.Name, predicateErr)\n\t\t}\n\t\treturn predicateErr\n\t})\n}\n```\n\n### 错误信息聚合\n在`addNodePredicateFailedCondition`函数中，所有Predicate错误会被聚合并添加到PodGroup条件中。\n\n## 三种Pending原因的区分方法\n\n### 1. NPU资源不足\n**特征**：\n- PodGroup事件显示`NotEnoughResources`或`queue resource quota insufficient`\n- 节点Allocatable资源不足，可通过`kubectl describe nodes`确认\n\n**日志示例**：\n```\nEvents:\n  Type     Reason         Age                     From     Message\n  ----     ------         ----                    -------  -------\n  Warning  Unschedulable  6m22s (x12 over 6m34s)  volcano  queue resource quota insufficient\n```\n\n### 2. 调度策略拒绝\n**特征**：\n- 节点注解不匹配，如`all nodes are unavailable: 1 node annotations(7) not same node idle(8)`\n- 通常由Ascend Device Plugin启动异常导致节点状态不一致\n\n**解决方法**：\n重新安装Ascend Device Plugin\n\n### 3. 设备插件未就绪\n**特征**：\n- Pod失败且状态为`UnexpectedAdmissionError`，消息包含`not get valid pod`\n- volcano-scheduler日志出现`Failed to get plugin volcano-npu_***`错误\n\n**详细错误信息**：\n```\nThis pod may not be scheduled by the volcano scheduler or this pod is not valid for allocation.\nPlease check whether the annotation huawei.com/Ascend910=<some-value> is present in the pod.\nIf it is missing, inspect the Volcano scheduler logs for the keyword `Failed to get plugin volcano-npu_***`\n```\n\n## 日志级别和内容\n\n- **Error级别**：Predicate失败会记录错误日志并添加到PodGroup条件中\n- **Warning级别**：K8s事件中会显示Unschedulable警告\n- **Info级别**：正常的调度过程信息\n\n## 推荐排查步骤\n\n1. 首先检查PodGroup状态和事件，确定失败类型\n2. 根据事件类型检查相应组件：\n   - 资源不足：检查节点资源分配情况\n   - 调度策略拒绝：检查Ascend Device Plugin状态\n   - 设备插件未就绪：检查volcano-scheduler配置和插件文件\n3. 查看相关组件日志进行深入分析\n\n## Notes\n\n- 所有Predicate错误都会被聚合到`NodePredicateErrors`中，通过`addNodePredicateFailedCondition`函数统一处理\n- ClusterD的调度异常收集器可以提供更详细的错误分析和建议\n- 建议同时检查K8s事件和各组件日志以获得完整的故障信息\n\nWiki pages you might want to explore:\n- [Overview (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#1)\n- [Deployment and Operations (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#12)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/npu.go",
+          "range_start": 154,
+          "range_end": 162
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/npu.go",
+          "range_start": 452,
+          "range_end": 473
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/faq.md",
+          "range_start": 1166,
+          "range_end": 1178
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/usage/basic_scheduling/03_full_npu_scheduling_and_static_vnpu_scheduling_training.md",
+          "range_start": 2649,
+          "range_end": 2675
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/faq.md",
+          "range_start": 709,
+          "range_end": 721
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/faq.md",
+          "range_start": 723,
+          "range_end": 725
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/clusterd/pkg/application/schedulingexception/collector.go",
+          "range_start": 348,
+          "range_end": 363
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/faq.md",
+          "range_start": 316,
+          "range_end": 320
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-for-volcano/npu.go",
+          "range_start": 452,
+          "range_end": 473
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/clusterd/pkg/application/schedulingexception/collector.go",
+          "range_start": 296,
+          "range_end": 328
+        }
+      ],
+      "rawResponseEventCount": 40
+    },
+    {
+      "id": "mindcluster-20",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 20,
+      "type": "核心概念",
+      "difficulty": 2,
+      "question": "`ascend-device-plugin/pkg/common/` 中的 `proto.go` 和 `proto_v2.go` 定义了与 kubelet 通信的哪些 gRPC 消息结构？`fault_code.go` 中枚举了哪些 NPU 故障类型，这些故障码是从哪里采集（DCMI 接口还是 K8s 事件）？`send_stat.go` 负责上报什么统计信息，上报目标是哪个组件？",
+      "mode": "fast",
+      "queryId": "mindcluster-20_0cc04c57-e11e-454e-8a53-0c0eb23f4d43",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/mind-cluster/61c81dda::master"
+      ],
+      "answer": "根据您的问题，我将分析 ascend-device-plugin 中相关文件的功能。需要注意的是，在提供的代码上下文中，我无法找到 `proto_v2.go` 和 `send_stat.go` 文件的具体内容，因此只能基于现有信息回答部分问题。\n\n## 与 kubelet 通信的 gRPC 消息结构\n\n在 `proto.go` 中定义了以下与 kubelet 通信的关键消息结构：\n\n### 设备信息相关结构\n- **NodeDeviceInfoCache**: 记录节点 NPU 设备信息，会被固化到 ConfigMap 中\n- **NodeDeviceInfo**: 包含设备列表和更新时间\n- **NpuDevice**: NPU 设备描述，包含故障码、健康状态、网络状态、IP 地址等信息\n\n### 故障事件相关结构\n- **SwitchFaultEvent**: 交换机上报的故障事件结构\n- **SwitchFaultInfo**: 交换机故障信息\n\n### 实例和设备映射结构\n- **Instance**: 用于注解的实例信息，包含 Pod 名称、设备列表等\n- **Device**: 设备 ID 信息\n\n## NPU 故障类型及采集来源\n\n### 故障类型枚举\n从文档和代码中可以看到，NPU 故障类型包括：\n- **CardUnhealthy**: 芯片故障\n- **CardNetworkUnhealthy**: 芯片网络故障（参数面网络故障）\n- **NodeUnhealthy**: 节点故障\n\n### 故障处理级别\n故障处理类型包括：\n- **SeparateNPU**: 隔离芯片\n- **PreSeparateNPU**: 预隔离芯片\n- **RestartBusiness**: 重新执行业务\n- **RestartRequest**: 重新执行业务请求\n- **FreeRestartNPU**: 待芯片空闲时复位芯片\n- **RestartNPU**: 直接复位芯片\n- **NotHandleFault**: 不做处理\n\n### 故障码采集来源\n从代码分析可以看出，故障码主要通过 **DCMI 接口** 采集：\n- `getDeviceFaults` 方法通过 `dmgr.GetDeviceAllErrorCode()` 获取设备故障码\n- 故障订阅接口通过 DCMI 事件订阅机制获取故障信息\n- 同时也会将故障信息写入 K8s Event 中\n\n## send_stat.go 功能\n\n很抱歉，在提供的代码上下文中我没有找到 `send_stat.go` 文件的具体内容，因此无法确认该文件负责上报的统计信息和目标组件。\n\n## Notes\n\n1. 关于 `proto_v2.go` 文件，在提供的代码上下文中也没有找到相关内容，可能该文件不存在或未被包含在当前代码片段中。\n\n2. 故障码的采集是双路径的：主要通过 DCMI 接口实时采集，同时也会通过 K8s Event 机制进行故障事件的记录和通知。\n\n3. 设备插件通过 gRPC 与 kubelet 通信，主要实现 Device Plugin API 的 `ListAndWatch` 和 `Allocate` 方法，相关的消息结构在 `plugin.go` 中有具体实现。\n\nWiki pages you might want to explore:\n- [Ascend Device Plugin (Ascend/mind-cluster)](/wiki/Ascend/mind-cluster#2)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/common/proto.go",
+          "range_start": 34,
+          "range_end": 41
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/common/proto.go",
+          "range_start": 78,
+          "range_end": 82
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/common/proto.go",
+          "range_start": 98,
+          "range_end": 122
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/common/proto.go",
+          "range_start": 43,
+          "range_end": 67
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/common/proto.go",
+          "range_start": 69,
+          "range_end": 76
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/common/proto.go",
+          "range_start": 142,
+          "range_end": 152
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/common/proto.go",
+          "range_start": 134,
+          "range_end": 140
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/common_operations.md",
+          "range_start": 637,
+          "range_end": 641
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: docs/zh/scheduling/common_operations.md",
+          "range_start": 650,
+          "range_end": 652
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/device/ascendcommon.go",
+          "range_start": 1760,
+          "range_end": 1765
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/manager.go",
+          "range_start": 592,
+          "range_end": 593
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/manager.go",
+          "range_start": 604,
+          "range_end": 605
+        },
+        {
+          "file_path": "Repo Ascend/mind-cluster: component/ascend-device-plugin/pkg/server/plugin.go",
+          "range_start": 187,
+          "range_end": 241
+        }
+      ],
+      "rawResponseEventCount": 52
+    },
+    {
+      "id": "recsdk-01",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 1,
+      "type": "架构概览",
+      "difficulty": 1,
+      "question": "RecSDK 的四个训练组件（`tf_rec_v1`、`tf_rec_v2`、`torch_rec_v1`、`torch_rec_v2`）各自的定位和技术差异是什么？\"非全下沉\"（hybrid）与\"全下沉\"（fully offloaded）在架构上的本质区别是什么——哪些计算在 CPU 侧执行、哪些在 NPU 侧执行？当前生产可用的组件有哪些，POC 状态组件的限制是什么？",
+      "mode": "fast",
+      "queryId": "recsdk-01_7e340304-edc7-474e-b7eb-d4d16a617f10",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/RecSDK/83b161bc::develop"
+      ],
+      "answer": "## RecSDK四个训练组件的定位和技术差异\n\nRecSDK包含四个训练组件，分别基于TensorFlow和PyTorch框架，支持不同的下沉模式：\n\n| 组件名称 | 基础框架 | 适配状态 | 框架类型 | 功能描述 |\n|---------|---------|---------|---------|---------|\n| tf_rec_v1 | TensorFlow | 非全下沉 | 稀疏推荐框架 | 基于TensorFlow，适配NPU设备的非全下沉稀疏推荐框架 |\n| tf_rec_v2 | TensorFlow | 全下沉 | 稀疏推荐框架 | 基于TensorFlow，适配NPU设备的全下沉稀疏推荐框架（POC状态） |\n| torch_rec_v1 | PyTorch + TorchRec | 非全下沉 | 稀疏推荐框架 | 基于PyTorch、TorchRec开源软件，适配NPU设备的非全下沉稀疏推荐框架 |\n| torch_rec_v2 | PyTorch + TorchRec | 全下沉 | 稀疏推荐框架 | 基于PyTorch、TorchRec开源软件，适配NPU设备的全下沉稀疏推荐框架（POC状态） |\n\n## \"非全下沉\"与\"全下沉\"的架构本质区别\n\n### 非全下沉（Hybrid）\n- **CPU侧执行**：稀疏表哈希映射、去重分桶相关操作在CPU上执行\n- **NPU侧执行**：其余计算任务在NPU上执行\n- **特点**：部分计算任务在NPU上执行，部分在CPU上执行的混合模式\n\n### 全下沉（Fully Offloaded）\n- **CPU侧执行**：无\n- **NPU侧执行**：所有计算任务都下沉到NPU上执行\n- **特点**：所有计算任务都下沉到NPU上执行，以获得更好的兼容性\n\n## 当前生产可用组件和POC状态组件限制\n\n### 生产可用组件\n1. **tf_rec_v1**：支持Atlas A2/A3/A5设备\n2. **torch_rec_v1**：支持Atlas A2/A3/A5设备\n\n### POC状态组件限制\n1. **tf_rec_v2**：\n   - 仅支持Atlas A5设备\n   - 处于POC状态，功能可能不完整或不稳定\n\n2. **torch_rec_v2**：\n   - 仅支持Atlas A5设备\n   - 处于POC状态，功能可能不完整或不稳定\n   - 基于DynamicEmb和TorchRec开源框架\n\n## Notes\n\nPOC状态组件表示仍处于试验验证阶段，建议在生产环境中使用成熟的非全下沉组件（tf_rec_v1、torch_rec_v1）。全下沉组件虽然理论上性能更优，但目前仍在开发完善中，且硬件支持受限（仅支持Atlas A5设备）。\n\nWiki pages you might want to explore:\n- [RecSDK Overview (Ascend/RecSDK)](/wiki/Ascend/RecSDK#1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/RecSDK: README.md",
+          "range_start": 52,
+          "range_end": 57
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/rec_full_stack.md",
+          "range_start": 66,
+          "range_end": 67
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/rec_full_stack.md",
+          "range_start": 66,
+          "range_end": 67
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: README.md",
+          "range_start": 61,
+          "range_end": 61
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/rec_full_stack.md",
+          "range_start": 68,
+          "range_end": 68
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/rec_full_stack.md",
+          "range_start": 68,
+          "range_end": 68
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/rec_full_stack.md",
+          "range_start": 58,
+          "range_end": 58
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/rec_full_stack.md",
+          "range_start": 60,
+          "range_end": 60
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/rec_full_stack.md",
+          "range_start": 59,
+          "range_end": 59
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: README.md",
+          "range_start": 63,
+          "range_end": 63
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/rec_full_stack.md",
+          "range_start": 61,
+          "range_end": 61
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: README.md",
+          "range_start": 63,
+          "range_end": 63
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/rec_full_stack.md",
+          "range_start": 61,
+          "range_end": 61
+        }
+      ],
+      "rawResponseEventCount": 48
+    },
+    {
+      "id": "recsdk-02",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 2,
+      "type": "架构概览",
+      "difficulty": 2,
+      "question": "`cust_op/`（自定义算子层）与 `training/`（训练框架层）之间的分工是什么？当 Python 框架代码调用一个 NPU 自定义算子（如 `block_bucketize_sparse_features`）时，从 Python API 调用到 AI Core 内核执行的完整调用栈是怎样的（Python → C++ pybind/TF plugin → AscendC kernel）？`cust_op/framework/tf_plugin` 与 `cust_op/ascendc_op` 各自承担调用栈的哪一层？",
+      "mode": "fast",
+      "queryId": "recsdk-02_bf47ab99-a776-4206-b94e-3ccb10a1938b",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/RecSDK/83b161bc::develop"
+      ],
+      "answer": "## 分工概述\n\n`cust_op/`（自定义算子层）与 `training/`（训练框架层）在 RecSDK 中具有明确的职责分工：\n\n- **training/**：提供完整的训练框架实现，包含 TensorFlow 和 PyTorch 的生产级和 POC 版本，负责模型构建、训练循环、分布式协调等高层训练逻辑\n- **cust_op/**：专门负责 NPU 自定义算子的实现，包含算子适配层和 AscendC 内核，为训练框架提供高性能算子支持\n\n## 完整调用栈分析\n\n以 `block_bucketize_sparse_features` 算子为例，从 Python API 到 AI Core 内核的完整调用栈如下：\n\n### 1. Python 框架层\nPython 代码通过 PyTorch/TensorFlow API 调用算子：\n```python\n# PyTorch 示例\ntorch.ops.mxrec.block_bucketize_sparse_features(...)\n```\n\n### 2. 框架适配层（cust_op/framework）\n`cust_op/framework/torch_plugin/torch_library/block_bucketize_sparse_features/block_bucketize_sparse_features.cpp` 负责将 Python 调用转换为 NPU 执行命令：\n\n- 定义算子接口和参数验证\n- 调用 `EXEC_NPU_CMD` 执行 NPU 算子\n\n### 3. Host 侧算子实现（cust_op/ascendc_op/op_host）\n`cust_op/ascendc_op/ai_core_op/block_bucketize_sparse_features/c310/op_host/block_bucketize_sparse_features.cpp` 负责：\n\n- 算子原型注册和输入输出定义\n- Tiling 参数计算和内存分配\n\n### 4. Kernel 侧实现（cust_op/ascendc_op/op_kernel）\n`cust_op/ascendc_op/ai_core_op/block_bucketize_sparse_features/c310/op_kernel/` 包含实际的 AI Core 内核实现：\n\n- 核心计算逻辑在 `block_bucketize_sparse_features_kernel_simplified.h`\n- 使用 AscendC SIMT 指令在 AI Core 上并行执行\n\n## 各层职责总结\n\n| 层次 | 目录 | 职责 | 关键文件 |\n|------|------|------|----------|\n| 训练框架层 | `training/` | 提供完整训练框架，模型构建，训练循环 | `training/torch_rec_v1`, `training/tf_rec_v1` |\n| 框架适配层 | `cust_op/framework/` | Python 到 C++ 的桥接，参数验证，NPU 命令调用 | `block_bucketize_sparse_features.cpp` |\n| Host 侧实现 | `cust_op/ascendc_op/op_host/` | 算子注册，Tiling 计算，内存管理 | `block_bucketize_sparse_features.cpp` |\n| Kernel 侧实现 | `cust_op/ascendc_op/op_kernel/` | AI Core 内核实现，实际计算逻辑 | `block_bucketize_sparse_features_kernel_simplified.h` |\n\n## Notes\n\n- `cust_op/framework/tf_plugin` 在提供的代码中未直接体现，但根据架构设计，它应该与 `torch_plugin` 类似，负责 TensorFlow 框架的算子适配\n- 调用栈中的 `EXEC_NPU_CMD` 宏是连接框架适配层和 AscendC 算子的关键接口\n- 算子编译通过 `run.sh` 脚本完成，支持不同的 AI Core 类型\n\nWiki pages you might want to explore:\n- [RecSDK Overview (Ascend/RecSDK)](/wiki/Ascend/RecSDK#1)\n- [Sparse Data Operations (Ascend/RecSDK)](/wiki/Ascend/RecSDK#5.3)\n- [Additional Custom Operators (Ascend/RecSDK)](/wiki/Ascend/RecSDK#9)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/RecSDK: README.md",
+          "range_start": 29,
+          "range_end": 48
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: README.md",
+          "range_start": 44,
+          "range_end": 47
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: README.md",
+          "range_start": 34,
+          "range_end": 36
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: cust_op/framework/torch_plugin/torch_library/block_bucketize_sparse_features/block_bucketize_sparse_features.cpp",
+          "range_start": 247,
+          "range_end": 265
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: cust_op/framework/torch_plugin/torch_library/block_bucketize_sparse_features/block_bucketize_sparse_features.cpp",
+          "range_start": 36,
+          "range_end": 90
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: cust_op/framework/torch_plugin/torch_library/block_bucketize_sparse_features/block_bucketize_sparse_features.cpp",
+          "range_start": 174,
+          "range_end": 192
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: cust_op/ascendc_op/ai_core_op/block_bucketize_sparse_features/c310/op_host/block_bucketize_sparse_features.cpp",
+          "range_start": 458,
+          "range_end": 503
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: cust_op/ascendc_op/ai_core_op/block_bucketize_sparse_features/c310/op_host/block_bucketize_sparse_features.cpp",
+          "range_start": 347,
+          "range_end": 365
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: cust_op/ascendc_op/ai_core_op/block_bucketize_sparse_features/c310/op_kernel/block_bucketize_sparse_features_kernel_simplified.h",
+          "range_start": 41,
+          "range_end": 72
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: cust_op/framework/torch_plugin/torch_library/block_bucketize_sparse_features/block_bucketize_sparse_features.cpp",
+          "range_start": 174,
+          "range_end": 192
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: cust_op/ascendc_op/ai_core_op/block_bucketize_sparse_features/c310/run.sh",
+          "range_start": 40,
+          "range_end": 68
+        }
+      ],
+      "rawResponseEventCount": 47
+    },
+    {
+      "id": "recsdk-04",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 4,
+      "type": "接口设计",
+      "difficulty": 2,
+      "question": "`tf_rec_v1/python/core/emb/emb_factory.py` 中 `EmbeddingFactory` 的工厂方法签名是什么？创建一个完整的稀疏 Embedding 表需要传入哪些配置参数（特征列定义、Embedding 维度、优化器类型、存储介质级别等）？工厂根据什么条件（配置字段或环境参数）决定实例化哪个具体的 Embedding 类？",
+      "mode": "fast",
+      "queryId": "recsdk-04_f4ebc800-ae9a-4c56-a64a-af15eda5f044",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/RecSDK/83b161bc::develop"
+      ],
+      "answer": "很抱歉，在我提供的代码上下文中没有找到 `tf_rec_v1/python/core/emb/emb_factory.py` 这个具体文件的内容。不过，我可以根据相关的 TensorFlow embedding 创建接口为您提供参考信息。\n\n## 工厂方法签名参考\n\n基于 TensorFlow v2 的类似接口，`get_embedding_table` 函数签名如下：\n\n```python\ndef get_embedding_table(\n    name: str,\n    dimension: int,\n    device_vocabulary_size: int,\n    initializer: Union[InitializerV1, InitializerV2] = tf.compat.v1.random_normal_initializer(),\n    key_dtype: tf.DType = tf.int64,\n    value_dtype: tf.DType = tf.float32,\n    distribution_strategy: str = EmbDistributionStrategy.MP.value,\n    min_used_times: Optional[int] = None,\n    max_cold_secs: Optional[int] = None,\n):\n```\n\n## 创建稀疏 Embedding 表的配置参数\n\n根据相关接口，创建完整的稀疏 Embedding 表需要以下关键参数：\n\n### 必选参数\n- **name**: 稀疏表名，只能包含[0-9A-Zaiz_.]，长度范围[1, 128]\n- **dimension**: Embedding 维度，取值范围[1, 512]\n- **device_vocabulary_size**: Device 侧稀疏表容量，取值范围[1, 10^9]\n\n### 可选参数\n- **initializer**: 初始化器，默认为随机正态分布\n- **key_dtype**: 特征 key 数据类型，默认 tf.int64\n- **value_dtype**: 特征 value 数据类型，默认 tf.float32\n- **distribution_strategy**: 分布式并行模式，默认\"MP\"（模型并行）\n- **min_used_times**: 特征准入阈值，控制 ID 历史出现次数\n- **max_cold_secs**: 特征淘汰阈值，控制 ID 最久未访问时长\n\n## 实例化条件判断\n\n从相关代码结构来看，工厂方法可能根据以下条件决定实例化哪个具体的 Embedding 类：\n\n1. **存储介质级别**: 通过 `device_vocabulary_size` 参数控制设备侧容量\n2. **分布式策略**: 通过 `distribution_strategy` 参数选择并行模式\n3. **特征准入淘汰**: 通过 `min_used_times` 和 `max_cold_secs` 控制特征管理策略\n\n## Notes\n\n由于我没有看到 `tf_rec_v1/python/core/emb/emb_factory.py` 的具体实现，以上信息基于 TensorFlow v2 的类似接口和相关文档推断。如需准确的 v1 工厂方法信息，建议直接查看该源文件。从 C++ 头文件可以看到存在 `EmbeddingMgmt` 类来管理多个 embedding 表，这可能与工厂模式相关。\n\nWiki pages you might want to explore:\n- [API Reference (Ascend/RecSDK)](/wiki/Ascend/RecSDK#11.1)\n- [torchrec_embcache (Ascend/RecSDK)](/wiki/Ascend/RecSDK#4.2.3)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 11,
+          "range_end": 21
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 28,
+          "range_end": 28
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 29,
+          "range_end": 29
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 30,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 31,
+          "range_end": 31
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 32,
+          "range_end": 32
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 33,
+          "range_end": 33
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 34,
+          "range_end": 34
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 35,
+          "range_end": 35
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 36,
+          "range_end": 36
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 30,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 34,
+          "range_end": 34
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v2/api/model_apis.md",
+          "range_start": 35,
+          "range_end": 36
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/src/core/emb_table/embedding_mgmt.h",
+          "range_start": 145,
+          "range_end": 145
+        }
+      ],
+      "rawResponseEventCount": 52
+    },
+    {
+      "id": "recsdk-03",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 3,
+      "type": "核心概念",
+      "difficulty": 2,
+      "question": "`tf_rec_v1/python/core/emb/` 下定义了哪几种稀疏 Embedding 实现类（`BaseSparseEmbedding`、`DynamicSparseEmbedding`、`MergeableSparseEmbedding`、`SparseEmbedding` 等）？它们的继承或组合关系是什么？各自在支持\"动态扩容\"、\"合并查表优化\"、\"多级存储\"等特性上有何差异？实际使用时应如何选择？",
+      "mode": "fast",
+      "queryId": "recsdk-03_f0f3fffe-e4a4-43b8-b173-d3833a007824",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/RecSDK/83b161bc::develop"
+      ],
+      "answer": "根据提供的代码上下文，我无法完全确定 `tf_rec_v1/python/core/emb/` 目录下的所有稀疏 Embedding 实现类的具体定义，但可以基于现有信息回答部分问题。\n\n## 稀疏 Embedding 实现类概述\n\n从代码上下文中可以确认的实现类：\n\n### 1. EmbeddingDynamic（C++实现）\n- **位置**: `training/tf_rec_v1/src/core/emb_table/embedding_dynamic.h`\n- **继承关系**: 继承自 `EmbeddingTable`\n- **核心特性**: 支持动态扩容，每次扩容分配10万条记录\n\n## 特性支持差异\n\n### 动态扩容支持\n- **EmbeddingDynamic**: 完全支持，通过片上内存侧动态扩容模式实现\n- **启用方式**: 在 `init` 接口中设置 `use_dynamic_expansion=True`\n\n### 合并查表优化支持\n- **实现方式**: 通过 `create_table` 接口的 `enable_merge` 参数控制\n- **合并条件**: 要求两个表的 key_dtype、dim、emb_initializer 等参数完全相同\n- **约束**: 当前仅支持片上内存动态扩容模式\n\n### 多级存储支持\n- **存储层级**: 支持 HBM（Device Memory）、DDR（Host Memory）、SSD 三级存储\n- **配置参数**: \n  - `device_vocabulary_size`: HBM 容量\n  - `host_vocabulary_size`: DDR 容量  \n  - `ssd_vocabulary_size`: SSD 容量\n\n## 使用选择建议\n\n### 选择动态扩容模式\n- **适用场景**: 无法预估稀疏表大小的推荐场景\n- **优势**: 避免显存浪费或空间不足\n- **限制**: 不支持特征淘汰功能\n\n### 选择合并查表优化\n- **适用场景**: 多个稀疏表参数相同且ID相互独立\n- **优势**: 减少CPU线程、Host与Device通信Channel数量，节省系统资源\n\n### 选择多级存储\n- **适用场景**: 超大规模稀疏表，单级存储无法满足需求\n- **约束**: 开启DDR/SSD模式必须同时开启自动改图模式\n\n## Notes\n\n由于提供的代码上下文中未包含 `tf_rec_v1/python/core/emb/` 目录的完整 Python 类定义，无法确认 `BaseSparseEmbedding`、`DynamicSparseEmbedding`、`MergeableSparseEmbedding`、`SparseEmbedding` 等类的具体继承关系。建议查看该目录下的 Python 源文件以获取完整的类继承结构信息。当前回答主要基于 C++ 实现和 API 文档进行分析。\n\nWiki pages you might want to explore:\n- [API Reference (Ascend/RecSDK)](/wiki/Ascend/RecSDK#11.1)\n- [TensorFlow Frameworks (Ascend/RecSDK)](/wiki/Ascend/RecSDK#4.1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/src/core/emb_table/embedding_dynamic.h",
+          "range_start": 30,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/src/core/emb_table/embedding_dynamic.h",
+          "range_start": 30,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/src/core/emb_table/embedding_dynamic.h",
+          "range_start": 54,
+          "range_end": 54
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 6,
+          "range_end": 8
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 28,
+          "range_end": 28
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/model_apis.md",
+          "range_start": 30,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/model_apis.md",
+          "range_start": 30,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/model_apis.md",
+          "range_start": 30,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/model_apis.md",
+          "range_start": 11,
+          "range_end": 24
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/model_apis.md",
+          "range_start": 11,
+          "range_end": 24
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 6,
+          "range_end": 8
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/model_apis.md",
+          "range_start": 30,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/model_apis.md",
+          "range_start": 46,
+          "range_end": 46
+        }
+      ],
+      "rawResponseEventCount": 53
+    },
+    {
+      "id": "recsdk-05",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 5,
+      "type": "接口设计",
+      "difficulty": 2,
+      "question": "`tf_rec_v1/python/optimizers/` 下实现了多种稀疏优化器（LazyAdam、Adagrad、FTRL、GradientDescent 等），以及对应的 `by_addr` 变体（如 `lazy_adam_by_addr.py`、`gradient_descent_by_addr.py`）。`by_addr` 后缀版本与普通版本的核心区别是什么（直接操作内存地址 vs. 标准梯度更新）？两者的接口签名差异体现在哪些参数上？在什么场景下应选择 `by_addr` 版本？",
+      "mode": "fast",
+      "queryId": "recsdk-05_98c8e225-cff3-4d11-8b20-53f27bbf25ce",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/RecSDK/83b161bc::develop"
+      ],
+      "answer": "## 核心区别\n\n`by_addr` 后缀版本与普通版本的核心区别在于**内存访问方式**：\n\n- **普通版本**：使用标准的梯度更新机制，通过变量索引进行参数更新\n- **by_addr 版本**：直接操作内存地址，专为动态扩容模式设计，通过地址映射进行参数更新\n\n## 接口签名差异\n\n两者的接口签名差异主要体现在创建函数上：\n\n### 普通版本\n```python\nfrom mx_rec.optimizers.lazy_adam import create_hash_optimizer\nsparse_optimizer = create_hash_optimizer(learning_rate=cfg.learning_rate)\n```\n\n### by_addr 版本  \n```python\nfrom mx_rec.optimizers.lazy_adam_by_addr import create_hash_optimizer_by_address\nsparse_optimizer = create_hash_optimizer_by_address(learning_rate=cfg.learning_rate)\n```\n\n关键差异在于：\n- 普通版本使用 `create_hash_optimizer`\n- by_addr 版本使用 `create_hash_optimizer_by_address`\n\n## 使用场景选择\n\n应选择 `by_addr` 版本的场景：\n\n1. **启用动态扩容模式时**：当初始化框架时设置 `use_dynamic_expansion=True`\n\n2. **需要片上内存自动扩容时**：适用于稀疏表大小无法预估，需要显存随模型训练增长的场景\n\n3. **获取嵌入表示和映射地址时**：需要通过 `tf.get_collection(\"ASCEND_SPARSE_LOOKUP_LOCAL_EMB\")` 获取嵌入表示，通过 `tf.get_collection(\"ASCEND_SPARSE_LOOKUP_ID_OFFSET\")` 获取映射地址\n\n## 工作流程差异\n\n### 普通版本工作流程\n1. 创建稀疏表\n2. 标准查表操作\n3. 计算梯度\n4. 使用变量索引更新参数\n\n### by_addr 版本工作流程\n1. 初始化时启用动态扩容\n2. 获取嵌入表示结果和映射地址\n3. 对嵌入表示结果求导得到梯度\n4. 使用 `sparse_optimizer.apply_gradients([grad, addr])` 通过地址更新参数\n\n## 注意事项\n\n- 使用 by_addr 版本时，地址列表必须是有效合法的，需要通过 `ASCEND_SPARSE_LOOKUP_ID_OFFSET` 获取\n- 动态扩容模式下不支持特征淘汰\n- 调用 `apply_gradients` 时，需要保证地址的维度和梯度的第一个维度相等\n\n## Notes\n\n虽然我没有看到 `tf_rec_v1/python/optimizers/` 目录下的具体实现文件，但从文档中可以明确看出 by_addr 版本是为动态扩容场景专门设计的，通过直接操作内存地址来实现更高效的参数更新。这种设计避免了传统索引方式在动态扩容时的性能开销。\n\nWiki pages you might want to explore:\n- [tf_rec_v1 (Production) (Ascend/RecSDK)](/wiki/Ascend/RecSDK#4.1.1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 37,
+          "range_end": 47
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/quick_start.md",
+          "range_start": 63,
+          "range_end": 75
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 28,
+          "range_end": 32
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 6,
+          "range_end": 8
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 37,
+          "range_end": 39
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 41,
+          "range_end": 47
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 99,
+          "range_end": 101
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 8,
+          "range_end": 8
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 99,
+          "range_end": 100
+        }
+      ],
+      "rawResponseEventCount": 44
+    },
+    {
+      "id": "recsdk-06",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 6,
+      "type": "接口设计",
+      "difficulty": 2,
+      "question": "`tf_rec_v1/python/saver/saver.py` 中稀疏 Embedding 表的 `save` 和 `restore` 接口签名是什么，与 TF 标准 `tf.train.Saver` 相比有哪些差异？`sparse.py` 负责处理稀疏参数的哪类序列化逻辑？`warm_start.py` 实现的热启动（warm start）功能与断点续训（checkpoint resume）有什么区别，对应的调用入口分别在哪里？",
+      "mode": "fast",
+      "queryId": "recsdk-06_9234d08e-8f6e-4f4d-8e55-f66569a1b1a4",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/RecSDK/83b161bc::develop"
+      ],
+      "answer": "## 稀疏 Embedding 表的 save 和 restore 接口\n\n### 接口签名\n\n在 `tf_rec_v1/python/saver/saver.py` 中，稀疏 Embedding 表的保存和恢复接口签名如下：\n\n**save 接口**：\n```python\ndef save(self, sess, save_path=\"model\", global_step=None, save_delta=False)\n```\n\n\n**restore 接口**：\n```python\ndef restore(self, sess, reading_path, warm_start_tables=None, model_type=\"base\")\n```\n\n\n### 与 TF 标准 tf.train.Saver 的差异\n\n| 特性 | RecSDK Saver | TF 标准 Saver |\n|------|-------------|---------------|\n| **稀疏表支持** | 专门处理稀疏 Embedding 表的多层存储（HBM/DDR/SSD） | 仅处理 Dense 变量 |\n| **增量保存** | 支持 `save_delta` 参数进行增量 checkpoint | 不支持增量保存 |\n| **多卡合并** | 自动合并多卡保存的稀疏表文件 | 每卡独立保存 |\n| **文件系统** | 支持本地和 HDFS 文件系统 | 主要支持本地文件系统 |\n| **存储结构** | 分层目录结构：`rank_id/HashTable/HBM/table/key/xxx.data` | 单一 checkpoint 文件 |\n\n## sparse.py 的序列化逻辑\n\n在提供的代码片段中没有直接看到 `sparse.py` 文件，但从 `saver.py` 的实现可以推断，稀疏参数的序列化逻辑主要包括：\n\n1. **Embedding 数据序列化**：通过 `save_embedding_data` 函数处理\n2. **优化器状态序列化**：通过 `save_optimizer_state_data` 函数处理\n3. **多线程保存**：使用 `SaveModelThread` 类进行异步保存\n\n## warm_start 功能与 checkpoint resume 的区别\n\n### 功能差异\n\n| 特性 | Warm Start | Checkpoint Resume |\n|------|------------|-------------------|\n| **目的** | 从预训练模型初始化部分参数，继续训练新任务 | 从中断点完全恢复训练状态 |\n| **参数选择** | 可选择性加载特定表或变量 | 加载所有训练状态 |\n| **模型版本** | 通常从不同版本的模型加载参数 | 从同一训练任务的 checkpoint 加载 |\n\n### 调用入口\n\n**Warm Start 调用**：\n- 通过 `restore` 方法的 `warm_start_tables` 参数指定要热启动的表\n- 使用 `get_warm_start_dict` 方法获取热启动相关的占位符和操作\n\n**Checkpoint Resume 调用**：\n- 直接调用 `restore` 方法，不指定 `warm_start_tables` 参数\n- 通过 `model_type` 参数指定加载基础模型还是增量模型\n\n在文档中还提到了多路径 WarmStart 功能，支持从多个 checkpoint 路径选择性加载不同的参数。\n\n## Notes\n\n1. 由于提供的代码片段中没有包含 `sparse.py` 和 `warm_start.py` 文件，相关分析基于 `saver.py` 的实现和文档描述推断\n2. RecSDK 的 Saver 类继承并扩展了 TensorFlow 标准 Saver 的功能，专门针对稀疏 Embedding 表的存储需求进行了优化\n3. 增量保存功能通过 `save_delta` 参数控制，支持定期保存增量模型以减少存储开销\n\nWiki pages you might want to explore:\n- [Reference (Ascend/RecSDK)](/wiki/Ascend/RecSDK#11)\n- [tf_rec_v1 (Production) (Ascend/RecSDK)](/wiki/Ascend/RecSDK#4.1.1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 156,
+          "range_end": 169
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 243,
+          "range_end": 270
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 158,
+          "range_end": 162
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 167,
+          "range_end": 168
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 223,
+          "range_end": 237
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 128,
+          "range_end": 131
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 158,
+          "range_end": 162
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 278,
+          "range_end": 278
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 283,
+          "range_end": 284
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 91,
+          "range_end": 102
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 342,
+          "range_end": 352
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 243,
+          "range_end": 243
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 342,
+          "range_end": 352
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 495,
+          "range_end": 497
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/tf_rec_v1/python/saver/saver.py",
+          "range_start": 250,
+          "range_end": 253
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 331,
+          "range_end": 362
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 364,
+          "range_end": 389
+        }
+      ],
+      "rawResponseEventCount": 55
+    },
+    {
+      "id": "recsdk-07",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 7,
+      "type": "接口设计",
+      "difficulty": 2,
+      "question": "`torch_rec_v1/hybrid_torchrec/hybrid_torchrec/modules/embedding_config.py` 中定义的 Embedding 配置类包含哪些核心字段（如 hash 大小、embedding 维度、数据类型、优化器配置）？如何通过该配置类来描述一张 HashEmbeddingBag 表，并将其传入 `distributed/sharding_plan.py` 中的分片策略函数？",
+      "mode": "fast",
+      "queryId": "recsdk-07_299844f1-def0-4d3d-91a3-56d5a2af10b5",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/RecSDK/83b161bc::develop"
+      ],
+      "answer": "根据代码库中的信息，我来为您解答关于 Embedding 配置类的问题。\n\n## HashEmbeddingBagConfig 核心字段\n\n`HashEmbeddingBagConfig` 类包含以下核心字段：\n\n| 字段名 | 类型 | 必选/可选 | 说明 |\n|--------|------|-----------|------|\n| `num_embeddings` | int | 必选 | 稀疏表的行数，取值范围：[1, 10亿]  |\n| `embedding_dim` | int | 必选 | 稀疏表的列数，取值范围：[8, 4096]，需为8的倍数  |\n| `name` | str | 必选 | 稀疏表的名称，只能包含数字、字母和下划线  |\n| `data_type` | torchrec.types.DataType | 可选 | 稀疏表的数据类型，仅支持默认值 DataType.FP32  |\n| `feature_names` | List[str] | 必选 | 稀疏表查询的特征名称  |\n| `pooling` | torchrec.modules.embedding_configs.PoolType | 可选 | pool操作类型，支持 SUM、MEAN、NONE，默认为 SUM  |\n| `init_fn` | Callable | 可选 | 初始化函数，支持传入 nn.Parameter 类型的函数  |\n\n## 描述 HashEmbeddingBag 表\n\n通过 `HashEmbeddingBagConfig` 创建表的示例：\n\n```python\nfrom hybrid_torchrec import HashEmbeddingBagConfig, HashEmbeddingBagCollection\n\nemb_config = HashEmbeddingBagConfig(\n    name=\"table0\",\n    embedding_dim=128,\n    num_embeddings=1000,\n    feature_names=[\"feat0\"],\n    pooling=torchrec.PoolingType.MEAN,\n    init_fn=weight_init,  # type: ignore\n)\n\n```\n\n## 传入分片策略函数\n\n配置创建后，需要传入分片策略函数进行分布式训练：\n\n1. **创建 HashEmbeddingBagCollection**：\n```python\nsparse_ebc: HashEmbeddingBagCollection = HashEmbeddingBagCollection(device=\"meta\", tables=embedding_configs)\n\n```\n\n2. **设置分片约束**：\n```python\nconstraints = {\n    # 分表方式为row_wise，compute_kernels使用fused\n    table_name: ParameterConstraints(sharding_types=[\"row_wise\"], compute_kernels=[\"fused\"])\n    for table_name in table_names\n}\n\n```\n\n3. **创建分片计划**：\n```python\nplanner = EmbeddingShardingPlanner(\n    topology=Topology(world_size=world_size, compute_device=\"npu\"),\n    constraints=constraints,\n)\nplan = planner.collective_plan(test_model, sharders, dist.GroupMember.WORLD)\n\n```\n\n4. **应用分布式模型并行**：\n```python\nddp_model = DistributedModelParallel(test_model, device=npu_device, plan=plan, sharders=sharders)\n\n```\n\n## Notes\n\n- `HashEmbeddingBagConfig` 继承自 `EmbeddingBagConfig`，在 `hash_embeddingbag.py` 中定义为空类 \n- 配置类会通过 `check_embedding_config_valid` 函数进行参数验证 \n- 分片策略支持 `row_wise` 分片类型和 `fused` 计算内核 \n\nWiki pages you might want to explore:\n- [API Reference (Ascend/RecSDK)](/wiki/Ascend/RecSDK#11.1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/api/table_creation_apis.md",
+          "range_start": 20,
+          "range_end": 20
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/api/table_creation_apis.md",
+          "range_start": 21,
+          "range_end": 21
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/api/table_creation_apis.md",
+          "range_start": 22,
+          "range_end": 22
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/api/table_creation_apis.md",
+          "range_start": 23,
+          "range_end": 23
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/api/table_creation_apis.md",
+          "range_start": 24,
+          "range_end": 24
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/api/table_creation_apis.md",
+          "range_start": 30,
+          "range_end": 30
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/api/table_creation_apis.md",
+          "range_start": 28,
+          "range_end": 28
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/api/table_creation_apis.md",
+          "range_start": 41,
+          "range_end": 48
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/migration_and_training.md",
+          "range_start": 568,
+          "range_end": 568
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/migration_and_training.md",
+          "range_start": 587,
+          "range_end": 591
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/migration_and_training.md",
+          "range_start": 592,
+          "range_end": 596
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/migration_and_training.md",
+          "range_start": 599,
+          "range_end": 599
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/torch_rec_v1/hybrid_torchrec/hybrid_torchrec/modules/hash_embeddingbag.py",
+          "range_start": 90,
+          "range_end": 91
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: training/torch_rec_v1/hybrid_torchrec/hybrid_torchrec/modules/hash_embeddingbag.py",
+          "range_start": 201,
+          "range_end": 216
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/torch/torch_rec_v1/migration_and_training.md",
+          "range_start": 588,
+          "range_end": 589
+        }
+      ],
+      "rawResponseEventCount": 54
+    },
+    {
+      "id": "recsdk-08",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 8,
+      "type": "调用链",
+      "difficulty": 3,
+      "question": "在 `tf_rec_v1` 的一次前向计算（forward pass）中，稀疏特征从用户输入到完成 Embedding 查表的完整调用链是什么？请从用户输入的稀疏 ID 特征出发，追踪经过 `data/dataset.py` → `core/feature_process.py` → `graph/merge_lookup.py`（合并查表优化）→ 底层 NPU 自定义算子执行的完整路径，`graph/modifier.py` 的图改造在其中哪个环节介入？",
+      "mode": "fast",
+      "queryId": "recsdk-08_39de132d-692c-41cb-bcf6-fa92076fe8c3",
+      "state": "done",
+      "deepwikiContextIds": [
+        "v1.9.9.5/PUBLIC/Ascend/RecSDK/83b161bc::develop"
+      ],
+      "answer": "在 `tf_rec_v1` 中，稀疏特征从用户输入到完成 Embedding 查表的完整调用链如下：\n\n## 完整调用链路\n\n```mermaid\ngraph TD\n    A[用户输入稀疏ID特征] --> B[data/dataset.py]\n    B --> C[core/feature_process.py]\n    C --> D[graph/merge_lookup.py]\n    D --> E[graph/modifier.py 图改造]\n    E --> F[底层NPU自定义算子]\n    \n    subgraph \"数据输入层\"\n        B1[FeatureSpec定义特征]\n        B2[get_asc_insert_func数据预处理]\n    end\n    \n    subgraph \"特征处理层\"\n        C1[特征解析与验证]\n        C2[特征准入与淘汰处理]\n    end\n    \n    subgraph \"查表优化层\"\n        D1[do_merge_lookup合并优化]\n        D2[多表查表合并]\n    end\n    \n    subgraph \"图改造层\"\n        E1[modify_graph_and_start_emb_cache]\n        E2[GraphModifierHook]\n    end\n    \n    subgraph \"NPU执行层\"\n        F1[稀疏表创建create_table]\n        F2[sparse_lookup查表操作]\n        F3[NPU自定义算子执行]\n    end\n```\n\n## 详细调用流程\n\n### 1. 数据输入阶段 (`data/dataset.py`)\n\n用户首先通过 `FeatureSpec` 定义稀疏特征列表：\n\n```python\nfeature_spec_list = [FeatureSpec(\"user_ids\", feat_count=cfg.user_feat_cnt, table_name=\"user_table\")]\n```\n\n然后调用 `get_asc_insert_func` 获取数据预处理接口并应用到数据集上：\n\n```python\nget_asc_insert_func = get_asc_insert_func(feature_spec_list)\ndataset = dataset.map(get_asc_insert_func)\n```\n\n### 2. 特征处理阶段 (`core/feature_process.py`)\n\n特征处理包括解析、验证和准入淘汰处理。在自动改图模式下，特征准入与淘汰通过 `access_and_evict_config` 参数配置：\n\n```python\naccess_and_evict_config = {\n    \"access_threshold\": 10,\n    \"eviction_threshold\": 86400,\n    \"faae_coefficient\": 1\n}\n```\n\n### 3. 合并查表优化 (`graph/merge_lookup.py`)\n\n在梯度计算后调用 `do_merge_lookup` 进行查表合并优化：\n\n```python\ndo_merge_lookup(is_train=True)\nsparse_grads = tf.gradients(loss, sparse_variables)\n```\n\n### 4. 图改造介入环节 (`graph/modifier.py`)\n\n**图改造在查表操作之后、Session创建之前介入**，这是关键的介入点：\n\n- 在 `sparse_lookup` 调用时设置 `modify_graph=True` 启用自动改图\n- 调用 `modify_graph_and_start_emb_cache()` 执行图改造\n\n```python\n# 查表时启用自动改图\nembedding = sparse_lookup(hash_table, feature, send_count, modify_graph=True, batch=batch)\n\n# 执行图改造\nmodify_graph_and_start_emb_cache(dump_graph=True)\n```\n\n在 NPUEstimator 模式下，通过 `GraphModifierHook` 自动执行图改造：\n\n```python\nest.train(input_fn=lambda: input_fn(), hooks=[GraphModifierHook()])\n```\n\n### 5. 底层 NPU 自定义算子执行\n\n图改造完成后，稀疏查表操作被重定向到 NPU 优化的执行路径：\n\n- 通过 `create_table` 创建稀疏表\n- 使用 `sparse_lookup` 执行实际的 NPU 查表操作\n- 底层调用 NPU 自定义算子进行高效的 Embedding 查找\n\n## 关键介入时机\n\n`graph/modifier.py` 的图改造在以下关键环节介入：\n\n1. **查表操作定义时**：通过 `modify_graph=True` 参数标记需要改造的查表操作\n2. **梯度计算完成后**：在 `do_merge_lookup` 执行后进行图优化\n3. **Session 创建前**：通过 `modify_graph_and_start_emb_cache()` 完成图改造\n4. **训练初始化时**：使用 `get_initializer(True)` 初始化改造后的图\n\n这种设计确保了稀疏特征从输入到 NPU 执行的完整优化路径，实现了高效的 Embedding 查表操作。\n\n## Notes\n\n- 在自动改图模式下，无需手动调用 `start_asc_pipeline`，图改造会自动处理数据流水线\n- 特征准入与淘汰功能在图改造阶段集成到查表操作中\n- 合并查表优化 `do_merge_lookup` 仅在训练模式下需要手动调用，评估模式下由图改造自动处理\n\nWiki pages you might want to explore:\n- [Reference (Ascend/RecSDK)](/wiki/Ascend/RecSDK#11)\n- [TensorFlow Frameworks (Ascend/RecSDK)](/wiki/Ascend/RecSDK#4.1)\n- [tf_rec_v1 (Production) (Ascend/RecSDK)](/wiki/Ascend/RecSDK#4.1.1)",
+      "references": [
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/migration_and_training.md",
+          "range_start": 242,
+          "range_end": 244
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/migration_and_training.md",
+          "range_start": 276,
+          "range_end": 276
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/model_apis.md",
+          "range_start": 121,
+          "range_end": 121
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/automatic_graph_modification.md",
+          "range_start": 113,
+          "range_end": 113
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/api/model_apis.md",
+          "range_start": 119,
+          "range_end": 119
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 165,
+          "range_end": 169
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 191,
+          "range_end": 193
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/migration_and_training.md",
+          "range_start": 295,
+          "range_end": 295
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/migration_and_training.md",
+          "range_start": 300,
+          "range_end": 300
+        },
+        {
+          "file_path": "Repo Ascend/RecSDK: docs/zh/tensorflow/tf_rec_v1/appendix.md",
+          "range_start": 176,
+          "range_end": 176
+        }
+      ],
+      "rawResponseEventCount": 44
+    },
+    {
+      "id": "mindcluster-16",
+      "sourceFile": "mindcluster.md",
+      "repoUrl": "https://gitcode.com/Ascend/mind-cluster",
+      "deepwikiRepo": "Ascend/mind-cluster",
+      "index": 16,
+      "type": "扩展开发",
+      "difficulty": 3,
+      "question": "`npu-exporter` 如何新增一个自定义 NPU 监控指标（例如新增某种 NPU 温度区域的细粒度指标）？请描述从 `collector/` 目录中实现新 Collector 的接口要求，到向 Prometheus Registry 注册该 metric，再到最终通过 `/metrics` 接口暴露的完整步骤。`plugins/` 目录与 `collector/` 的分工是什么？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "基于提供的 DeepWiki 页面内容，**无法回答**关于 `npu-exporter` 内部实现细节（如 Collector 接口实现、Prometheus 注册流程、目录分工）的问题。页面内容未直接覆盖该组件的代码结构和开发指南。\n\n以下是基于已有页面内容的**有限推断**：\n\n### 1. DeepWiki 页面覆盖情况\n提供的页面内容主要集中在 MindCluster 的整体架构、核心组件（如 Device Plugin, Operator, ClusterD）的交互流程以及 Ascend Device Plugin 的详细实现。虽然在 \"Relevant source files\" 列表中出现了 `npu-exporter` 相关文件，但正文部分并未包含对该组件内部设计（如 Collector 接口定义、plugins 目录结构）的描述。\n\n### 2. 基于源文件列表的有限推断\n根据 \"Relevant source files\" 中列出的路径，可以推断出以下有限信息：\n\n*   **组件定位**：`npu-exporter` 是 MindCluster 体系中的一个独立组件，位于 `component/npu-exporter/` 目录下。\n*   **输入数据源**：存在路径 `component/npu-exporter/platforms/inputs/all/npu.go`，暗示该组件可能通过 `platforms/inputs` 目录组织不同平台或类型的 NPU 数据采集逻辑。\n*   **功能推测**：结合名称 \"exporter\" 和集群运维背景，该组件可能负责采集 NPU 相关的监控数据并提供给外部监控系统（如 Prometheus），但具体的注册流程和目录分工在文中未提及。\n\n### 3. 相关上下文补充\nDeepWiki 页面描述了其他组件如何通过 ConfigMap 或 API 交互，例如 Device Plugin 会更新 `DeviceInfo` ConfigMap，NodeD 负责节点健康监控。`npu-exporter` 可能作为补充组件提供更细粒度的性能指标，但这部分逻辑在提供的文本中未明确说明。",
+      "references": [],
+      "rawResponseEventCount": 0,
+      "error": "POST 429: {\"detail\":\"Rate limit exceeded. Too many requests.\"}"
+    },
+    {
+      "id": "recsdk-09",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 9,
+      "type": "调用链",
+      "difficulty": 3,
+      "question": "`tf_rec_v1/python/graph/modifier.py` 的图改造（Graph Modification）在什么时机被调用？它会对 TF 原生计算图中的哪些算子进行替换或修改（如 EmbeddingLookup、Unique 等），修改后的子图是如何适配 NPU 执行模型的？`graph/patch.py` 和 `graph/slicers.py` 在图改造流程中各自承担什么角色？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "根据提供的 DeepWiki 页面内容，无法直接回答关于 `tf_rec_v1/python/graph/modifier.py` 具体实现细节的问题。以下是基于已有内容的覆盖情况说明及有限推断：\n\n### 1. 覆盖情况说明\n**DeepWiki 页面未直接覆盖** `tf_rec_v1/python/graph/modifier.py` 的内部逻辑、调用时机、算子替换规则（如 EmbeddingLookup、Unique）以及 `graph/patch.py` 和 `graph/slicers.py` 的具体角色。\n提供的文档片段主要集中在：\n*   仓库的整体结构和目的（Page 1）。\n*   环境搭建与安装指南（Page 2, 2.1, 2.2）。\n*   构建系统的编排流程（Page 3, 3.1）。\n*   PyTorch 相关组件（`torch_rec_v1`）的细节。\n\n### 2. 基于已有页面的有限推断\n虽然缺乏直接证据，结合 Page 1 中关于 `tf_rec_v1` 的定义和 Page 3 的构建流程，可做如下推断：\n\n*   **功能定位推断**：\n    Page 1 将 `training/tf_rec_v1` 定义为 **\"Production TensorFlow v1 framework\"**，并明确标注为 **\"NPU-adapted non-full-sink framework\"**。由此推断，`modifier.py`（如果位于该路径下）的核心职责应是将标准的 TensorFlow 计算图转换为能在 Ascend NPU 上高效执行的形态，这与 \"NPU-adapted\" 的描述相符。\n\n*   **自定义算子关联推断**：\n    Page 1 提到 `cust_op/framework` 包含 **\"tf_plugin\"**，`cust_op/ascendc_op` 包含 **\"AscendC Kernels\"**。\n    *   推断图改造过程中，原生 TensorFlow 算子（可能包括 EmbeddingLookup 等）会被替换为通过 `tf_plugin` 加载的自定义算子，以便利用 `ascendc_op` 中的底层 Kernel 进行加速。\n\n*   **构建依赖推断**：\n    Page 3.1 提到构建流程会编译 `tf_rec_v1` 的共享库文件（`compile_tf_rec_v1_so_file`）并将其收集到 `libasc` 目录。推断图改造逻辑可能依赖这些编译好的 C++ 扩展库来实现 Python 层的图操作接口。",
+      "references": [],
+      "rawResponseEventCount": 0,
+      "error": "POST 429: {\"detail\":\"Rate limit exceeded. Too many requests.\"}"
+    },
+    {
+      "id": "recsdk-10",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 10,
+      "type": "调用链",
+      "difficulty": 3,
+      "question": "`torch_rec_v1/hybrid_torchrec/hybrid_torchrec/distributed/hybrid_train_pipeline.py` 实现的混合训练流水线是如何将\"稀疏 Embedding 查表（CPU/主机内存侧）\"和\"Dense 前向/反向计算（NPU 侧）\"异步流水化的？`pipeline` 的 `progress` 函数（或等价方法）在每个训练 step 中执行哪几个阶段，CPU 与 NPU 之间的数据搬运和同步点在哪里？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "根据提供的 DeepWiki 页面内容，**无法直接回答** `hybrid_train_pipeline.py` 中具体的流水线实现细节（如 `progress` 函数的阶段定义、CPU/NPU 同步点的代码逻辑）。\n\n提供的文档主要侧重于 RecSDK 的系统架构、环境搭建、安装流程及构建系统，虽然列出了相关测试文件路径，但未包含该核心模块的代码逻辑或 API 详细说明。\n\n以下是基于已有页面内容的**有限推断**：\n\n### 1. 混合训练流水线的设计意图\nDeepWiki 页面描述了 `hybrid_torchrec` 的核心定位，这解释了流水线存在的背景：\n*   **目标**：解决 Embedding 表规模超过 NPU HBM 容量的问题，支持超过 10TB 的稀疏模型训练 [README.md:20-27]()。\n*   **架构**：采用“非全下沉”模式，即混合 CPU/NPU 执行。稀疏 Embedding 查表在 **CPU/主机内存侧** 执行，而稠密模型的前向/反向计算在 **NPU 侧** 执行 [README.md:60-65]()。\n*   **组件定位**：`training/torch_rec_v1/hybrid_torchrec` 是生产级 PyTorch 栈，基于 TorchRec 1.1.0/1.2.0 实现了 NPU 适配的混合哈希表 [training/torch_rec_v1/hybrid_torchrec/README.md:6-7]()。\n\n### 2. 推断的流水线阶段与同步点\n虽然文档未直接描述 `progress` 函数的实现，但根据“Hybrid”架构和通用的流水线并行原理，推断其核心流程如下：\n\n**推断的流水线阶段：**\n1.  **CPU 阶段**：在主机内存中执行 Embedding 查找。\n    *   *依据*：文档提到 `torchrec_embcache` 负责设备与主机内存间的多级缓存协调 [training/torch_rec_v1/torchrec_embcache/README.md:5]()。\n2.  **传输阶段**：将查找到的 Embedding 向量从主机内存搬运到 NPU 显存。\n3.  **NPU 阶段**：在 NPU 上执行稠密网络的前向传播和反向传播。\n4.  **回传阶段**：将参数梯度从 NPU 传回 CPU 以更新 Embedding 表。\n\n**推断的同步点：**\n*   **H2D 同步**：CPU 查表结束且数据成功拷贝至 NPU 后，NPU 计算才能开始。\n*   **D2H 同步**：NPU 反向计算结束并产生梯度后，CPU 更新操作才能进行。\n*   *依据*：自定义算子库 `libfbgemm_npu_api.so` 的加载是 NPU 执行的前提 [training/torch_rec_v1/hybrid_torchrec/test/st/test_hybrid_pipeline_hash_embeddingbag.py:42]()。\n\n### 总结\nDeepWiki 页面目前未覆盖 `hybrid_train_pipeline.py` 的内部代码实现逻辑。要获取具体的 `progress` 函数定义和流水线切分细节，需查阅该源文件或更详细的 API 文档。",
+      "references": [],
+      "rawResponseEventCount": 0,
+      "error": "POST 429: {\"detail\":\"Rate limit exceeded. Too many requests.\"}"
+    },
+    {
+      "id": "recsdk-11",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 11,
+      "type": "核心概念",
+      "difficulty": 2,
+      "question": "`torch_rec_v1/hybrid_torchrec/hybrid_torchrec/sparse/` 下的 `ExtendedJaggedTensor`、`JaggedTensorWithCount`、`JaggedTensorWithLookupHelper` 相比 TorchRec 标准 `JaggedTensor` 分别扩展了哪些字段或方法？这些扩展是为了解决昇腾 NPU 上的哪些特定问题（如可变长稀疏特征的批处理、查表辅助信息等）？开发者在表示变长稀疏 ID 特征时应使用哪个类？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "基于提供的 DeepWiki 页面内容，无法回答关于 `ExtendedJaggedTensor` 等类的具体字段扩展和选型建议。以下是详细说明：\n\n### DeepWiki 页面未直接覆盖\n提供的页面片段中**未包含**关于 `ExtendedJaggedTensor`、`JaggedTensorWithCount` 或 `JaggedTensorWithLookupHelper` 类的定义、字段扩展详情或方法对比。尽管源文件列表中包含 `docs/zh/torch/torch_rec_v1/api/README.md`，但该文件的具体内容（通常包含 API 定义）未在提供的文本中展示。\n\n### 基于已有页面的有限推断\n虽然无法获取具体类的详细信息，但根据页面中对 `training/torch_rec_v1/hybrid_torchrec` 模块的描述，可以推断该模块的设计意图：\n\n1.  **模块核心功能**：\n    `hybrid_torchrec` 被描述为一个“混合哈希表实现”，基于 TorchRec 1.1.0/1.2.0，专门用于支持 NPU 上的训练和推理 [Embedding Management Systems]。\n\n2.  **核心组件**：\n    文档中提及的核心类为 `HashEmbeddingBagCollection`，用于处理稀疏嵌入 [Getting Started -> Verification]。\n\n3.  **解决的问题**：\n    该模块旨在解决大规模推荐模型在昇腾 NPU 上的适配问题，支持“Non-full-sink”（非全下沉模式），并配合 `torchrec_embcache` 实现多级缓存（HBM、Host DDR、SSD）。\n\n**建议**：具体的类选型和字段差异需查阅 `docs/zh/torch/torch_rec_v1/api/README.md` 或相关源码文件，这些内容未包含在当前的页面片段中。",
+      "references": [],
+      "rawResponseEventCount": 0,
+      "error": "POST 429: {\"detail\":\"Rate limit exceeded. Too many requests.\"}"
+    },
+    {
+      "id": "recsdk-12",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 12,
+      "type": "调用链",
+      "difficulty": 3,
+      "question": "`tf_rec_v1/python/core/asc/`（自动子图计算，ASC）模块的作用是什么？`build_graph.py` 中的图构建入口函数做了什么，`manager.py`、`merge_table.py`、`feature_spec.py` 各自负责 ASC 流程的哪一步？`graph/hooks.py` 中的 Hook 是在训练的什么阶段被触发，用于实现什么功能？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "基于提供的 DeepWiki 页面内容，**无法直接回答**关于 `tf_rec_v1/python/core/asc/` 模块内部具体实现逻辑的问题。\n\n以下是具体情况说明及基于现有页面的有限推断：\n\n### DeepWiki 页面未直接覆盖\n提供的页面片段主要涵盖了 RecSDK 的总体概述、构建系统架构、安装指南以及 PyTorch 部分的内容。虽然列出了 `training/tf_rec_v1` 作为源文件目录，但**未包含**对 `asc/` 子目录下具体源码文件（如 `build_graph.py`、`manager.py`、`merge_table.py`、`feature_spec.py` 或 `graph/hooks.py`）的解析或引用。因此，关于图构建入口函数、各组件职责划分以及 Hook 触发阶段的具体细节在当前上下文中缺失。\n\n### 基于已有页面的有限推断\n根据片段中对 `training/tf_rec_v1` 的描述，可以得出以下推断：\n\n1.  **模块归属与定位**：\n    该模块属于 `training/tf_rec_v1` 目录，这是 RecSDK 的 **Production TensorFlow v1 framework** 栈。该栈主要用于支持 **Non-full-sink**（非全下沉）模式的训练 [README.md:45, 55]。ASC（推测为 Automatic Subgraph Computation 或类似含义）可能与此模式的子图切分或计算流程相关，但页面未提供确切定义。\n\n2.  **构建产物关联**：\n    在构建流程中，`build/build_tf1.sh` 脚本会将编译好的共享对象（`.so` 文件）收集到 `training/tf_rec_v1/python/libasc/` 目录下 [build/build_tf1.sh:131-143]。这表明 ASC 模块依赖或包含底层 C++/算子实现，且是 TensorFlow v1 训练框架的核心组成部分。",
+      "references": [],
+      "rawResponseEventCount": 0,
+      "error": "POST 429: {\"detail\":\"Rate limit exceeded. Too many requests.\"}"
+    },
+    {
+      "id": "recsdk-13",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 13,
+      "type": "接口设计",
+      "difficulty": 3,
+      "question": "`torch_rec_v1/hybrid_torchrec/hybrid_torchrec/distributed/sharding_plan.py` 如何在 NPU 环境下定制 TorchRec 的 Embedding 分片策略？支持哪几种分片模式（如 `table_wise`、`row_wise`、`column_wise`），分片决策依据什么信息（Embedding 表规模、NPU 卡数、拓扑信息）？用户如何通过该接口为多张 Embedding 表配置不同的分片策略？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "基于提供的 DeepWiki 页面内容，关于 `torch_rec_v1/hybrid_torchrec/hybrid_torchrec/distributed/sharding_plan.py` 的具体实现细节和分片策略配置，回答如下：\n\n### 1. DeepWiki 页面覆盖情况\n**DeepWiki 页面未直接覆盖**该特定文件的源码实现或 API 细节。\n\n提供的上下文中虽然包含了 `training/torch_rec_v1/hybrid_torchrec/` 目录下的部分文件（如 `README.md` 和测试文件），但**不包含** `hybrid_torchrec/distributed/sharding_plan.py` 的具体代码逻辑。因此，无法直接回答该文件支持哪些具体的分片模式（如 `table_wise` 等）或其内部决策依据。\n\n### 2. 基于已有页面的有限推断\n虽然缺少具体文件内容，但根据页面中关于 **Hybrid-Torchrec** 和 **分布式环境** 的描述，可以做出以下推断：\n\n*   **分片环境依赖**：\n    根据 `docs/zh/torch/torch_rec_v1/migration_and_training.md` 片段，分片功能的运行依赖于分布式环境的初始化。系统需要先初始化 Process Group (`backend=\"hccl\"`) 和 Host Group (`backend=\"gloo\"`)，然后利用 `world size`、`rank` 和 Host Group 信息来构建 `ShardingEnv`。这表明分片策略的执行是基于 NPU 的分布式拓扑信息。\n\n*   **框架基础**：\n    `training/torch_rec_v1/hybrid_torchrec/README.md` 指出该模块基于 TorchRec 1.1.0/1.2.0 开发。由此推断，其分片策略接口设计大概率遵循或扩展了原生 TorchRec 的分片概念，但具体的 NPU 优化逻辑或自定义策略（如针对 HBM/DDR 多级存储的特殊分片）在提供的文档片段中未详细说明。\n\n### 总结\n*   **直接证据**：无。未提供 `sharding_plan.py` 的代码片段。\n*   **推断**：分片功能需要 `ShardingEnv` 支持，且依赖于 HCCL 和 Gloo 后端初始化的分布式拓扑信息（Rank、World Size）。\n*   **缺失信息**：具体的分片模式列表（table_wise/row_wise/column_wise）、决策算法（如何根据表规模选择策略）以及多表配置接口示例均不在提供的上下文中。",
+      "references": [],
+      "rawResponseEventCount": 0,
+      "error": "POST 429: {\"detail\":\"Rate limit exceeded. Too many requests.\"}"
+    },
+    {
+      "id": "recsdk-14",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 14,
+      "type": "核心概念",
+      "difficulty": 3,
+      "question": "`cust_op/ascendc_op/ai_core_op/hstu_dense_forward/` 中的 HSTU Dense Forward 算子是什么？HSTU（Hierarchical Sequential Transduction Units）在推荐模型中解决什么核心计算问题（与标准 Attention 相比的区别）？该算子的 AscendC 内核实现使用了 `common/workload_sharder.h` 和 `matmul_check.h` 中的哪些工具，`test/hstu_dense/torch/test_hstu_dense_forward.py` 中的测试如何验证其正确性？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "根据提供的 DeepWiki 页面内容，回答如下：\n\n### 1. HSTU Dense Forward 算子定义\n根据 DeepWiki 页面，`hstu_dense_forward` 是 RecSDK 中的一个 **自定义 AscendC 算子**，位于 `cust_op/ascendc_op/ai_core_op/hstu_dense_forward/v220/` 目录下。\n\n*   **功能定位**：它被归类为“复杂算子”，其构建产物是用于 CANN 供应商目录的二进制安装包（`.run` 文件），用于在 NPU AI Core 上执行计算。\n*   **构建特征**：该算子在构建时具有模块化的主机实现，会根据目标 AI Core 类型选择特定的 Tiling 策略（例如 `tiling_policy_dense.cpp`）。\n\n### 2. HSTU 核心计算问题（与标准 Attention 对比）\n**DeepWiki 页面未直接覆盖** HSTU（Hierarchical Sequential Transduction Units）的理论定义及其解决的核心计算问题。页面主要聚焦于其构建流程和目录结构，未涉及其算法原理或与标准 Attention 的区别。\n\n### 3. AscendC 内核实现工具\nDeepWiki 页面提及了部分构建工具，但对特定头文件的覆盖有限：\n\n*   **已覆盖内容**：\n    *   页面提到复杂算子（如 HSTU）的主机实现使用了**模块化的 Tiling 策略工厂**（例如 `tiling_policy_dense.cpp`）。\n    *   许多算子共享通用工具，例如 `kernel_common_utils.h`。\n*   **未直接覆盖内容**：\n    *   页面**未直接提及** `common/workload_sharder.h` 的具体使用。\n    *   页面**未直接提及** `matmul_check.h` 的具体使用。\n\n### 4. 测试验证方法\n**DeepWiki 页面未直接覆盖** `test/hstu_dense/torch/test_hstu_dense_forward.py` 的具体内容或其验证正确性的方法。页面仅提到了 `training/torch_rec_v1/` 路径下的 ST 和 Accuracy 测试套件，未包含 HSTU 算子特定的测试脚本细节。",
+      "references": [],
+      "rawResponseEventCount": 0,
+      "error": "POST 429: {\"detail\":\"Rate limit exceeded. Too many requests.\"}"
+    },
+    {
+      "id": "recsdk-15",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 15,
+      "type": "扩展开发",
+      "difficulty": 3,
+      "question": "如何在 `cust_op/ascendc_op/ai_core_op/` 中新增一个 AscendC 自定义算子？参考 `custom_op_template/` 目录的结构，需要创建哪些文件（`.cpp` 内核文件、`CMakeLists.txt`、`CMakePresets.json`）？在 `cust_op/ascendc_op/config/transform.json` 中如何注册算子的类型映射关系？编译脚本 `build/build_ai_core_op.sh` 需要哪些昇腾工具链环境变量？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "根据 DeepWiki 页面内容，关于新增 AscendC 自定义算子的流程回答如下：\n\n### 1. 新增算子目录与文件结构\n在 `cust_op/ascendc_op/ai_core_op/` 下新增算子需遵循以下结构（DeepWiki 页面未直接描述 `custom_op_template/` 目录，以下基于已有算子结构推断）：\n\n*   **目录位置**：创建目录 `cust_op/ascendc_op/ai_core_op/<op_name>/v220/`。\n*   **必需文件**：\n    *   **`run.sh`**：算子构建脚本，负责调用工具链进行编译。\n    *   **`*.json` (通常为 `operator.json`)**：算子定义文件，包含算子输入输出描述。\n    *   **`op_host/*.cpp`**：Host 侧实现，包含 Tiling 策略和算子注册逻辑。\n    *   **`op_kernel/*.cpp`**：AscendC 内核实现代码。\n\n### 2. 构建配置文件生成\nDeepWiki 页面未直接说明需手动创建 `CMakeLists.txt` 或 `CMakePresets.json`。\n*   **推断**：页面指出构建流程通过 `msopgen gen` 工具生成脚手架代码，其中包含 `CMakeLists.txt` 和 `CMakePresets.json`。因此，这些文件通常由工具根据算子定义自动生成，而非手动创建。\n\n### 3. 注册算子映射关系 (`transform.json`)\n**DeepWiki 页面未直接覆盖** `cust_op/ascendc_op/config/transform.json` 的配置细节。\n*   **相关机制**：页面提到了构建脚本 `build_ai_core_op.sh` 中维护了一个 `OP_PLUGIN_MAP` 变量，用于将算子目录名称映射到对应的框架插件目录。这是目前页面中唯一提及的映射注册方式。\n\n### 4. 编译脚本所需环境变量\n脚本 `build_ai_core_op.sh` 及其调用的算子构建脚本依赖以下昇腾工具链环境：\n\n*   **`CATLASS_HOME`**：对于特定算子（如 `in_linear_silu`），脚本会验证此环境变量，用于高级矩阵运算库的路径引用。\n*   **工具依赖**：脚本会加载 `op_builder_utils.sh` 工具库，并调用 `msopgen` 工具进行代码生成。虽然页面未列出所有具体路径变量（如 `ASCEND_HOME`），但隐含需要配置完整的 CANN 开发环境。",
+      "references": [],
+      "rawResponseEventCount": 0
+    },
+    {
+      "id": "recsdk-16",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 16,
+      "type": "扩展开发",
+      "difficulty": 3,
+      "question": "如何在 `cust_op/framework/tf_plugin/src/` 中为一个新的 AscendC 算子添加 TF 框架适配层？以 `cust_embedding_by_address.cpp` 或 `lazy_adam.cpp` 为参考，TF 自定义算子的注册（`REGISTER_OP` 宏）、输入输出类型声明、以及 `Compute` 函数中调用 CANN 底层接口的完整写法是什么？头文件 `include/mxrec_tf_plugin.h` 中声明了哪些公共接口？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "基于提供的 DeepWiki 页面内容，**页面未直接覆盖** `cust_op/framework/tf_plugin/src/` 目录下具体源文件（如 `cust_embedding_by_address.cpp` 或 `lazy_adam.cpp`）的实现细节，也未包含 `include/mxrec_tf_plugin.h` 头文件的具体接口声明。\n\n以下是依据页面已有信息对该组件架构和集成方式的**有限推断**：\n\n### 1. 组件定位与架构关系\n根据 **System Component Association** 章节的图表和目录结构表格：\n*   **目录角色**：`cust_op/framework` 被定义为 **\"Framework adapter layer\"**（框架适配层），其中包含 `tf_plugin` 和 `torch_plugin`。\n*   **层级关系**：\n    *   上游：接受 TensorFlow 训练框架（`tf_rec_v1`, `tf_rec_v2`）的调用。\n    *   下游：通过适配层调用底层的 **AscendC Kernels**（位于 `cust_op/ascendc_op`）。\n    *   依赖：依赖 CANN 8.5.0 toolkit 和 ops 底层软件栈。\n\n### 2. 构建集成方式\n根据 **Build System Architecture** 章节的推断：\n*   **编译入口**：虽然 `cust_op/framework` 的具体源码构建细节未展示，但 `build/build_tf1.sh` 负责编译 TensorFlow 相关组件。\n*   **产物集成**：构建脚本会将编译生成的共享对象文件收集到 `training/tf_rec_v1/python/libasc/` 目录下，这暗示 TF Plugin 通常以动态链接库形式被框架加载。\n\n### 3. 缺失的具体实现细节\n由于源码内容缺失，无法回答以下具体问题：\n*   `REGISTER_OP` 宏的具体注册参数。\n*   `Compute` 函数中调用 CANN 底层接口（如 ACL 接口）的具体写法。\n*   `mxrec_tf_plugin.h` 中声明的公共接口名称。\n\n**建议**：若需了解具体的算子注册和 Compute 函数写法，需查阅 `cust_op/framework/tf_plugin/src/` 下的具体源文件，或参考 CANN 开发文档中关于 TensorFlow 自定义算子适配的标准流程。",
+      "references": [],
+      "rawResponseEventCount": 0
+    },
+    {
+      "id": "recsdk-17",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 17,
+      "type": "扩展开发",
+      "difficulty": 2,
+      "question": "如果要基于 `tf_rec_v1` 新增一种自定义稀疏优化器（如某种新的自适应学习率算法），需要继承 `optimizers/base.py` 中的哪个基类，必须实现哪些抽象方法（如 `_apply_sparse`、`_apply_dense`、`get_config`）？`_apply_sparse` 与 `_apply_dense` 分别在什么场景下被调用，稀疏 Embedding 场景下哪个方法是核心路径？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "基于提供的 DeepWiki 页面内容，回答如下：\n\n**DeepWiki 页面未直接覆盖**\n\n提供的 DeepWiki 页面片段虽然列出了 `docs/zh/tensorflow/tf_rec_v1/api/optimizers_apis.md` 作为相关源文件，但**并未包含该文件的具体代码内容或 API 定义**。因此，无法从页面中直接获取 `optimizers/base.py` 的基类名称、必须实现的抽象方法列表（如 `_apply_sparse`、`_apply_dense`）以及它们的具体调用场景和核心路径。\n\n**基于已有页面的有限推断**\n\n根据页面中关于仓库结构和相关文件的描述，可以得出以下推断：\n\n1.  **代码实体位置**：\n    自定义优化器相关的代码应位于 **`training/tf_rec_v1`** 目录下。根据 \"Repository Structure\" 章节，该目录对应 \"Production TF1 stack\"，是 RecSDK 的生产级 TensorFlow v1 框架实现。\n\n2.  **参考文档位置**：\n    页面在 \"RecSDK Overview\" 章节的 \"Relevant source files\" 中明确列出了 **`docs/zh/tensorflow/tf_rec_v1/api/optimizers_apis.md`**，这表明优化器的具体 API 定义和接口规范应在该文档中详细描述。",
+      "references": [],
+      "rawResponseEventCount": 0
+    },
+    {
+      "id": "recsdk-19",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 19,
+      "type": "接口设计",
+      "difficulty": 2,
+      "question": "`torch_rec_v2` 的核心模块是 `training/torch_rec_v2/dynamic_emb`，它与 `torch_rec_v1` 在 Embedding 存储架构上的根本区别是什么？`dynamic_emb` 采用了怎样的动态 Key-Value 哈希表方案（`DynamicVariableBase` / `HkvVariable`）替代静态 Embedding 表，`VariableFactory::Create` 的核心参数（`max_capacity`、`evict_strategy`、`max_hbm_for_vectors`、`optimizer_type`）分别控制哈希表的哪些行为？Python 侧的 `DynamicEmbTableOptions` 与 C++ 侧的 `DynamicVariableBase` 之间是通过哪个绑定层（`module_bind.cpp`）打通的？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "根据提供的 DeepWiki 页面内容，关于 `torch_rec_v2` 与 `torch_rec_v1` 的架构区别及具体实现细节回答如下：\n\n### 1. Embedding 存储架构的根本区别\n\n根据“Framework Support Matrix”和“Embedding Management Systems”章节，两者的核心区别在于执行模式与存储管理方式：\n\n*   **`torch_rec_v1` (Production)**：\n    *   **模式**：**Non-full-sink**（非全下沉，混合 CPU/NPU 执行）。\n    *   **架构**：基于 `hybrid_torchrec`（混合哈希表实现）和 `torchrec_embcache`（多级 Embedding 缓存扩展）。\n    *   **特点**：协调设备内存和主机内存，旨在平衡性能与灵活性。\n\n*   **`torch_rec_v2` (POC)**：\n    *   **模式**：**Full-sink**（全下沉，全 NPU 任务）。\n    *   **架构**：使用 **HierarchicalKV (HKV)** 系统进行动态嵌入表管理。\n    *   **特点**：专为大规模稀疏推荐模型设计，支持 10TB+ 规模的动态 Embedding 管理。\n\n### 2. DeepWiki 页面未直接覆盖的内容\n\nDeepWiki 页面虽然列出了相关文件（如 `training/torch_rec_v2/dynamic_emb/README.md` 和 `training/torch_rec_v2/dynamic_emb/dynamic_emb/__init__.py`），但**未提供**以下具体实现细节的上下文：\n\n*   **具体类名**：未明确提及 `DynamicVariableBase` 或 `HkvVariable` 类的定义。\n*   **工厂方法参数**：未提及 `VariableFactory::Create` 的具体参数（如 `max_capacity`、`evict_strategy`、`max_hbm_for_vectors`、`optimizer_type`）及其行为控制逻辑。\n*   **绑定层文件**：未提及 `module_bind.cpp` 文件或 Python `DynamicEmbTableOptions` 与 C++ 层的具体绑定机制。\n\n### 3. 基于已有页面的有限推断\n\n虽然缺乏直接代码细节，但基于“Purpose and Scope”和“Embedding Management Systems”章节可推断：\n\n*   **动态表方案**：`torch_rec_v2` 利用 HKV 系统替代了静态表，这种架构是为了解决“超过 10TB”的超大规模稀疏特征存储问题。HKV 可能提供了多级存储能力，使得在 Full-sink 模式下也能突破 HBM 容量限制。\n*   **执行差异**：V1 通过 `torchrec_embcache` 实现主机与设备间的数据搬运，而 V2 通过 HKV 系统实现了更底层的存储管理，以支持全 NPU 计算图的高效执行。",
+      "references": [],
+      "rawResponseEventCount": 0
+    },
+    {
+      "id": "recsdk-20",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 20,
+      "type": "调用链",
+      "difficulty": 3,
+      "question": "`dynamic_emb/distributed/dynamicemb_config.py` 中 `DynamicEmbTableOptions` 包含哪些关键配置字段（如 `init_capacity`、`max_load_factor`、`bucket_capacity`、`score_strategy`、`evict_strategy`、`safe_check_mode`）？`DynamicEmbEvictStrategy`（LRU/LFU/EPOCH_LRU/EPOCH_LFU/CUSTOMIZED）与 `DynamicEmbScoreStrategy`（TIMESTAMP/STEP/CUSTOMIZED/LFU）这两个枚举的语义差异和配合关系是什么？`DynamicEmbCheckMode` 的三种模式（ERROR/WARNING/IGNORE）对插入失败场景的处理行为有何不同，何时应开启 WARNING 或 ERROR 模式？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "基于提供的 DeepWiki 页面内容，关于 `dynamic_emb/distributed/dynamicemb_config.py` 的配置详情如下：\n\n### 1. DynamicEmbTableOptions 关键配置字段\n**DeepWiki 页面未直接覆盖**该类的完整字段列表。\n*   **有限推断**：页面提到 `DynamicEmbTable` 具有“运行时可增长的容量”特性，推测其底层配置涉及容量参数，但页面文本未显式列出 `init_capacity`、`max_load_factor`、`bucket_capacity`、`safe_check_mode` 等具体字段。\n*   **相关配置**：页面提到了 `DynamicEmbInitializerArgs`，它定义了初始化模式（`NORMAL`, `UNIFORM`, `CONSTANT`），这与表的初始化行为相关。\n\n### 2. DynamicEmbEvictStrategy（驱逐策略）\nDeepWiki 页面**部分覆盖**了该枚举的定义。\n\n*   **已覆盖的策略**：\n    *   `LRU`\n    *   `LFU`\n    *   `EPOCH_LRU`\n*   **未覆盖的策略**：\n    *   `EPOCH_LFU`\n    *   `CUSTOMIZED`\n*   **语义说明**：页面未详细解释这些策略的语义差异或工作机制，仅列举了支持类型。\n    *   来源：`[training/torch_rec_v2/dynamic_emb/dynamic_emb/distributed/dynamicemb_config.py:120-125]`\n\n### 3. DynamicEmbScoreStrategy（评分策略）\n**DeepWiki 页面未直接覆盖**。\n*   页面文本中未提及 `DynamicEmbScoreStrategy` 枚举或其与 `DynamicEmbEvictStrategy` 的配合关系。\n\n### 4. DynamicEmbCheckMode（检查模式）\n**DeepWiki 页面未直接覆盖**。\n*   页面未提及 `DynamicEmbCheckMode` 或其 `ERROR`、`WARNING`、`IGNORE` 模式在插入失败场景下的具体行为差异。\n\n---\n\n**总结**：\nDeepWiki 页面目前仅确认了驱逐策略支持 `LRU`、`LFU` 和 `EPOCH_LRU`，并提到了初始化参数 `DynamicEmbInitializerArgs`。关于 `DynamicEmbTableOptions` 的具体字段、评分策略、检查模式及其详细语义，页面内容未提供直接证据。",
+      "references": [],
+      "rawResponseEventCount": 0
+    },
+    {
+      "id": "recsdk-21",
+      "sourceFile": "recsdk.md",
+      "repoUrl": "https://gitcode.com/Ascend/RecSDK",
+      "deepwikiRepo": "Ascend/RecSDK",
+      "index": 21,
+      "type": "接口设计",
+      "difficulty": 3,
+      "question": "`torch_rec_v2/dynamic_emb` 在一次 forward 查表过程中，稀疏 ID 从 Python 侧输入到 NPU 完成 Embedding 聚合的完整调用链是什么？请从 `distributed/batched_dynamicemb_function.py` 中的 `apply` 入口出发，说明 `unique_op`（去重）→ `find_pointers`（哈希表指针查询）→ `load_from_pointer`（按指针加载 Embedding 向量）→ `pooling_embeddings`（SUM/MEAN 聚合）这四个底层算子各自的输入输出张量形状，以及 `batched_dynamicemb_compute_kernel.py` 中的 compute kernel 如何协调这些算子的调度顺序？",
+      "mode": "fast",
+      "state": "fallback_from_deepwiki_wiki_due_rate_limit",
+      "deepwikiContextIds": [],
+      "answer": "根据提供的 DeepWiki 页面内容，无法直接回答关于 `torch_rec_v2/dynamic_emb` 内部算子调用链、张量形状及 Compute Kernel 调度顺序的详细问题。\n\nDeepWiki 页面未直接覆盖 `distributed/batched_dynamicemb_function.py` 或 `batched_dynamicemb_compute_kernel.py` 的具体实现逻辑。以下是基于已有页面内容的有限推断：\n\n### 1. 模块定位与依赖\n*   **框架层级**：`torch_rec_v2` 在 RecSDK 中被定义为 **POC (Proof of Concept)** 框架，主要支持 **Full-sink**（全下沉 NPU）模式的稀疏推荐模型训练 [README.md:46-48]()。\n*   **底层存储**：该模块的动态嵌入表管理底层依赖 **HierarchicalKV (HKV)** 系统，支持 HBM、Host DDR 和 SSD 的多级存储 [README.md:37-48]()。\n\n### 2. 已知文件线索\nDeepWiki 页面的目录结构中列出了以下相关文件，证实了该模块的存在，但未提供其内部代码细节：\n*   `[training/torch_rec_v2/dynamic_emb/README.md](training/torch_rec_v2/dynamic_emb/README.md)`\n*   `[training/torch_rec_v2/dynamic_emb/dynamic_emb/__init__.py](training/torch_rec_v2/dynamic_emb/dynamic_emb/__init__.py)`\n*   `[training/torch_rec_v2/dynamic_emb/scripts/gen_tar_pkg.sh](training/torch_rec_v2/dynamic_emb/scripts/gen_tar_pkg.sh)`\n\n### 3. 缺失信息说明\n由于上下文限制，以下具体技术细节无法从 DeepWiki 页面获取：\n*   `unique_op`、`find_pointers`、`load_from_pointer`、`pooling_embeddings` 等算子的具体定义与输入输出张量形状。\n*   `batched_dynamicemb_function.py` 中的 `apply` 入口逻辑。\n*   `batched_dynamicemb_compute_kernel.py` 中的算子调度协调机制。",
+      "references": [],
+      "rawResponseEventCount": 0
+    }
+  ]
+}

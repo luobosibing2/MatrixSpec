@@ -1,0 +1,12 @@
+{
+  "projectName": "mind-cluster-source",
+  "language": "Go",
+  "primaryExtension": ".go",
+  "modules": [
+    {
+      "name": "Project Root",
+      "path": ".",
+      "description": "Fallback module for a small project without obvious source module directories."
+    }
+  ]
+}

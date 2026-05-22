@@ -1,0 +1,69 @@
+{
+  "runId": "20260522132129831",
+  "type": "generate",
+  "status": "generated",
+  "createdAt": "2026-05-22T05:21:29.833Z",
+  "root": "C:\\Users\\kvenu\\playground\\MatrixSpec\\benchmark\\doc-quality\\work\\mind-cluster-source",
+  "commitId": "f3515b3",
+  "runner": "codex",
+  "generationMode": "react",
+  "provider": "codex",
+  "model": "gpt-5.3-codex-spark",
+  "probeModels": {
+    "requested": false,
+    "status": "not_requested"
+  },
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "plan": "plan.json",
+    "modules": [
+      "modules/..md"
+    ]
+  },
+  "logs": {
+    "scan": "logs/scan.json",
+    "llm": null,
+    "prompts": {
+      "design": "logs/prompts/design.md",
+      "spec": "logs/prompts/spec.md"
+    },
+    "react": "logs/react.json"
+  },
+  "warnings": [
+    "P3 CLI runner react output; module artifacts were staged under the run directory."
+  ],
+  "tokens": {
+    "input": 127930,
+    "output": 7874
+  },
+  "applied": false,
+  "generationReason": "forced_module_first",
+  "scanSummary": {
+    "totalFiles": 3962,
+    "includedFiles": 2727,
+    "ignoredFiles": 1238,
+    "readmeFiles": [
+      "README.md",
+      "component/ascend-common/README.md",
+      "component/ascend-common/api/ascend-operator/README.md"
+    ],
+    "docsFiles": [
+      "docs/rfc/26.0.0/Device-plugin故障升级原因.md",
+      "docs/rfc/26.0.0/features-inference-workload.md",
+      "docs/rfc/26.0.0/features-multilevel-scheduling-npu-affinity.md",
+      "docs/rfc/26.0.0/manual_fault_isolation_rfc.md",
+      "docs/rfc/26.0.0/支持NPU软切分.md",
+      "docs/rfc/26.1.0/features-NPUExporter新增node_base_info指标.md",
+      "docs/zh/advanced knowledge/HBM UCE进程级快恢.md",
+      "docs/zh/advanced knowledge/亚健康热切.md",
+      "docs/zh/advanced knowledge/网络故障进程级快恢.md",
+      "docs/zh/advanced knowledge/进程级重调度.md"
+    ]
+  },
+  "planSummary": {
+    "modules": 1,
+    "language": "Go",
+    "primaryExtension": ".go"
+  }
+}
