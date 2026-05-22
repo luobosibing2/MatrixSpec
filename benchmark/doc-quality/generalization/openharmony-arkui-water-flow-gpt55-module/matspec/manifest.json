@@ -1,0 +1,69 @@
+{
+  "runId": "20260522225314100",
+  "type": "generate",
+  "status": "generated",
+  "createdAt": "2026-05-22T14:53:14.101Z",
+  "root": "C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\arkui_ace_engine",
+  "commitId": "921b268f",
+  "runner": "codex",
+  "generationMode": "react",
+  "provider": "codex",
+  "model": "gpt-5.5",
+  "probeModels": {
+    "requested": false,
+    "status": "not_requested"
+  },
+  "artifacts": {
+    "spec": null,
+    "design": null,
+    "plan": "plan.json",
+    "modules": [
+      "modules/frameworks-core-components_v2-water_flow.md"
+    ]
+  },
+  "logs": {
+    "scan": "logs/scan.json",
+    "llm": null,
+    "prompts": {
+      "modules": {
+        "frameworks/core/components_v2/water_flow": "logs/prompts/modules/frameworks-core-components_v2-water_flow.md"
+      }
+    },
+    "external": "logs/external.json",
+    "react": "logs/react.json"
+  },
+  "warnings": [
+    "P0 deterministic stub output; no LLM was called.",
+    "CLI runner module output; artifact was staged under the run directory."
+  ],
+  "tokens": {
+    "input": 29974,
+    "output": 4810
+  },
+  "applied": false,
+  "scanSummary": {
+    "totalFiles": 25192,
+    "includedFiles": 16066,
+    "ignoredFiles": 9130,
+    "readmeFiles": [
+      ".claude/skills/build-error-analyzer/README.md",
+      ".claude/skills/capi-test-fixer/README.md",
+      ".claude/skills/capi-test-naming-verifier/README.md"
+    ],
+    "docsFiles": [
+      "docs/NavRouter组件知识库.md",
+      "docs/Navigation组件知识库.md",
+      "docs/SideBarContainer组件知识库.md",
+      "docs/Stepper组件知识库.md",
+      "docs/accessibility/accessibility_base_README.md",
+      "docs/api/api_KnowLedge_Base.md"
+    ]
+  },
+  "planSummary": {
+    "modules": 1,
+    "language": null,
+    "primaryExtension": ".cpp"
+  },
+  "generationReason": "forced_module_first",
+  "updatedAt": "2026-05-22T14:56:26.143Z"
+}

@@ -1,0 +1,12 @@
+{
+  "projectName": "arkui_ace_engine",
+  "language": null,
+  "primaryExtension": ".cpp",
+  "modules": [
+    {
+      "name": "Water Flow",
+      "path": "frameworks/core/components_v2/water_flow",
+      "description": "Module requested by user at frameworks/core/components_v2/water_flow."
+    }
+  ]
+}
