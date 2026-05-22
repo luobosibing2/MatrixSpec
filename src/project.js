@@ -115,8 +115,7 @@ export function detectExternalAgents(env = process.env) {
   return {
     codex: agentInfo("codex", {
       env,
-      recommendedModel: "gpt-5.3-codex-spark",
-      fallbackModel: "gpt-5.5"
+      recommendedModel: "gpt-5.5"
     }),
     claude: agentInfo("claude", {
       env,

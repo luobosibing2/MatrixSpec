@@ -81,14 +81,13 @@ function selectGenerationMode({ requestedMode }) {
 }
 
 function defaultExternalModel(runner) {
-  if (runner === "codex") return "gpt-5.3-codex-spark";
+  if (runner === "codex") return "gpt-5.5";
   if (runner === "claude") return "claude-sonnet-4-6";
   if (runner === "opencode") return null;
   return null;
 }
 
 function fallbackExternalModel(runner) {
-  if (runner === "codex") return "gpt-5.5";
   return null;
 }
 

@@ -87,7 +87,7 @@ if (process.env.MOCK_MODIFY_MATSPEC_CONFIG === "1") {
   fs.mkdirSync(path.join(process.cwd(), ".matspec-cli"), { recursive: true });
   fs.writeFileSync(path.join(process.cwd(), ".matspec-cli/config.yaml"), "modified by external runner\\n", "utf8");
 }
-if (process.env.MOCK_FAIL_SPARK === "1" && args.includes("gpt-5.3-codex-spark")) process.exit(9);
+if (process.env.MOCK_FAIL_GPT55 === "1" && args.includes("gpt-5.5")) process.exit(9);
 if (process.env.MOCK_FAIL === "1") process.exit(7);
 const outputIndex = args.indexOf("--output-last-message");
 if (process.env.MOCK_EMPTY === "1") {
@@ -184,8 +184,8 @@ test("init records local coding agent detection in result and config", () => {
   assert.equal(result.generation.probeModels.status, "not_implemented");
   assert.equal(result.generation.externalAgents.codex.available, true);
   assert.equal(result.generation.externalAgents.codex.version, "codex mock 1.0.0");
-  assert.equal(result.generation.externalAgents.codex.recommendedModel, "gpt-5.3-codex-spark");
-  assert.equal(result.generation.externalAgents.codex.fallbackModel, "gpt-5.5");
+  assert.equal(result.generation.externalAgents.codex.recommendedModel, "gpt-5.5");
+  assert.equal(result.generation.externalAgents.codex.fallbackModel, undefined);
   assert.equal(result.generation.externalAgents.claude.available, false);
   assert.equal(result.generation.externalAgents.claude.recommendedModel, "claude-sonnet-4-6");
 
@@ -1372,7 +1372,7 @@ test("external codex runner writes staged design and spec artifacts", () => {
   assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/spec.md")));
 });
 
-test("codex runner retries fallback model when default model fails", () => {
+test("codex runner uses gpt-5.5 by default without implicit fallback retry", () => {
   const root = tempProject();
   const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
   const callsFile = path.join(binDir, "calls.txt");
@@ -1382,14 +1382,15 @@ test("codex runner retries fallback model when default model fails", () => {
 
   const generated = json(
     run(["--path", root, "generate", "--runner", "codex", "--mode", "direct", "--json"], {
-      env: mockRunnerEnv(binDir, { MOCK_CALLS_FILE: callsFile, MOCK_FAIL_SPARK: "1" })
+      env: mockRunnerEnv(binDir, { MOCK_CALLS_FILE: callsFile })
     })
   );
   const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "manifest.json"), "utf8"));
   assert.equal(manifest.model, "gpt-5.5");
   const calls = fs.readFileSync(callsFile, "utf8");
-  assert.match(calls, /gpt-5\.3-codex-spark/);
   assert.match(calls, /gpt-5\.5/);
+  assert.doesNotMatch(calls, /gpt-5\.3-codex-spark/);
+  assert.equal(calls.split("\n").filter(Boolean).length, 2);
 });
 
 test("external claude runner parses JSON result output", () => {
