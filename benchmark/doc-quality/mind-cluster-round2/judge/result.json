@@ -1,0 +1,80 @@
+{
+  "repo": "mind-cluster",
+  "judgedAt": "2026-05-22",
+  "scores": {
+    "MatrixSpec round2": {
+      "coverage": 94,
+      "source_grounding": 92,
+      "module_validity": 95,
+      "architecture_clarity": 91,
+      "developer_usability": 88,
+      "hallucination_control": 89,
+      "operational_completeness": 90,
+      "totalScore": 639,
+      "strengths": [
+        "明确覆盖 build/build_all.sh、build/build_each.sh、ascend-common、ascend-device-plugin、ascend-for-volcano，并给出专门模块页",
+        "模块职责、关键源码锚点、构建部署、测试排障链路组织完整",
+        "对 GOPATH 同级组件布局、Volcano 插件编译方式、Device Plugin 参数和运行模式等源码事实贴合度高"
+      ],
+      "weaknesses": [
+        "文档体量较大，开发者快速入口还可以再压缩",
+        "部分 DFX/规模目标仍标注待确认，偏规格化而非直接操作手册",
+        "个别行号锚点未在本次抽样中逐一复核"
+      ]
+    },
+    "CodeWiki community": {
+      "coverage": 75,
+      "source_grounding": 65,
+      "module_validity": 72,
+      "architecture_clarity": 78,
+      "developer_usability": 73,
+      "hallucination_control": 55,
+      "operational_completeness": 61,
+      "totalScore": 479,
+      "strengths": [
+        "核心架构、主链路、ascend-common、device-plugin、ascend-for-volcano、构建入口均有覆盖",
+        "结构较适合快速阅读，按架构、调用链、配置部署、扩展开发拆分",
+        "community 既有评测也显示其在多项问答中通常优于 DeepWiki"
+      ],
+      "weaknesses": [
+        "大量内容显式依赖“推断”，接口、调用链和扩展点的源码确定性不足",
+        "构建配置存在明显失真：源码 service_config.ini 抽样仅含 mind-cluster-version，但文档推断了镜像仓库、组件开关、架构等配置项",
+        "Go 版本表述偏弱或错误，源码 README 明确 Go 1.21，device-plugin go.mod 为 go 1.21.0"
+      ]
+    },
+    "DeepWiki": {
+      "coverage": 68,
+      "source_grounding": 70,
+      "module_validity": 60,
+      "architecture_clarity": 74,
+      "developer_usability": 62,
+      "hallucination_control": 62,
+      "operational_completeness": 66,
+      "totalScore": 462,
+      "strengths": [
+        "answers.json 带引用范围，部分问题如 ascend-common、构建 Go 1.21、device-plugin Allocate、Volcano 调度覆盖较直接",
+        "对缺失上下文有时会明确说明无法确认，优于硬编造",
+        "架构主链路表达清楚，适合作为问答式补充材料"
+      ],
+      "weaknesses": [
+        "不是体系化文档，而是长问答集合，开发者查找和持续维护成本较高",
+        "answers.md 后段出现 RecSDK、tf_rec、torch_rec 等与 mind-cluster 目标模块不相干内容，模块有效性扣分明显",
+        "部分回答依赖公共 Ask API 上下文，覆盖深度不稳定，且对缺失文件常停留在有限推断"
+      ]
+    }
+  },
+  "winner": "MatrixSpec round2",
+  "ranking": [
+    "MatrixSpec round2",
+    "CodeWiki community",
+    "DeepWiki"
+  ],
+  "rationale": "MatrixSpec round2 在受限抽样下对指定五个源码区域均有明确覆盖，并且与 build_all.sh、build_each.sh、三个组件 README/入口源码的核验结果高度一致；它同时提供系统架构、模块职责、源码锚点、构建部署和排障信息，文档质量最完整。CodeWiki community 可读性较好，但大量依赖推断，且在 service_config.ini 与 Go 版本等运维细节上存在失真。DeepWiki 局部源码引用较好，但整体是问答集合而非文档体系，并混入与 mind-cluster 不匹配的 RecSDK 内容，影响模块有效性和幻觉控制。",
+  "matrixSpecBacklog": [
+    "增加一页面向新开发者的快速导航，按“构建、部署、调度、设备插件、公共库、排障”给最短阅读路径",
+    "把 design.md 中较长的源码锚点表拆成可检索索引，减少主文档阅读负担",
+    "补齐待确认的规模、延迟、吞吐等 DFX 约束来源或明确标为非源码事实",
+    "为 build/service_config.ini 增加专门说明：当前抽样源码仅确认 mind-cluster-version，避免泛化配置项",
+    "为关键运维命令补充前置条件和失败现象，例如 Volcano 插件名不匹配、kubelet socket 注册失败、device-info ConfigMap 缺失"
+  ]
+}

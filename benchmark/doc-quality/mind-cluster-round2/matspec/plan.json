@@ -1,0 +1,71 @@
+{
+  "projectName": "mind-cluster-source",
+  "language": "Go",
+  "primaryExtension": ".go",
+  "modules": [
+    {
+      "name": "Ascend Faultdiag",
+      "path": "component/ascend-faultdiag",
+      "description": "Component source module discovered under component/.",
+      "sourceFiles": 316,
+      "sourceLines": 40886,
+      "largeFile": false
+    },
+    {
+      "name": "Clusterd",
+      "path": "component/clusterd",
+      "description": "Component source module discovered under component/.",
+      "sourceFiles": 260,
+      "sourceLines": 67448,
+      "largeFile": false
+    },
+    {
+      "name": "Ascend Faultdiag Online",
+      "path": "component/ascend-faultdiag-online",
+      "description": "Component source module discovered under component/.",
+      "sourceFiles": 247,
+      "sourceLines": 46751,
+      "largeFile": false
+    },
+    {
+      "name": "Mindio",
+      "path": "component/mindio",
+      "description": "Component source module discovered under component/.",
+      "sourceFiles": 222,
+      "sourceLines": 49834,
+      "largeFile": false
+    },
+    {
+      "name": "Ascend For Volcano",
+      "path": "component/ascend-for-volcano",
+      "description": "Component source module discovered under component/.",
+      "sourceFiles": 188,
+      "sourceLines": 56708,
+      "largeFile": false
+    },
+    {
+      "name": "Taskd",
+      "path": "component/taskd",
+      "description": "Component source module discovered under component/.",
+      "sourceFiles": 179,
+      "sourceLines": 29221,
+      "largeFile": false
+    },
+    {
+      "name": "Ascend Common",
+      "path": "component/ascend-common",
+      "description": "Component source module discovered under component/.",
+      "sourceFiles": 108,
+      "sourceLines": 22699,
+      "largeFile": false
+    },
+    {
+      "name": "Ascend Device Plugin",
+      "path": "component/ascend-device-plugin",
+      "description": "Component source module discovered under component/.",
+      "sourceFiles": 101,
+      "sourceLines": 45221,
+      "largeFile": false
+    }
+  ]
+}
