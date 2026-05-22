@@ -1,83 +1,80 @@
-# [Component Name] Implementation Design
+# [组件名称] 实现设计
 
-## 1. Design Overview
+## 1. 设计概述
 
-### 1.1 Design Goals
+### 1.1 设计目标
 
-[Describe the technical goals this design must satisfy.]
+[描述该设计必须满足的技术目标。]
 
-### 1.2 Design Constraints
+### 1.2 设计约束
 
-1. [Constraint 1]
-2. [Constraint 2]
+1. [约束 1]
+2. [约束 2]
 
-## 2. System Architecture
+## 2. 系统架构
 
-### 2.1 Architecture Overview
+### 2.1 架构概述
 
-[Describe the runtime architecture and major dependencies.]
+[描述运行时架构和主要依赖。]
 
-### 2.2 Module Responsibilities
+### 2.2 模块职责
 
-| Module | Responsibility | Key Files |
-|--------|----------------|-----------|
-| [Module] | [Responsibility] | [Files] |
+| 模块 | 职责 | 关键文件 |
+|------|------|----------|
+| [模块] | [职责] | [文件] |
 
-### 2.3 Technology Stack
+### 2.3 技术栈
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| [Layer] | [Technology] | [Purpose] |
+| 层次 | 技术 | 用途 |
+|------|------|------|
+| [层次] | [技术] | [用途] |
 
-## 3. Data Model
+## 3. 数据模型
 
-### 3.1 Entities and Structures
+### 3.1 实体与结构
 
-| Entity | Purpose | Important Fields |
-|--------|---------|------------------|
-| [Entity] | [Purpose] | [Fields] |
+| 实体 | 用途 | 重要字段 |
+|------|------|----------|
+| [实体] | [用途] | [字段] |
 
-### 3.2 Persistence
+### 3.2 持久化
 
-[Describe persistence, migrations, and compatibility requirements.]
+[描述存储、索引、迁移和兼容性策略。]
 
-## 4. Interface Design
+## 4. 接口设计
 
-### 4.1 Public Interfaces
+### 4.1 对外接口
 
-| Interface | Input | Output | Errors |
-|-----------|-------|--------|--------|
-| [Interface] | [Input] | [Output] | [Errors] |
+| 接口 | 调用方 | 输入 | 输出 |
+|------|--------|------|------|
+| [接口] | [调用方] | [输入] | [输出] |
 
-## 5. Core Flow Design
+### 4.2 内部接口
 
-### 5.1 [Flow Name]
+[描述模块间调用边界。]
 
-```plantuml
-@startuml
-Client -> Service: request
-Service -> Repository: query/update
-Repository --> Service: data
-Service --> Client: response
-@enduml
-```
+## 5. 核心流程设计
 
-## 6. Algorithm Design
+### 5.1 [流程名称]
 
-[Describe important algorithms or state that none are required.]
+[描述主要执行流程、关键分支和异常路径。]
 
-## 7. Caching Design
+## 6. 算法设计
 
-[Describe caching, invalidation, or state that no explicit cache is used.]
+[描述关键算法、规则计算或决策逻辑；如无复杂算法，说明不适用。]
 
-## 8. Error Handling Design
+## 7. 缓存设计
 
-[Describe validation errors, dependency failures, retries, fallbacks, and user-visible errors.]
+[描述缓存对象、失效策略、一致性和降级行为；如无缓存，说明不适用。]
 
-## 9. Observability
+## 8. 异常处理设计
 
-[Describe logs, metrics, traces, and operational diagnostics.]
+[描述错误分类、用户可见错误、重试、补偿和告警策略。]
 
-## 10. Security Design
+## 9. 监控与日志
 
-[Describe authentication, authorization, data protection, and audit behavior.]
+[描述关键指标、日志字段、审计要求和排障入口。]
+
+## 10. 安全设计
+
+[描述认证、授权、数据保护、输入校验和依赖安全。]

@@ -1,8 +1,11 @@
+const EN = new Set(["en", "en-us", "en_us", "en-gb", "en_gb"]);
 const ZH = new Set(["zh", "zh-cn", "zh_cn", "cn"]);
 
 export function langOf(options = {}, env = process.env) {
-  const value = options.lang || env.MATSPEC_LANG || env.LANG || "";
-  return ZH.has(String(value).toLowerCase()) ? "zh-CN" : "en";
+  const value = String(options.lang || env.MATSPEC_LANG || "").toLowerCase();
+  if (EN.has(value)) return "en";
+  if (ZH.has(value)) return "zh-CN";
+  return "zh-CN";
 }
 
 export function isZh(options = {}) {

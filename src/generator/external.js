@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { ensureDir, rel, slugify, writeJson } from "../util.js";
 import { commonOutputRules, readFullTemplates, specBlackBoxRules } from "./templates.js";
 
-export function runExternalGeneration({ paths, run, scan, plan, strategy }) {
+export function runExternalGeneration({ paths, run, scan, plan, strategy, options = {} }) {
   const executable = strategy.executable || findExecutable(strategy.runner);
   if (!executable) {
     return failure("RUNNER_NOT_FOUND", `External runner not found: ${strategy.runner}`, { runner: strategy.runner });
@@ -15,7 +15,7 @@ export function runExternalGeneration({ paths, run, scan, plan, strategy }) {
   const promptsDir = path.join(run.dir, "logs/prompts");
   ensureDir(promptsDir);
 
-  const designPrompt = buildDesignPrompt(scan, plan, strategy.runner);
+  const designPrompt = buildDesignPrompt(scan, plan, strategy.runner, options);
   const designPromptFile = path.join(promptsDir, "design.md");
   fs.writeFileSync(designPromptFile, designPrompt, "utf8");
   const designResult = runRunnerTask({
@@ -29,7 +29,7 @@ export function runExternalGeneration({ paths, run, scan, plan, strategy }) {
   if (!designResult.ok) return designResult;
 
   const effectiveStrategy = designResult.model && designResult.model !== strategy.model ? { ...strategy, model: designResult.model, fallbackModel: null } : strategy;
-  const specPrompt = buildSpecPrompt(designResult.content, strategy.runner);
+  const specPrompt = buildSpecPrompt(designResult.content, strategy.runner, options);
   const specPromptFile = path.join(promptsDir, "spec.md");
   fs.writeFileSync(specPromptFile, specPrompt, "utf8");
   const specResult = runRunnerTask({
@@ -234,17 +234,17 @@ function parseOutput({ strategy, task, stdout, outputFile }) {
   };
 }
 
-function buildDesignPrompt(scan, plan, runner) {
-  const templates = readFullTemplates();
-  return `You are the MatSpec documentation generation runner (${runner}).
+function buildDesignPrompt(scan, plan, runner, options = {}) {
+  const templates = readFullTemplates(options);
+  return `${commonOutputRules(options)}
+
+You are the MatSpec documentation generation runner (${runner}).
 Read and analyze the repository only.
 Do not modify any files.
 Do not call git apply.
 Do not write to matspec/specs.
 The MatSpec CLI will save files.
 Output only the final Markdown for design.md.
-
-${commonOutputRules()}
 
 Template requirements:
 1. Strictly use the main section structure and headings from the DESIGN template below.
@@ -263,9 +263,11 @@ ${scan.fileTree}
 `;
 }
 
-function buildSpecPrompt(design, runner) {
-  const templates = readFullTemplates();
-  return `You are the MatSpec documentation generation runner (${runner}).
+function buildSpecPrompt(design, runner, options = {}) {
+  const templates = readFullTemplates(options);
+  return `${commonOutputRules(options)}
+
+You are the MatSpec documentation generation runner (${runner}).
 Do not modify any files.
 Do not call git apply.
 Do not write to matspec/specs.
@@ -273,9 +275,7 @@ The MatSpec CLI will save files.
 Output only the final Markdown for spec.md.
 Derive spec.md only from the generated design.md below. Do not use source context directly.
 
-${commonOutputRules()}
-
-${specBlackBoxRules()}
+${specBlackBoxRules(options)}
 
 Template requirements:
 1. Strictly use the main section structure and headings from the SPEC template below.

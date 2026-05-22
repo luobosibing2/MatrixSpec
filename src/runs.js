@@ -46,8 +46,8 @@ export function generateDocs(options = {}) {
     progress(options, tr(options, "Direct mode: generate design.md, then derive spec.md from design.md", "整体 direct：生成 design.md，然后从 design.md 反推 spec.md"));
     const direct =
       strategy.provider === "fake"
-        ? runDirectGeneration({ paths, run, scan, plan, strategy })
-        : runExternalGeneration({ paths, run, scan, plan, strategy });
+        ? runDirectGeneration({ paths, run, scan, plan, strategy, options })
+        : runExternalGeneration({ paths, run, scan, plan, strategy, options });
     if (!direct.ok && !direct.design) return failRun(run, direct);
     fs.writeFileSync(designPath, direct.design, "utf8");
     fs.writeFileSync(specPath, direct.spec, "utf8");
@@ -66,7 +66,7 @@ export function generateDocs(options = {}) {
     });
   } else if (strategy.generationMode === "react") {
     progress(options, tr(options, `Module-first mode: generate module docs, compose design.md, then derive spec.md (${plan.modules.length} modules, about ${plan.modules.length + 2} runner calls)`, `模块优先生成：逐模块生成文档，合成 design.md，然后反推 spec.md（${plan.modules.length} 个模块，预计 ${plan.modules.length + 2} 次 runner 调用）`));
-    const react = runReactGeneration({ paths, run, scan, plan, strategy, progress: options.progress });
+    const react = runReactGeneration({ paths, run, scan, plan, strategy, progress: options.progress, options });
     if (!react.ok) return failRun(run, react);
     fs.writeFileSync(designPath, react.design, "utf8");
     fs.writeFileSync(specPath, react.spec, "utf8");
@@ -86,8 +86,8 @@ export function generateDocs(options = {}) {
     });
   } else {
     progress(options, tr(options, "No local runner found; writing deterministic stub artifacts", "未发现可用本地 runner，写入 deterministic stub"));
-    fs.writeFileSync(designPath, designStub(paths.root, run.manifest), "utf8");
-    fs.writeFileSync(specPath, specStub(paths.root, run.manifest), "utf8");
+    fs.writeFileSync(designPath, designStub(paths.root, run.manifest, options), "utf8");
+    fs.writeFileSync(specPath, specStub(paths.root, run.manifest, options), "utf8");
     run.manifest.generationReason = strategy.generationReason;
     run.manifest.warnings = [tr(options, "No local generation tool found; deterministic stub was used.", "未发现可用的本地生成工具，已使用 deterministic stub。")];
   }
@@ -177,12 +177,12 @@ export function generateModule(modulePath, options = {}) {
     strategy.generationMode === "stub"
       ? {
           ok: true,
-          content: moduleStub(relativeModulePath, run.manifest),
+          content: moduleStub(relativeModulePath, run.manifest, options),
           logs: {},
           tokens: run.manifest.tokens,
           warnings: [tr(options, "No local generation tool found; deterministic stub was used.", "未发现可用的本地生成工具，已使用 deterministic stub。")]
         }
-      : runModuleGeneration({ paths, run, scan, module: plan.modules[0], strategy, fileName });
+    : runModuleGeneration({ paths, run, scan, module: plan.modules[0], strategy, fileName, options });
   if (!moduleResult.ok) return failRun(run, moduleResult);
   fs.writeFileSync(moduleFile, moduleResult.content, "utf8");
 
@@ -227,15 +227,15 @@ export function generateModule(modulePath, options = {}) {
   };
 }
 
-function runModuleGeneration({ paths, run, scan, module, strategy, fileName }) {
+function runModuleGeneration({ paths, run, scan, module, strategy, fileName, options = {} }) {
   const promptsDir = path.join(run.dir, "logs/prompts/modules");
   ensureDir(promptsDir);
   const promptFile = path.join(promptsDir, fileName);
-  const prompt = buildModulePrompt(scan, module, strategy);
+  const prompt = buildModulePrompt(scan, module, strategy, options);
   fs.writeFileSync(promptFile, prompt, "utf8");
 
   if (strategy.provider === "fake") {
-    const result = fakeCompletion({ task: "module", prompt, plan: module, model: strategy.model });
+    const result = fakeCompletion({ task: "module", prompt, plan: module, model: strategy.model, options });
     const tokens = { input: result.usage.input, output: result.usage.output };
     const isReact = strategy.generationMode === "react";
     const logFile = path.join(run.dir, isReact ? "logs/react.json" : "logs/module.json");
@@ -308,7 +308,7 @@ function runModuleGeneration({ paths, run, scan, module, strategy, fileName }) {
   };
 }
 
-function buildModulePrompt(scan, module, strategy) {
+function buildModulePrompt(scan, module, strategy, options = {}) {
   const moduleFiles = scan.includedFiles.filter((file) => module.path === "." || file === module.path || file.startsWith(`${module.path}/`));
   return `You are the MatSpec module documentation runner (${strategy.runner}).
 Read and analyze the repository only.
@@ -316,7 +316,7 @@ Do not modify any files.
 Do not write to matspec/specs.
 Output only the module Markdown. Module docs are white-box intermediate material and may include files, classes, frameworks, and data structures.
 
-${commonOutputRules()}
+${commonOutputRules(options)}
 
 Module document requirements:
 1. Explain module purpose, directory structure, core components, core flows, interfaces/data structures, and key constraints.
@@ -460,14 +460,14 @@ function validateApplyArtifacts(specFile, designFile, options = {}) {
   if (!spec.trim()) findings.push({ level: "error", code: "SPEC_EMPTY", path: "spec.md", message: tr(options, "spec.md is empty.", "spec.md 为空。") });
   if (!design.trim()) findings.push({ level: "error", code: "DESIGN_EMPTY", path: "design.md", message: tr(options, "design.md is empty.", "design.md 为空。") });
 
-  for (const section of requiredSpecSections()) {
-    if (!containsSection(spec, section)) {
-      findings.push({ level: "error", code: "SPEC_SECTION_MISSING", path: "spec.md", message: tr(options, `spec.md is missing required section: ${section}`, `spec.md 缺少固定章节：${section}`) });
+  for (const section of requiredSpecSections(options)) {
+    if (!containsAnySection(spec, section)) {
+      findings.push({ level: "error", code: "SPEC_SECTION_MISSING", path: "spec.md", message: tr(options, `spec.md is missing required section: ${displaySection(section)}`, `spec.md 缺少固定章节：${displaySection(section)}`) });
     }
   }
-  for (const section of requiredDesignSections()) {
-    if (!containsSection(design, section)) {
-      findings.push({ level: "error", code: "DESIGN_SECTION_MISSING", path: "design.md", message: tr(options, `design.md is missing required section: ${section}`, `design.md 缺少固定章节：${section}`) });
+  for (const section of requiredDesignSections(options)) {
+    if (!containsAnySection(design, section)) {
+      findings.push({ level: "error", code: "DESIGN_SECTION_MISSING", path: "design.md", message: tr(options, `design.md is missing required section: ${displaySection(section)}`, `design.md 缺少固定章节：${displaySection(section)}`) });
     }
   }
   for (const finding of forbiddenGeneratedOutput(spec, "spec.md", options)) findings.push(finding);
@@ -483,8 +483,17 @@ function validateApplyArtifacts(specFile, designFile, options = {}) {
   };
 }
 
+function containsAnySection(text, section) {
+  const sections = Array.isArray(section) ? section : [section];
+  return sections.some((item) => containsSection(text, item));
+}
+
 function containsSection(text, section) {
-  return text.replace(/\s+/g, "").toLowerCase().includes(section.replace(/\s+/g, "").toLowerCase());
+  return text.replace(/\s+/g, "").toLowerCase().includes(String(section).replace(/\s+/g, "").toLowerCase());
+}
+
+function displaySection(section) {
+  return Array.isArray(section) ? section[0] : section;
 }
 
 function forbiddenGeneratedOutput(text, file, options = {}) {
@@ -735,7 +744,55 @@ function moduleName(modulePath) {
     .join(" ");
 }
 
-function designStub(root, manifest) {
+function designStub(root, manifest, options = {}) {
+  if (isZh(options)) {
+    return `${STUB_MARKER}
+# MatSpec 实现设计
+
+Run: ${manifest.runId}
+Repository: ${path.basename(root)}
+
+## 1. 设计概述
+
+这个 deterministic stub 用于验证 MatSpec 候选文档生成流程。
+
+## 2. 系统架构
+
+stub 不调用 LLM 或外部 agent。CLI 负责创建 run 目录、写入产物并维护 manifest。
+
+## 3. 数据模型
+
+manifest.json 记录 run ID、状态、产物、runner、模型元数据和 apply 状态。
+
+## 4. 接口设计
+
+用户入口包括 matspec generate、matspec show、matspec apply 和 matspec generate module <path>。
+
+## 5. 核心流程设计
+
+generate 写入候选文档，show 展示最近一次 run，apply 将审查后的产物发布到 matspec/specs 并提供覆盖保护。
+
+## 6. 算法设计
+
+stub 模式不使用复杂算法。
+
+## 7. 缓存设计
+
+stub 模式不使用缓存。
+
+## 8. 异常处理设计
+
+除非显式传入 --force，否则不会覆盖已有权威文档。
+
+## 9. 监控与日志
+
+run 目录保存 manifest 和生成日志。
+
+## 10. 安全设计
+
+stub 内容只是 fallback 产物，不代表真实项目设计结论。
+`;
+  }
   return `${STUB_MARKER}
 # MatSpec Implementation Design
 
@@ -784,7 +841,46 @@ Stub content is only a fallback artifact and does not represent a real project d
 `;
 }
 
-function specStub(root, manifest) {
+function specStub(root, manifest, options = {}) {
+  if (isZh(options)) {
+    return `${STUB_MARKER}
+# MatSpec 规格说明
+
+Run: ${manifest.runId}
+Repository: ${path.basename(root)}
+
+## 1. 组件定位
+
+该组件使用 MatSpec CLI 管理候选文档，并发布审查后的权威文档。
+
+## 2. 领域术语
+
+- 候选文档：apply 前存放在 run 目录中的生成文档。
+- 权威文档：matspec/specs 下的 spec.md 或 design.md。
+- Run：一次生成动作创建的隔离结果目录。
+
+## 3. 角色与边界
+
+CLI 负责产物写入、审查展示和 apply。外部 agent 不能直接写入权威文档。
+
+## 4. DFX 约束
+
+应用候选文档时必须遵守覆盖保护；默认保留已有权威文档。
+
+## 5. 核心能力
+
+- 用户可以生成候选 spec.md 和 design.md。
+- 用户可以审查最近一次候选文档摘要。
+- 用户可以显式 apply 最近一次候选文档。
+- 用户可以为单个模块生成审查材料。
+
+## 6. 数据约束
+
+- generate 只写入 .matspec-cli/runs。
+- show 可以返回最近一次 run manifest。
+- 目标已存在且未传入 --force 时，apply 必须失败。
+`;
+  }
   return `${STUB_MARKER}
 # MatSpec SPEC
 
@@ -824,7 +920,38 @@ Applying candidate documents must respect overwrite protection; existing authori
 `;
 }
 
-function moduleStub(modulePath, manifest) {
+function moduleStub(modulePath, manifest, options = {}) {
+  if (isZh(options)) {
+    return `${STUB_MARKER}
+# 模块设计：${modulePath}
+
+Run: ${manifest.runId}
+
+## 1. 模块定位
+
+这是 ${modulePath} 的 deterministic stub 模块文档。
+
+## 2. 目录结构
+
+stub 不分析完整文件树；真实生成应补充仓库扫描和模块规划信息。
+
+## 3. 核心组件
+
+待真实代码分析补充。
+
+## 4. 核心流程
+
+该文件只存放在 run/modules 下，不会 apply 到 matspec/specs。
+
+## 5. 接口与数据结构
+
+待确认。
+
+## 6. 关键约束
+
+deterministic stub 不调用 LLM 或外部 runner。
+`;
+  }
   return `${STUB_MARKER}
 # Module Design: ${modulePath}
 

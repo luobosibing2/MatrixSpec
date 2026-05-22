@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { sha256, writeJson } from "./util.js";
+import { isZh } from "./i18n.js";
 
 const INTEGRATIONS = {
   opencode: {
@@ -17,54 +18,54 @@ const INTEGRATIONS = {
   }
 };
 
-function opencodeFiles() {
+function opencodeFiles(options = {}) {
   return {
-  "matspec.md": opencodeCommand("matspec", "MatSpec Main Flow", mainFlowBody()),
-  "matspec.proposal.md": opencodeCommand("matspec.proposal", "MatSpec Requirement Clarification", stageCommandBody(stageDefinitions.proposal)),
-  "matspec.delta-spec.md": opencodeCommand("matspec.delta-spec", "MatSpec Spec Delta", stageCommandBody(stageDefinitions["delta-spec"])),
-  "matspec.delta-design.md": opencodeCommand("matspec.delta-design", "MatSpec Design Delta", stageCommandBody(stageDefinitions["delta-design"])),
-  "matspec.tasks.md": opencodeCommand("matspec.tasks", "MatSpec Task Breakdown", stageCommandBody(stageDefinitions.tasks)),
-  "matspec.validation.md": opencodeCommand("matspec.validation", "MatSpec Consistency Validation", stageCommandBody(stageDefinitions.validation))
+  "matspec.md": opencodeCommand("matspec", "MatSpec Main Flow", mainFlowBody(options)),
+  "matspec.proposal.md": opencodeCommand("matspec.proposal", "MatSpec Requirement Clarification", stageCommandBody(stageDefinitions.proposal, options)),
+  "matspec.delta-spec.md": opencodeCommand("matspec.delta-spec", "MatSpec Spec Delta", stageCommandBody(stageDefinitions["delta-spec"], options)),
+  "matspec.delta-design.md": opencodeCommand("matspec.delta-design", "MatSpec Design Delta", stageCommandBody(stageDefinitions["delta-design"], options)),
+  "matspec.tasks.md": opencodeCommand("matspec.tasks", "MatSpec Task Breakdown", stageCommandBody(stageDefinitions.tasks, options)),
+  "matspec.validation.md": opencodeCommand("matspec.validation", "MatSpec Consistency Validation", stageCommandBody(stageDefinitions.validation, options))
   };
 }
 
-function commands() {
+function commands(options = {}) {
   return [
   {
     id: "matspec",
     title: "MatSpec",
     description: "Inspect the current MatSpec change and route to the active stage.",
-    body: mainFlowBody()
+    body: mainFlowBody(options)
   },
   {
     id: "matspec-proposal",
     title: "MatSpec Proposal",
     description: "Write the proposal stage for a MatSpec change.",
-    body: stageCommandBody(stageDefinitions.proposal)
+    body: stageCommandBody(stageDefinitions.proposal, options)
   },
   {
     id: "matspec-delta-spec",
     title: "MatSpec Delta Spec",
     description: "Write business-rule delta specifications for a MatSpec change.",
-    body: stageCommandBody(stageDefinitions["delta-spec"])
+    body: stageCommandBody(stageDefinitions["delta-spec"], options)
   },
   {
     id: "matspec-delta-design",
     title: "MatSpec Delta Design",
     description: "Write implementation delta design for a MatSpec change.",
-    body: stageCommandBody(stageDefinitions["delta-design"])
+    body: stageCommandBody(stageDefinitions["delta-design"], options)
   },
   {
     id: "matspec-tasks",
     title: "MatSpec Tasks",
     description: "Break a MatSpec change into executable implementation and verification tasks.",
-    body: stageCommandBody(stageDefinitions.tasks)
+    body: stageCommandBody(stageDefinitions.tasks, options)
   },
   {
     id: "matspec-validation",
     title: "MatSpec Validation",
     description: "Validate coverage from proposal to tasks before implementation.",
-    body: stageCommandBody(stageDefinitions.validation)
+    body: stageCommandBody(stageDefinitions.validation, options)
   }
   ];
 }
@@ -161,8 +162,10 @@ ${body}
 `;
 }
 
-function mainFlowBody() {
+function mainFlowBody(options = {}) {
   return `You are working in a repository that uses MatSpec. /matspec is the user's main entry point; do not make the user bounce between terminal and agent.
+
+${languagePolicy(options)}
 
 Workflow:
 1. First call \`matspec go --json\` and read change, stage, artifact path, nextAction, stage.inputs, and stage.allowedWritePath.
@@ -203,8 +206,10 @@ Constraints:
 `;
 }
 
-function stageCommandBody(stage) {
+function stageCommandBody(stage, options = {}) {
   return `Current stage: ${stage.index}/${stage.total} ${stage.key} / ${stage.name}
+
+${languagePolicy(options)}
 
 Required flow:
 1. First call \`matspec go --json\` and read the active change, stage.key, stage.file, stage.allowedWritePath, and stage.inputs.
@@ -384,6 +389,18 @@ function sharedPathRules() {
 6. If you find extra change directories without \`.matspec-state.json\`, stop and ask the user to run \`matspec doctor\`; do not write into those directories.`;
 }
 
+function languagePolicy(options = {}) {
+  return isZh(options)
+    ? `Language policy:
+1. User-facing replies should be Chinese unless the user explicitly asks otherwise.
+2. Stage artifacts and generated output documents must be written in Chinese.
+3. Keep fixed file names, command names, code identifiers, and required MatSpec headings exactly as specified.`
+    : `Language policy:
+1. User-facing replies should be English unless the user explicitly asks otherwise.
+2. Stage artifacts and generated output documents must be written in English.
+3. Keep fixed file names, command names, code identifiers, and required MatSpec headings exactly as specified.`;
+}
+
 export function listIntegrations() {
   return Object.entries(INTEGRATIONS).map(([name, value]) => ({ name, ...value }));
 }
@@ -409,7 +426,7 @@ function installOpencode(root, options = {}) {
   const dir = path.join(root, INTEGRATIONS.opencode.path);
   fs.mkdirSync(dir, { recursive: true });
   const files = [];
-  for (const [fileName, content] of Object.entries(opencodeFiles())) {
+  for (const [fileName, content] of Object.entries(opencodeFiles(options))) {
     const file = path.join(dir, fileName);
     writeTrackedFile(file, content, files, root, options);
   }
@@ -421,13 +438,13 @@ function installClaudeCode(root, options = {}) {
   const files = [];
   const commandDir = path.join(root, ".claude/commands");
   fs.mkdirSync(commandDir, { recursive: true });
-  for (const command of commands()) {
+  for (const command of commands(options)) {
     writeTrackedFile(path.join(commandDir, `${command.id}.md`), claudeCommand(command), files, root, options);
   }
 
   const skillsDir = path.join(root, ".claude/skills");
   fs.mkdirSync(skillsDir, { recursive: true });
-  for (const command of commands()) {
+  for (const command of commands(options)) {
     writeTrackedFile(path.join(skillsDir, command.id, "SKILL.md"), skillMarkdown(command, "claude"), files, root, options);
   }
 
@@ -439,7 +456,7 @@ function installCodex(root, options = {}) {
   const files = [];
   const skillsDir = path.join(root, ".agents/skills");
   fs.mkdirSync(skillsDir, { recursive: true });
-  for (const command of commands()) {
+  for (const command of commands(options)) {
     writeTrackedFile(path.join(skillsDir, command.id, "SKILL.md"), skillMarkdown(command, "codex"), files, root, options);
   }
 

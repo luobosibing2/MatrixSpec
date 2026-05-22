@@ -326,7 +326,7 @@ Options:
   --runner auto|codex|claude|opencode   generation tool, default auto
   --mode auto|direct|react              generation mode, default auto
   --model model                         override the runner default model
-  --lang en|zh-CN                       output language, default en
+  --lang en|zh-CN                       output language, default zh-CN
   --json                                machine-readable JSON output
 
 Notes:
@@ -370,7 +370,7 @@ function helpZh() {
   --runner auto|codex|claude|opencode   生成工具，默认 auto
   --mode auto|direct|react              生成模式，默认 auto
   --model model                         覆盖 runner 默认模型
-  --lang en|zh-CN                       输出语言，默认 en
+  --lang en|zh-CN                       输出语言，默认 zh-CN
   --json                                输出机器可读 JSON
 
 说明：

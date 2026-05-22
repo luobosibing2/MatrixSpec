@@ -21,4 +21,4 @@ The installed command teaches the agent to:
 
 ## Language
 
-The default CLI and agent instruction surface is English. Use `--lang zh-CN` or `MATSPEC_LANG=zh-CN` for Chinese CLI output.
+The default CLI, agent instruction surface, and generated artifacts are Chinese. Use `--lang en` or `MATSPEC_LANG=en` for English CLI output and English generated artifacts.

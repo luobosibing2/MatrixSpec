@@ -1,132 +1,98 @@
-# [Component Name] Specification
+# [组件名称] 规格说明
 
-## 1. Component Purpose
+## 1. 组件定位
 
-### 1.1 Core Responsibility
+### 1.1 核心职责
 
-[Describe the component's core business responsibility in one clear sentence.]
+[用一句清晰的话描述该组件承担的核心业务职责。]
 
-### 1.2 Core Inputs
+### 1.2 核心输入
 
-1. [Source A]: [business entity or signal]
-2. [Source B]: [business entity or signal]
+1. [来源 A]：[业务对象或信号]
+2. [来源 B]：[业务对象或信号]
 
-### 1.3 Core Outputs
+### 1.3 核心输出
 
-1. [Target A]: [business entity, report, response, or event]
-2. [Target B]: [notification or downstream request]
+1. [目标 A]：[业务对象、报表、响应或事件]
+2. [目标 B]：[通知或下游请求]
 
-### 1.4 Responsibility Boundaries
+### 1.4 职责边界
 
-1. [Explicitly excluded responsibility A]
-2. [Explicitly excluded responsibility B]
+1. [明确不负责的事项 A]
+2. [明确不负责的事项 B]
 
-## 2. Domain Terminology
+## 2. 领域术语
 
-**Term 1**
-: Strict business definition.
+**术语 1**
+: 严格的业务定义。
 
-**Term 2**
-: Strict business definition.
-: Optional note, alias, or contrast with similar terms.
+**术语 2**
+: 严格的业务定义。
+: 可选备注、别名或与相近术语的区别。
 
-## 3. Actors and Boundaries
+## 3. 角色与边界
 
-### 3.1 Primary Actors
+### 3.1 主要角色
 
-1. **Actor A**: [role and responsibility]
-2. **Actor B**: [role and responsibility]
+1. **角色 A**：[角色和职责]
+2. **角色 B**：[角色和职责]
 
-### 3.2 External Systems
+### 3.2 外部系统
 
-1. **System X**: [interaction responsibility]
-2. **System Y**: [interaction responsibility]
+1. **系统 A**：[交互目的]
+2. **系统 B**：[交互目的]
 
-### 3.3 Interaction Context
+### 3.3 交互边界
 
-```plantuml
-@startuml
-actor ActorA
-component "This Component" as Component
-component "External System X" as External
+[描述该组件与外部角色/系统之间的业务边界。]
 
-ActorA --> Component : business request
-Component --> External : dependency call
-@enduml
-```
+## 4. DFX 约束
 
-## 4. DFX Constraints
+### 4.1 性能
 
-### 4.1 Performance
+[描述用户可感知或业务要求的性能约束。]
 
-1. **Latency**: [measurable threshold]
-2. **Throughput**: [measurable threshold]
-3. **Resource usage**: [measurable threshold]
+### 4.2 可靠性
 
-### 4.2 Reliability
+[描述失败处理、可用性和恢复要求。]
 
-1. **Availability**: [target]
-2. **Failure recovery**: [expected behavior]
-3. **Data consistency**: [consistency requirement]
+### 4.3 安全
 
-### 4.3 Security
+[描述认证、授权、隐私和敏感数据约束。]
 
-1. **Authentication and authorization**: [requirement]
-2. **Data protection**: [requirement]
-3. **Auditability**: [requirement]
+### 4.4 兼容性
 
-### 4.4 Maintainability
+[描述必须保留的既有行为、接口或数据兼容性。]
 
-1. **Monitoring**: [requirement]
-2. **Logging**: [requirement]
+## 5. 核心能力
 
-### 4.5 Compatibility
+### 5.1 [能力名称]
 
-1. **API compatibility**: [requirement]
-2. **Data migration**: [requirement]
+**业务规则**
 
-## 5. Core Capabilities
+1. [必须/应当/禁止的业务规则]
+   - **验收条件**：[触发场景] -> [预期行为]
 
-### 5.1 [Capability Name]
+**异常场景**
 
-#### 5.1.1 Business Rules
+1. [异常或边界场景] -> [系统行为]
 
-1. **Rule name**: [complete business rule]
-   - **Acceptance criteria**: [trigger] -> [expected behavior]
-2. **Rule name**: [complete business rule]
-   - **Acceptance criteria**: [trigger] -> [expected behavior]
-3. **Prohibited behavior**: [complete prohibited behavior]
-   - **Acceptance criteria**: [trigger] -> [expected behavior]
+### 5.2 [能力名称]
 
-#### 5.1.2 Interaction Flow
+[按同样结构描述。]
 
-```plantuml
-@startuml
-actor ActorA
-participant Component
-participant External
+## 6. 数据约束
 
-ActorA -> Component: request
-activate Component
-Component -> Component: validate business rules
-Component -> External: dependency call
-External --> Component: response
-Component --> ActorA: result
-deactivate Component
-@enduml
-```
+### 6.1 领域对象
 
-#### 5.1.3 Exceptional Scenarios
+| 对象 | 业务含义 | 关键约束 |
+|------|----------|----------|
+| [对象] | [含义] | [约束] |
 
-1. **Scenario**: [name]
-   - **Trigger**: [condition]
-   - **System behavior**: [behavior]
-   - **User-visible result**: [error or response]
+### 6.2 状态与生命周期
 
-## 6. Data Constraints
+[描述状态、状态转换和生命周期约束。]
 
-### 6.1 [Domain Object]
+### 6.3 数据质量
 
-1. **Identifier**: [constraint]
-2. **Name**: [constraint]
-3. **Type**: [constraint]
+[描述唯一性、完整性、格式、时效性和保留策略。]

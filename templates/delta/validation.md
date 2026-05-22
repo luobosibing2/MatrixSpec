@@ -1,102 +1,102 @@
-# [REQ ID] Consistency Validation
+# [REQ ID] 一致性验证
 
-> This document checks coverage and conflicts across proposal, delta-spec, delta-design, tasks, and the full documents before implementation.
+> 本文档在实现前检查 proposal、delta-spec、delta-design、tasks 与全量文档之间的覆盖和冲突。
 
-## 1. Validation Summary
+## 1. 验证摘要
 
-| Area | Status | Issues | Conclusion |
-|------|--------|--------|------------|
-| Proposal <-> Delta-Spec | [pass/warn/fail] | [count] | [summary] |
-| Delta-Spec <-> Delta-Design | [pass/warn/fail] | [count] | [summary] |
-| Delta-Design <-> Tasks | [pass/warn/fail] | [count] | [summary] |
-| Delta <-> Full Documents | [pass/warn/fail] | [count] | [summary] |
-| Planned Done Finalization | [pass/warn/fail] | [count] | [spec.md/design.md refresh tasks] |
-| Decision Clarification Gate | [pass/warn/fail] | [count] | [unconfirmed decisions] |
-| Pre-Implementation Risk Gate | [pass/warn/fail] | [count] | [worktree, tests, migration, compatibility, concurrency] |
+| 领域 | 状态 | 问题数 | 结论 |
+|------|------|--------|------|
+| Proposal <-> Delta-Spec | [通过/警告/失败] | [数量] | [摘要] |
+| Delta-Spec <-> Delta-Design | [通过/警告/失败] | [数量] | [摘要] |
+| Delta-Design <-> Tasks | [通过/警告/失败] | [数量] | [摘要] |
+| Delta <-> 全量文档 | [通过/警告/失败] | [数量] | [摘要] |
+| Planned Done Finalization | [通过/警告/失败] | [数量] | [spec.md/design.md 刷新任务] |
+| 决策澄清门禁 | [通过/警告/失败] | [数量] | [未确认决策] |
+| 实现前风险门禁 | [通过/警告/失败] | [数量] | [工作树、测试、迁移、兼容性、并发] |
 
-**Overall conclusion**: [implementation may start / revise before implementation]
+**总体结论**：[可进入实现 / 实现前需修订]
 
-## 1.1 Decision Clarification Gate
+## 1.1 决策澄清门禁
 
-| Document | Unconfirmed Decisions | Agent Inferences | Blocking | Notes |
-|----------|-----------------------|------------------|----------|-------|
-| proposal.md | [count/none] | [count/none] | [yes/no] | [notes] |
-| delta-spec.md | [count/none] | [count/none] | [yes/no] | [notes] |
-| delta-design.md | [count/none] | [count/none] | [yes/no] | [notes] |
-| tasks.md | [count/none] | [count/none] | [yes/no] | [notes] |
+| 文档 | 未确认决策 | Agent 推断 | 是否阻塞 | 备注 |
+|------|------------|------------|----------|------|
+| proposal.md | [数量/无] | [数量/无] | [是/否] | [备注] |
+| delta-spec.md | [数量/无] | [数量/无] | [是/否] | [备注] |
+| delta-design.md | [数量/无] | [数量/无] | [是/否] | [备注] |
+| tasks.md | [数量/无] | [数量/无] | [是/否] | [备注] |
 
-> If an unconfirmed decision affects scope, business rules, data model, migration, compatibility, testability, or acceptance criteria, the conclusion must be "revise before implementation".
+> 如果未确认决策影响范围、业务规则、数据模型、迁移、兼容性、可测试性或验收标准，结论必须是“实现前需修订”。
 
-## 1.2 Pre-Implementation Risk Gate
+## 1.2 实现前风险门禁
 
-| Risk Type | Status | Blocking | Notes |
-|-----------|--------|----------|-------|
-| Unrelated dirty worktree | [pass/warn/fail] | [yes/no] | [notes] |
-| Test environment runnable | [pass/warn/fail] | [yes/no] | [notes] |
-| Migration and historic data compatibility | [pass/warn/fail] | [yes/no] | [notes] |
-| Concurrency and consistency risk | [pass/warn/fail] | [yes/no] | [notes] |
-| Scope expansion beyond non-goals | [pass/warn/fail] | [yes/no] | [notes] |
+| 风险类型 | 状态 | 是否阻塞 | 备注 |
+|----------|------|----------|------|
+| 无关脏工作区 | [通过/警告/失败] | [是/否] | [备注] |
+| 测试环境可运行 | [通过/警告/失败] | [是/否] | [备注] |
+| 迁移和历史数据兼容 | [通过/警告/失败] | [是/否] | [备注] |
+| 并发与一致性风险 | [通过/警告/失败] | [是/否] | [备注] |
+| 超出非目标的范围扩张 | [通过/警告/失败] | [是/否] | [备注] |
 
-## 2. Proposal <-> Delta-Spec Coverage
+## 2. Proposal <-> Delta-Spec 覆盖
 
-| Proposal Item | Delta-Spec Rule | Status | Notes |
-|---------------|-----------------|--------|-------|
-| [item] | [rule] | [pass/missing/partial] | [notes] |
+| Proposal 项 | Delta-Spec 规则 | 状态 | 备注 |
+|-------------|-----------------|------|------|
+| [项目] | [规则] | [通过/缺失/部分] | [备注] |
 
-## 3. Delta-Spec <-> Delta-Design Coverage
+## 3. Delta-Spec <-> Delta-Design 覆盖
 
-| Business Rule | Design Item | Status | Notes |
-|---------------|-------------|--------|-------|
-| [rule] | [design section] | [pass/missing/partial] | [notes] |
+| 业务规则 | 设计项 | 状态 | 备注 |
+|----------|--------|------|------|
+| [规则] | [设计章节] | [通过/缺失/部分] | [备注] |
 
-## 4. Delta-Design <-> Tasks Coverage
+## 4. Delta-Design <-> Tasks 覆盖
 
-| Design Item | Task | Status | Notes |
-|-------------|------|--------|-------|
-| [design item] | [task] | [pass/missing/partial] | [notes] |
+| 设计项 | 任务 | 状态 | 备注 |
+|--------|------|------|------|
+| [设计项] | [任务] | [通过/缺失/部分] | [备注] |
 
-## 5. Full Document Compatibility
+## 5. 全量文档兼容性
 
 ### 5.1 spec.md
 
-| Check | Status | Notes |
-|-------|--------|-------|
-| Business rule conflict | [pass/fail] | [notes] |
-| Data constraint conflict | [pass/fail] | [notes] |
-| Terminology conflict | [pass/fail] | [notes] |
+| 检查项 | 状态 | 备注 |
+|--------|------|------|
+| 业务规则冲突 | [通过/失败] | [备注] |
+| 数据约束冲突 | [通过/失败] | [备注] |
+| 术语冲突 | [通过/失败] | [备注] |
 
 ### 5.2 design.md
 
-| Check | Status | Notes |
-|-------|--------|-------|
-| Architecture conflict | [pass/fail] | [notes] |
-| Interface compatibility conflict | [pass/fail] | [notes] |
-| Data model conflict | [pass/fail] | [notes] |
+| 检查项 | 状态 | 备注 |
+|--------|------|------|
+| 架构冲突 | [通过/失败] | [备注] |
+| 接口兼容性冲突 | [通过/失败] | [备注] |
+| 数据模型冲突 | [通过/失败] | [备注] |
 
-## 6. Missing Coverage
+## 6. 遗漏覆盖
 
-| Type | Covered | Notes |
-|------|---------|-------|
-| Error scenarios | [yes/no/partial] | [notes] |
-| Boundary conditions | [yes/no/partial] | [notes] |
-| DFX constraints | [yes/no/partial] | [notes] |
-| Tests and verification | [yes/no/partial] | [notes] |
-| Done-stage spec.md refresh task | [yes/no/partial] | [notes] |
-| Done-stage design.md refresh task | [yes/no/partial] | [notes] |
+| 类型 | 是否覆盖 | 备注 |
+|------|----------|------|
+| 错误场景 | [是/否/部分] | [备注] |
+| 边界条件 | [是/否/部分] | [备注] |
+| DFX 约束 | [是/否/部分] | [备注] |
+| 测试与验证 | [是/否/部分] | [备注] |
+| Done 阶段 spec.md 刷新任务 | [是/否/部分] | [备注] |
+| Done 阶段 design.md 刷新任务 | [是/否/部分] | [备注] |
 
-## 7. Issues and Fixes
+## 7. 问题与修复
 
-### 7.1 Must Fix
+### 7.1 必须修复
 
-- [Issue]: [fix]
+- [问题]：[修复方式]
 
-### 7.2 Should Fix
+### 7.2 建议修复
 
-- [Issue]: [fix]
+- [问题]：[修复方式]
 
-## 8. Final Conclusion
+## 8. 最终结论
 
-- **Implementation may start**: [yes/no]
-- **Blocking issues**: [none/list]
-- **Validator role**: [name or role]
-- **Validation date**: [YYYY-MM-DD]
+- **是否允许进入实现**：[是/否]
+- **阻塞问题**：[无/列出]
+- **验证角色**：[姓名或角色]
+- **验证日期**：[YYYY-MM-DD]

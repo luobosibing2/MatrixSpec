@@ -4,8 +4,9 @@ import { fakeCompletion } from "../llm.js";
 import { ensureDir, rel, slugify, writeJson } from "../util.js";
 import { createWorkspaceGuard, runRunnerTask } from "./external.js";
 import { commonOutputRules, readFullTemplates, specBlackBoxRules } from "./templates.js";
+import { isZh } from "../i18n.js";
 
-export function runReactGeneration({ paths, run, scan, plan, strategy, progress = null }) {
+export function runReactGeneration({ paths, run, scan, plan, strategy, progress = null, options = {} }) {
   const modulesDir = path.join(run.dir, "modules");
   const modulePromptsDir = path.join(run.dir, "logs/prompts/modules");
   const promptsDir = path.join(run.dir, "logs/prompts");
@@ -18,7 +19,7 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
   for (const [index, module] of plan.modules.entries()) {
     const slug = `${slugify(module.path) || "project-root"}.md`;
     progress?.(`Module ${index + 1}/${plan.modules.length}: ${module.name} (${module.path})`);
-    const prompt = buildModulePrompt(scan, module);
+    const prompt = buildModulePrompt(scan, module, options);
     const promptFile = path.join(modulePromptsDir, slug);
     fs.writeFileSync(promptFile, prompt, "utf8");
 
@@ -27,7 +28,8 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
           task: "module",
           prompt,
           plan: module,
-          model: strategy.model
+          model: strategy.model,
+          options
         })
       : externalCompletion({
           paths,
@@ -51,12 +53,12 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
   }
 
   progress?.("Composing design.md");
-  const designPrompt = buildDesignPrompt(plan, moduleResults);
+  const designPrompt = buildDesignPrompt(plan, moduleResults, options);
   const designPromptFile = path.join(promptsDir, "design.md");
   fs.writeFileSync(designPromptFile, designPrompt, "utf8");
   const designResult = isFake
     ? {
-        text: fakeReactDesign(plan, moduleResults, strategy.model),
+        text: fakeReactDesign(plan, moduleResults, strategy.model, options),
         usage: { input: estimateTokens(designPrompt), output: 0 }
       }
     : externalCompletion({ paths, run, strategy, task: "design", prompt: designPrompt });
@@ -64,7 +66,7 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
   const design = designResult.text;
 
   progress?.("Deriving spec.md from design.md");
-  const specPrompt = buildSpecPrompt(design);
+  const specPrompt = buildSpecPrompt(design, options);
   const specPromptFile = path.join(promptsDir, "spec.md");
   fs.writeFileSync(specPromptFile, specPrompt, "utf8");
   const specResult = isFake
@@ -73,7 +75,8 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
         prompt: specPrompt,
         plan,
         design,
-        model: strategy.model
+        model: strategy.model,
+        options
       })
     : externalCompletion({ paths, run, strategy, task: "spec", prompt: specPrompt });
   if (!specResult.ok && !specResult.text) return specResult;
@@ -152,7 +155,7 @@ function externalCompletion({ paths, run, strategy, task, prompt }) {
   };
 }
 
-function buildModulePrompt(scan, module) {
+function buildModulePrompt(scan, module, options = {}) {
   const moduleFiles = scan.includedFiles.filter((file) => module.path === "." || file === module.path || file.startsWith(`${module.path}/`));
   const moduleTree = buildTree(moduleFiles);
   const readmeContext = scan.readmeFiles.map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n");
@@ -160,7 +163,7 @@ function buildModulePrompt(scan, module) {
   return `You are the MatSpec module documentation runner.
 Task: generate an intermediate module design document for later design.md synthesis.
 
-${commonOutputRules()}
+${commonOutputRules(options)}
 
 Module document requirements:
 1. Module docs are white-box intermediate material and may include files, classes, frameworks, and tables.
@@ -185,12 +188,12 @@ ${docsContext || "(none)"}
 `;
 }
 
-function buildDesignPrompt(plan, moduleResults) {
-  const templates = readFullTemplates();
+function buildDesignPrompt(plan, moduleResults, options = {}) {
+  const templates = readFullTemplates(options);
   return `You are the MatSpec design.md generation runner.
 Task: synthesize a project-level implementation design document from module documents.
 
-${commonOutputRules()}
+${commonOutputRules(options)}
 
 Template requirements:
 1. Strictly use the main section structure and headings from the DESIGN template below.
@@ -211,14 +214,14 @@ ${moduleResults.map((module) => module.content).join("\n\n")}
 `;
 }
 
-function buildSpecPrompt(design) {
-  const templates = readFullTemplates();
+function buildSpecPrompt(design, options = {}) {
+  const templates = readFullTemplates(options);
   return `You are the MatSpec spec.md generation runner.
 Task: derive the SPEC only from the generated design.md.
 
-${commonOutputRules()}
+${commonOutputRules(options)}
 
-${specBlackBoxRules()}
+${specBlackBoxRules(options)}
 
 Template requirements:
 1. Strictly use the main section structure and headings from the SPEC template below.
@@ -259,7 +262,68 @@ function renderTree(node, depth, lines) {
   }
 }
 
-function fakeReactDesign(plan, moduleResults, model) {
+function fakeReactDesign(plan, moduleResults, model, options = {}) {
+  if (isZh(options)) {
+    return `# MatSpec 实现设计
+
+<!-- generated by matspec fake react -->
+
+Provider: fake
+Model: ${model}
+
+## 1. 设计概述
+
+根据模块文档合成的 fake react 设计。
+
+## 2. 系统架构
+
+Project: ${plan.projectName}
+
+### 2.1 架构概述
+
+模块优先模式会先生成模块文档，再合成项目级设计。
+
+### 2.2 模块职责
+
+${moduleResults.map((module) => `- ${module.module.name}: ${module.module.path}`).join("\n")}
+
+### 2.3 技术栈
+
+fake provider 不推断真实技术栈。
+
+## 3. 数据模型
+
+run manifest 存储产物路径和生成元数据。
+
+## 4. 接口设计
+
+用户入口包括 matspec generate、matspec show 和 matspec apply。
+
+## 5. 核心流程设计
+
+react 模式先生成模块文档，再合成 design.md，最后从 design.md 反推 spec.md。
+
+## 6. 算法设计
+
+不需要复杂算法。
+
+## 7. 缓存设计
+
+未使用显式缓存。
+
+## 8. 异常处理设计
+
+fake react provider 不调用网络 API。
+
+## 9. 监控与日志
+
+生成产物在 apply 前隔离保存在 .matspec-cli/runs 下。
+
+## 10. 安全设计
+
+这是用于测试的 deterministic fake react 输出。
+`;
+  }
   return `# MatSpec Implementation Design
 
 <!-- generated by matspec fake react -->

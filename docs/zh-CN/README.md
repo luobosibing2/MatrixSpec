@@ -39,19 +39,19 @@ Agent 入口：
 /matspec
 ```
 
-## 中文命令行
+## 语言
 
-MatSpec 默认英文输出。需要中文输出时使用：
+MatSpec 默认中文输出。需要英文输出时使用：
 
 ```bash
-matspec --lang zh-CN --help
-matspec --lang zh-CN init
+matspec --lang en --help
+matspec --lang en init
 ```
 
 或设置环境变量：
 
 ```bash
-$env:MATSPEC_LANG = "zh-CN"
+$env:MATSPEC_LANG = "en"
 matspec --help
 ```
 
@@ -108,5 +108,5 @@ matspec integration install all
 ```bash
 npm test
 node bin/matspec.js --help
-node bin/matspec.js --lang zh-CN --help
+node bin/matspec.js --lang en --help
 ```

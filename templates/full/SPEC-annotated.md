@@ -1,106 +1,34 @@
-# [Component Name] Specification
+# SPEC 写作参考
 
-> **Spec vs Design**
->
-> SPEC answers "what the system does": externally visible behavior, business rules, constraints, and acceptance criteria.
->
-> DESIGN answers "how the system works": architecture, modules, data model, interfaces, algorithms, operations, and security.
->
-> Do not put implementation details in SPEC. If changing the technology stack would force a rewrite of a paragraph, it belongs in DESIGN.
+SPEC 是业务规格，不是实现设计。它回答“系统对用户和业务做什么”，并为后续 design、tasks 和测试提供稳定基线。
 
-## 1. Component Purpose
+## 1. 组件定位
 
-> Help the reader understand what this component is responsible for and what it explicitly does not own.
+写清楚组件的核心职责、输入、输出和边界。边界要明确说明“不负责什么”，避免后续增量需求无限扩张。
 
-### 1.1 Core Responsibility
+## 2. 领域术语
 
-[Describe the component's core business responsibility in one clear sentence.]
+使用业务语言定义术语，不要用类名、表名或框架概念代替业务概念。同一术语应在 spec、design、任务和测试中保持一致。
 
-### 1.2 Core Inputs
+## 3. 角色与边界
 
-[List external requests, user actions, scheduled triggers, and subscribed messages.]
+说明哪些角色会使用或影响该组件，以及它与外部系统的交互边界。这里关注业务交互，不写实现细节。
 
-### 1.3 Core Outputs
+## 4. DFX 约束
 
-[List responses, downstream calls, notifications, reports, and published events.]
+记录业务上必须满足的性能、可靠性、安全、兼容性和可维护性约束。不要写具体实现方案，方案应放到 design。
 
-### 1.4 Responsibility Boundaries
+## 5. 核心能力
 
-[List responsibilities that are explicitly out of scope.]
+每个能力应包含业务规则、验收条件和异常场景。规则要可判定，避免“更好”“更灵活”“优化”等不可验收表达。
 
-## 2. Domain Terminology
+推荐格式：
 
-> Define business terms that appear in requirements, code, tests, or user conversations.
-
-**Term**
-: Complete business definition.
-
-## 3. Actors and Boundaries
-
-### 3.1 Primary Actors
-
-[List human actors and their responsibilities.]
-
-### 3.2 External Systems
-
-[List upstream callers and downstream dependencies.]
-
-### 3.3 Interaction Context
-
-```plantuml
-@startuml
-' Draw the context diagram here.
-@enduml
+```markdown
+1. **规则名称**：[必须/应当/禁止描述业务约束]
+   - **验收条件**：[触发场景] -> [预期行为]
 ```
 
-## 4. DFX Constraints
+## 6. 数据约束
 
-> Define measurable non-functional constraints before describing capabilities.
-
-### 4.1 Performance
-
-[Latency, throughput, resource usage.]
-
-### 4.2 Reliability
-
-[Availability, recovery, consistency.]
-
-### 4.3 Security
-
-[Authentication, authorization, data protection, audit.]
-
-### 4.4 Maintainability
-
-[Monitoring, logging, supportability.]
-
-### 4.5 Compatibility
-
-[API compatibility, data migration, backward compatibility.]
-
-## 5. Core Capabilities
-
-### 5.1 [Capability Name]
-
-#### 5.1.1 Business Rules
-
-1. **Rule name**: [complete rule]
-   - **Acceptance criteria**: [trigger] -> [expected behavior]
-
-#### 5.1.2 Interaction Flow
-
-```plantuml
-@startuml
-' Draw the sequence diagram here.
-@enduml
-```
-
-#### 5.1.3 Exceptional Scenarios
-
-1. **Scenario**: [name]
-   - **Trigger**: [condition]
-   - **System behavior**: [behavior]
-   - **User-visible result**: [error or response]
-
-## 6. Data Constraints
-
-[Describe logical business constraints on domain objects. Do not include database field types or indexes.]
+描述领域对象、状态转换、数据质量和保留策略等业务层面的约束。不要写表结构、字段类型、索引或 ORM 细节。

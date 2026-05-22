@@ -4,11 +4,11 @@ import { fakeCompletion } from "../llm.js";
 import { ensureDir, rel, writeJson } from "../util.js";
 import { commonOutputRules, readFullTemplates, specBlackBoxRules } from "./templates.js";
 
-export function runDirectGeneration({ paths, run, scan, plan, strategy }) {
+export function runDirectGeneration({ paths, run, scan, plan, strategy, options = {} }) {
   const promptsDir = path.join(run.dir, "logs/prompts");
   ensureDir(promptsDir);
 
-  const designPrompt = buildDesignPrompt(scan, plan);
+  const designPrompt = buildDesignPrompt(scan, plan, options);
   const designPromptFile = path.join(promptsDir, "design.md");
   fs.writeFileSync(designPromptFile, designPrompt, "utf8");
 
@@ -16,11 +16,12 @@ export function runDirectGeneration({ paths, run, scan, plan, strategy }) {
     task: "design",
     prompt: designPrompt,
     plan,
-    model: strategy.model
+    model: strategy.model,
+    options
   });
   const design = designResult.text;
 
-  const specPrompt = buildSpecPrompt(design);
+  const specPrompt = buildSpecPrompt(design, options);
   const specPromptFile = path.join(promptsDir, "spec.md");
   fs.writeFileSync(specPromptFile, specPrompt, "utf8");
 
@@ -29,7 +30,8 @@ export function runDirectGeneration({ paths, run, scan, plan, strategy }) {
     prompt: specPrompt,
     plan,
     design,
-    model: strategy.model
+    model: strategy.model,
+    options
   });
 
   const llmLog = {
@@ -73,12 +75,12 @@ export function runDirectGeneration({ paths, run, scan, plan, strategy }) {
   };
 }
 
-function buildDesignPrompt(scan, plan) {
-  const templates = readFullTemplates();
-  return `You are the MatSpec direct design.md generation runner.
-Task: generate a whole-project design.md from the scan and module plan.
+function buildDesignPrompt(scan, plan, options = {}) {
+  const templates = readFullTemplates(options);
+  return `${commonOutputRules(options)}
 
-${commonOutputRules()}
+You are the MatSpec direct design.md generation runner.
+Task: generate a whole-project design.md from the scan and module plan.
 
 Template requirements:
 1. Strictly use the main section structure and headings from the DESIGN template below.
@@ -106,14 +108,14 @@ ${scan.fileTree}
 `;
 }
 
-function buildSpecPrompt(design) {
-  const templates = readFullTemplates();
-  return `You are the MatSpec direct spec.md generation runner.
+function buildSpecPrompt(design, options = {}) {
+  const templates = readFullTemplates(options);
+  return `${commonOutputRules(options)}
+
+You are the MatSpec direct spec.md generation runner.
 Task: derive the SPEC only from the generated design.md.
 
-${commonOutputRules()}
-
-${specBlackBoxRules()}
+${specBlackBoxRules(options)}
 
 Template requirements:
 1. Strictly use the main section structure and headings from the SPEC template below.
