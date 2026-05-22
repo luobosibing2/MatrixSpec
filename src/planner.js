@@ -2,37 +2,43 @@ import path from "node:path";
 
 const CORE_DIRS = ["src", "lib", "pkg", "packages", "app", "server", "cmd"];
 const COMPONENT_ROOTS = ["component", "components", "services", "plugins", "modules", "tools", "cmd"];
-const OPENHARMONY_MODULE_PATTERNS = [
-  {
-    prefix: ["frameworks", "core", "components_v2"],
-    depth: 4,
-    description: "OpenHarmony component module discovered under frameworks/core/components_v2."
-  },
-  {
-    prefix: ["frameworks", "core", "components_ng", "pattern"],
-    depth: 5,
-    description: "OpenHarmony NG pattern module discovered under frameworks/core/components_ng/pattern."
-  },
-  {
-    prefix: ["frameworks", "core", "interfaces", "native"],
-    depth: 5,
-    description: "OpenHarmony native interface module discovered under frameworks/core/interfaces/native."
-  },
-  {
-    prefix: ["frameworks", "bridge"],
-    depth: 3,
-    description: "OpenHarmony bridge subsystem discovered under frameworks/bridge."
-  },
-  {
-    prefix: ["adapter"],
-    depth: 2,
-    description: "OpenHarmony adapter subsystem discovered under adapter."
-  },
-  {
-    prefix: ["interfaces"],
-    depth: 2,
-    description: "OpenHarmony interface surface discovered under interfaces."
-  }
+const OPENHARMONY_MODULE_PATTERN_GROUPS = [
+  [
+    {
+      prefix: ["frameworks", "core", "components_v2"],
+      depth: 4,
+      description: "OpenHarmony component module discovered under frameworks/core/components_v2."
+    }
+  ],
+  [
+    {
+      prefix: ["frameworks", "core", "components_ng", "pattern"],
+      depth: 5,
+      description: "OpenHarmony NG pattern module discovered under frameworks/core/components_ng/pattern."
+    }
+  ],
+  [
+    {
+      prefix: ["frameworks", "core", "interfaces", "native"],
+      depth: 5,
+      description: "OpenHarmony native interface module discovered under frameworks/core/interfaces/native."
+    },
+    {
+      prefix: ["frameworks", "bridge"],
+      depth: 3,
+      description: "OpenHarmony bridge subsystem discovered under frameworks/bridge."
+    },
+    {
+      prefix: ["adapter"],
+      depth: 2,
+      description: "OpenHarmony adapter subsystem discovered under adapter."
+    },
+    {
+      prefix: ["interfaces"],
+      depth: 2,
+      description: "OpenHarmony interface surface discovered under interfaces."
+    }
+  ]
 ];
 const SDK_MODULE_PATTERNS = [
   {
@@ -128,10 +134,12 @@ function discoverModules(files, primaryExtension, sourceFileStats = null) {
   }
   if (modules.length >= 2) return modules;
 
-  for (const module of discoverPatternModules(sourceFiles, OPENHARMONY_MODULE_PATTERNS)) {
-    addModule(modules, seen, module.path, module.name, module.description);
+  for (const patternGroup of OPENHARMONY_MODULE_PATTERN_GROUPS) {
+    for (const module of discoverPatternModules(sourceFiles, patternGroup)) {
+      addModule(modules, seen, module.path, module.name, module.description);
+    }
+    if (modules.length) return modules;
   }
-  if (modules.length) return modules;
 
   for (const module of discoverPatternModules(sourceFiles, SDK_MODULE_PATTERNS)) {
     addModule(modules, seen, module.path, module.name, module.description);

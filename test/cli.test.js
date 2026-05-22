@@ -799,6 +799,27 @@ test("planner discovers OpenHarmony components_v2 modules", () => {
   assert.doesNotMatch(plan.modules[0].description, /Fallback/);
 });
 
+test("planner keeps OpenHarmony components_v2 modules ahead of broad infrastructure modules", () => {
+  const includedFiles = [
+    ...Array.from({ length: 120 }, (_, index) => `frameworks/bridge/declarative_frontend/file_${index}.cpp`),
+    ...Array.from({ length: 110 }, (_, index) => `frameworks/core/interfaces/native/implementation/file_${index}.cpp`),
+    ...Array.from({ length: 30 }, (_, index) => `frameworks/core/components_v2/inspector/file_${index}.cpp`),
+    ...Array.from({ length: 20 }, (_, index) => `frameworks/core/components_v2/water_flow/file_${index}.cpp`),
+    ...Array.from({ length: 12 }, (_, index) => `frameworks/core/components_v2/grid/file_${index}.cpp`)
+  ];
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles,
+    sourceFileStats: includedFiles.map((file) => ({ path: file, lines: 10 }))
+  };
+
+  const plan = planModules("C:/repo/arkui_ace_engine", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.ok(paths.includes("frameworks/core/components_v2/water_flow"));
+  assert.ok(paths.every((modulePath) => modulePath.startsWith("frameworks/core/components_v2/")));
+});
+
 test("planner discovers OpenHarmony components_ng pattern modules", () => {
   const scan = {
     primaryExtension: ".cpp",
