@@ -670,6 +670,27 @@ test("scanner returns source directory stats, core coverage, and line-numbered e
   assert.match(scan.docsFiles.find((file) => file.path === "docs/deploy.md").content, /release job/);
 });
 
+test("scanner returns bounded operational evidence", () => {
+  const root = tempProject();
+  writeProjectFile(root, "README.md", "# Demo\n\n## Build\nRun build/build_all.sh.\n");
+  writeProjectFile(root, "build/build_all.sh", "#!/usr/bin/env sh\nset -e\nmake all\n");
+  writeProjectFile(root, "build/build_each.sh", "#!/usr/bin/env sh\nset -e\nmake \"$1\"\n");
+  writeProjectFile(root, "deploy/app.yaml", "kind: Deployment\nmetadata:\n  name: demo\n");
+  writeProjectFile(root, "build/service_config.ini", "[service]\nname=demo\n");
+  writeProjectFile(root, "docs/troubleshooting.md", "# Troubleshooting\n\nCheck logs first.\n");
+  writeProjectFile(root, "src/index.js", "export const app = true;\n");
+
+  const scan = scanRepository(root);
+
+  assert.ok(scan.operationalEvidence);
+  assert.ok(scan.operationalEvidence.build.find((item) => item.path === "build/build_all.sh"));
+  assert.ok(scan.operationalEvidence.build.find((item) => item.path === "build/build_each.sh"));
+  assert.ok(scan.operationalEvidence.config.find((item) => item.path === "deploy/app.yaml"));
+  assert.ok(scan.operationalEvidence.config.find((item) => item.path === "build/service_config.ini"));
+  assert.ok(scan.operationalEvidence.troubleshooting.find((item) => item.path === "docs/troubleshooting.md"));
+  assert.match(scan.operationalEvidence.build.find((item) => item.path === "build/build_all.sh").content, /1: #!/);
+});
+
 test("planner validates modules, avoids test-only coverage, and marks large-file modules", () => {
   const scan = {
     includedFiles: [
@@ -695,6 +716,61 @@ test("planner validates modules, avoids test-only coverage, and marks large-file
   assert.ok(plan.modules.some((module) => module.path === "src/large" && module.largeFile));
   assert.equal(plan.modules.some((module) => module.path.startsWith("tests/")), false);
   assert.equal(plan.modules.some((module) => module.path.startsWith("examples/")), false);
+});
+
+test("planner discovers source-heavy component child modules", () => {
+  const scan = {
+    includedFiles: [
+      "component/ascend-common/api/type.go",
+      "component/ascend-common/devmanager/dcmi.go",
+      "component/ascend-device-plugin/main.go",
+      "component/ascend-device-plugin/pkg/server/server.go",
+      "component/ascend-for-volcano/plugin/npu.go",
+      "component/ascend-for-volcano/plugin/node.go",
+      "component/example/demo.go",
+      "README.md"
+    ],
+    primaryExtension: ".go",
+    sourceFileStats: [
+      { path: "component/ascend-common/api/type.go", lines: 120, size: 1200, extension: ".go" },
+      { path: "component/ascend-common/devmanager/dcmi.go", lines: 180, size: 1800, extension: ".go" },
+      { path: "component/ascend-device-plugin/main.go", lines: 70, size: 700, extension: ".go" },
+      { path: "component/ascend-device-plugin/pkg/server/server.go", lines: 140, size: 1400, extension: ".go" },
+      { path: "component/ascend-for-volcano/plugin/npu.go", lines: 160, size: 1600, extension: ".go" },
+      { path: "component/ascend-for-volcano/plugin/node.go", lines: 120, size: 1200, extension: ".go" },
+      { path: "component/example/demo.go", lines: 30, size: 300, extension: ".go" }
+    ]
+  };
+
+  const plan = planModules("C:/repo/mind-cluster", scan);
+
+  assert.deepEqual(
+    plan.modules.map((module) => module.path),
+    ["component/ascend-common", "component/ascend-for-volcano", "component/ascend-device-plugin"]
+  );
+  assert.equal(plan.modules[0].sourceFiles, 2);
+  assert.equal(plan.modules[0].sourceLines, 300);
+  assert.doesNotMatch(plan.modules[0].description, /Fallback/);
+});
+
+test("planner bounds component child modules by source size", () => {
+  const sourceFileStats = Array.from({ length: 12 }, (_, index) => ({
+    path: `component/service-${index}/main.go`,
+    lines: 10 + index,
+    size: 100 + index,
+    extension: ".go"
+  }));
+  const scan = {
+    includedFiles: sourceFileStats.map((file) => file.path),
+    primaryExtension: ".go",
+    sourceFileStats
+  };
+
+  const plan = planModules("C:/repo/services", scan);
+
+  assert.equal(plan.modules.length, 8);
+  assert.equal(plan.modules[0].path, "component/service-11");
+  assert.equal(plan.modules.at(-1).path, "component/service-4");
 });
 
 test("generate planning falls back to Project Root when no obvious module exists", () => {
@@ -941,6 +1017,11 @@ test("fake direct generate writes prompts, llm log, and design-derived spec", ()
   assert.match(designPrompt, /Directory Source File Stats/);
   assert.match(designPrompt, /src\/auth\/\s+\(1 files, 1 lines\)/);
   assert.match(designPrompt, /Source excerpts with line numbers/);
+  assert.match(designPrompt, /Operational evidence/);
+  assert.match(designPrompt, /source anchors/);
+  assert.match(designPrompt, /runbook/);
+  assert.match(designPrompt, /debugging guidance/);
+  assert.match(designPrompt, /certainty boundaries/);
   assert.match(designPrompt, /1: export function login/);
   assert.match(designPrompt, /Quick Start/);
   assert.match(designPrompt, /least privilege/);
@@ -975,6 +1056,11 @@ test("fake react generate writes module documents and react log", () => {
   const modulePrompt = fs.readFileSync(path.join(runDir, "logs/prompts/modules/src-auth.md"), "utf8");
   assert.match(modulePrompt, /Directory Source File Stats/);
   assert.match(modulePrompt, /Source excerpts with line numbers/);
+  assert.match(modulePrompt, /Operational evidence/);
+  assert.match(modulePrompt, /source anchors/);
+  assert.match(modulePrompt, /runbook/);
+  assert.match(modulePrompt, /debugging guidance/);
+  assert.match(modulePrompt, /certainty boundaries/);
   assert.match(modulePrompt, /1: export function login/);
   assert.match(fs.readFileSync(path.join(runDir, "spec.md"), "utf8"), /Derived from design/);
 });

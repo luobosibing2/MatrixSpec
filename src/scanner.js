@@ -164,6 +164,8 @@ const MAX_DOC_FILE_BYTES = 32 * 1024;
 const MAX_IGNORED_SAMPLE = 50;
 const MAX_SOURCE_EXCERPTS = 24;
 const MAX_SOURCE_EXCERPT_LINES = 80;
+const MAX_OPERATIONAL_FILES = 16;
+const MAX_OPERATIONAL_SNIPPET_LINES = 40;
 
 export function scanRepository(root) {
   const includedFiles = [];
@@ -220,6 +222,7 @@ export function scanRepository(root) {
   const dirStats = buildDirStats(sourceFileStats);
   const coreDirStats = buildCoreDirStats(sourceFileStats);
   const sourceExcerpts = buildSourceExcerpts(root, sourceFileStats);
+  const operationalEvidence = buildOperationalEvidence(root);
 
   return {
     totalFiles,
@@ -236,7 +239,8 @@ export function scanRepository(root) {
     sourceFileStats,
     dirStats,
     coreDirStats,
-    sourceExcerpts
+    sourceExcerpts,
+    operationalEvidence
   };
 }
 
@@ -408,6 +412,76 @@ function buildSourceExcerpts(root, sourceFileStats) {
         content: addLineNumbers(content, MAX_SOURCE_EXCERPT_LINES)
       };
     });
+}
+
+function buildOperationalEvidence(root) {
+  const result = {
+    build: [],
+    config: [],
+    troubleshooting: []
+  };
+
+  function walk(dir) {
+    if (isOperationalEvidenceFull(result)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const absolute = path.join(dir, entry.name);
+      const relativePath = normalizePath(path.relative(root, absolute));
+      if (!relativePath) continue;
+      if (entry.isDirectory()) {
+        if (ANY_DEPTH_IGNORED_DIRS.has(entry.name)) continue;
+        walk(absolute);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const bucket = operationalBucket(relativePath, entry.name);
+      if (!bucket || result[bucket].length >= MAX_OPERATIONAL_FILES) continue;
+      const stat = fs.statSync(absolute);
+      if (stat.size > MAX_DOC_FILE_BYTES || looksBinary(absolute)) continue;
+      result[bucket].push({
+        path: relativePath,
+        size: stat.size,
+        content: addLineNumbers(fs.readFileSync(absolute, "utf8"), MAX_OPERATIONAL_SNIPPET_LINES)
+      });
+    }
+  }
+
+  walk(root);
+  return result;
+}
+
+function isOperationalEvidenceFull(result) {
+  return Object.values(result).every((items) => items.length >= MAX_OPERATIONAL_FILES);
+}
+
+function operationalBucket(relativePath, name) {
+  const lower = relativePath.toLowerCase();
+  const extension = path.extname(name).toLowerCase();
+  if (
+    lower.includes("troubleshoot") ||
+    lower.includes("debug") ||
+    lower.includes("faq") ||
+    lower.includes("runbook") ||
+    lower.includes("diagnos")
+  ) {
+    return "troubleshooting";
+  }
+  if (
+    /^makefile$/i.test(name) ||
+    /^dockerfile/i.test(name) ||
+    /\.(?:sh|ps1)$/i.test(name) && /(^|\/)(build|scripts|tools)\//i.test(relativePath) ||
+    /(^|\/)(build|compile|package|release|install)[^/]*\.(?:sh|ps1)$/i.test(relativePath)
+  ) {
+    return "build";
+  }
+  if (
+    [".yml", ".yaml", ".ini", ".toml", ".env"].includes(extension) ||
+    lower.includes("deploy") ||
+    lower.includes("service_config") ||
+    lower.includes("docker-compose")
+  ) {
+    return "config";
+  }
+  return null;
 }
 
 function addLineNumbers(content, limit) {

@@ -1,8 +1,10 @@
 import path from "node:path";
 
 const CORE_DIRS = ["src", "lib", "pkg", "packages", "app", "server", "cmd"];
-const SKIP_MODULE_DIRS = new Set(["__tests__", "__mocks__", "test", "tests", "spec", "fixtures", "fixture", "demo", "examples"]);
+const COMPONENT_ROOTS = ["component", "components", "services", "plugins", "modules", "tools", "cmd"];
+const SKIP_MODULE_DIRS = new Set(["__tests__", "__mocks__", "test", "tests", "spec", "fixtures", "fixture", "demo", "demos", "examples"]);
 const LARGE_FILE_LINES = 2000;
+const MAX_COMPONENT_MODULES = 8;
 
 const LANGUAGE_BY_EXTENSION = {
   ".js": "JavaScript",
@@ -26,7 +28,7 @@ const LANGUAGE_BY_EXTENSION = {
 };
 
 export function planModules(root, scan) {
-  const modules = validateAndFixModules(discoverModules(scan.includedFiles || [], scan.primaryExtension || null), scan);
+  const modules = validateAndFixModules(discoverModules(scan.includedFiles || [], scan.primaryExtension || null, scan.sourceFileStats || null), scan);
   const primaryExtension = scan.primaryExtension || null;
   return {
     projectName: path.basename(root),
@@ -79,7 +81,7 @@ export function validateAndFixModules(modules, scan) {
   return result;
 }
 
-function discoverModules(files, primaryExtension) {
+function discoverModules(files, primaryExtension, sourceFileStats = null) {
   const modules = [];
   const seen = new Set();
 
@@ -88,6 +90,11 @@ function discoverModules(files, primaryExtension) {
     addModule(modules, seen, module.path, module.name, module.description);
   }
   if (modules.length >= 2) return modules;
+
+  for (const module of discoverComponentModules(sourceFileStats || files.map((file) => ({ path: file, lines: 0 })))) {
+    addModule(modules, seen, module.path, module.name, module.description);
+  }
+  if (modules.length) return modules;
 
   for (const coreDir of CORE_DIRS) {
     const underCore = files.filter((file) => file === coreDir || file.startsWith(`${coreDir}/`));
@@ -111,6 +118,28 @@ function discoverModules(files, primaryExtension) {
   }
 
   return modules;
+}
+
+function discoverComponentModules(sourceFiles) {
+  const candidates = new Map();
+  for (const file of sourceFiles) {
+    const parts = file.path.split("/");
+    if (parts.length < 3 || !COMPONENT_ROOTS.includes(parts[0])) continue;
+    if (SKIP_MODULE_DIRS.has(parts[1]?.toLowerCase()) || parts[1]?.toLowerCase() === "example") continue;
+    const modulePath = `${parts[0]}/${parts[1]}`;
+    const current = candidates.get(modulePath) || { path: modulePath, files: 0, lines: 0 };
+    current.files += 1;
+    current.lines += file.lines || 0;
+    candidates.set(modulePath, current);
+  }
+  return [...candidates.values()]
+    .sort((a, b) => b.files - a.files || b.lines - a.lines || a.path.localeCompare(b.path))
+    .slice(0, MAX_COMPONENT_MODULES)
+    .map((candidate) => ({
+      path: candidate.path,
+      name: moduleName(candidate.path),
+      description: `Component source module discovered under ${candidate.path.split("/")[0]}/.`
+    }));
 }
 
 function discoverJavaModules(files) {

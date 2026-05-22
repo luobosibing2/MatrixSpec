@@ -72,6 +72,7 @@ export function repositoryEvidence(scan, module = null) {
   const coreStats = (scan.coreDirStats || []).map((item) => `- ${item.path}/: ${item.files} files, ${item.lines} lines`).join("\n") || "- none";
   const readmeContext = (scan.readmeFiles || []).map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n") || "(none)";
   const docsContext = (scan.docsFiles || []).map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n") || "(none)";
+  const opsContext = formatOperationalEvidence(scan.operationalEvidence);
   const excerptContext =
     sourceExcerpts
       .slice(0, module ? 12 : 24)
@@ -89,8 +90,33 @@ ${readmeContext}
 Docs context:
 ${docsContext}
 
+Operational evidence:
+${opsContext}
+
 Source excerpts with line numbers:
-${excerptContext}`;
+${excerptContext}
+
+Developer documentation requirements:
+- Include source anchors for important claims: file path, visible symbol/function/class name when available, and why the anchor matters.
+- Include a runbook when operational evidence exists: build, validation, deployment, rollback, and failure-mode notes.
+- Include debugging guidance for each major module: symptom, likely source area, and command or file to inspect.
+- State certainty boundaries: mark source-confirmed facts separately from inferred behavior or missing evidence.`;
+}
+
+function formatOperationalEvidence(operationalEvidence = {}) {
+  const sections = [
+    ["Build evidence", operationalEvidence.build || []],
+    ["Config/deploy evidence", operationalEvidence.config || []],
+    ["Troubleshooting evidence", operationalEvidence.troubleshooting || []]
+  ];
+  return sections
+    .map(([title, items]) => {
+      const body = items.length
+        ? items.map((item) => `--- ${item.path} ---\n${item.content}`).join("\n\n")
+        : "(none)";
+      return `${title}:\n${body}`;
+    })
+    .join("\n\n");
 }
 
 function readTemplate(templateDir, name) {
