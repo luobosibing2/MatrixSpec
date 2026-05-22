@@ -5,7 +5,7 @@ export const STAGES = [
     file: "proposal.md",
     agentCommand: "/matspec.proposal",
     name: "Requirement clarification",
-    objective: "Clarify the business goal, scope, constraints, non-goals, and acceptance criteria.",
+    objective: "Discover the real need behind the requested change, then clarify scope boundary, non-goals, confirmed decisions, and acceptance criteria.",
     inputs: ["matspec/specs/spec.md", "matspec/specs/design.md", "matspec/service-context.md"],
     requiresFullSpec: false,
     requiresFullDesign: false

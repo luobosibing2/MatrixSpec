@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { STAGES } from "./constants.js";
-import { nowStamp, readJson, slugify, today, writeJson } from "./util.js";
+import { nowStamp, readJson, rel, sha256, slugify, today, writeJson } from "./util.js";
 import { projectPaths } from "./project.js";
 import { isZh, tr } from "./i18n.js";
 
@@ -149,6 +149,8 @@ export function acceptStage(options = {}, explicitChange, explicitStage) {
     if (nextRecord.status === "pending") nextRecord.status = "clarifying";
   } else {
     state.currentStage = "completed";
+    state.implementationBaseline = captureFullDocumentBaseline(paths.root);
+    state.history.push({ action: "capture-implementation-baseline", stage: stage.key, timestamp: record.confirmedAt, documents: state.implementationBaseline.documents });
   }
   saveState(paths.root, change, state);
   return {
@@ -164,7 +166,76 @@ export function acceptStage(options = {}, explicitChange, explicitStage) {
       : tr(options, `Accepted ${stage.key}; the document chain is validated and implementation may start.`, `已确认 ${stage.key}，文档链已验证，可进入实现。`),
     next: next
       ? [tr(options, "Continue with /matspec in your coding agent", "继续在 opencode 中执行 /matspec")]
-      : isZh(options) ? ["执行实现任务", "实现完成并验证通过后执行 matspec done"] : ["Implement the tasks", "Run matspec done after implementation and verification pass"]
+      : isZh(options) ? ["执行实现任务", "运行必要验证", "done finalization 更新 full spec/design 后执行 matspec done"] : ["Implement the tasks", "Run required verification", "Run matspec done after done finalization updates full spec/design"]
+  };
+}
+
+export function validateFullDocumentUpdatesForDone(options = {}, explicitChange) {
+  const paths = projectPaths(options);
+  const change = resolveChange(options, explicitChange);
+  if (!change) {
+    return {
+      ok: false,
+      code: "NO_ACTIVE_CHANGE",
+      message: tr(options, "No active MatSpec change found.", "未发现活动的 matspec 变更。")
+    };
+  }
+  const state = loadState(paths.root, change);
+  const baseline = state.implementationBaseline;
+  if (!baseline?.documents) {
+    return {
+      ok: false,
+      code: "BASELINE_UPDATE_SNAPSHOT_MISSING",
+      message: tr(options, "Missing implementation baseline snapshot. Confirm validation.md again or use matspec archive --force only for manual recovery.", "缺少实现前 baseline 快照。请重新确认 validation.md，或仅在手工恢复时使用 matspec archive --force。")
+    };
+  }
+
+  const current = captureFullDocumentBaseline(paths.root);
+  const required = ["matspec/specs/spec.md", "matspec/specs/design.md"];
+  const notUpdated = [];
+  for (const filePath of required) {
+    const before = baseline.documents[filePath];
+    const after = current.documents[filePath];
+    if (!before?.exists) {
+      notUpdated.push({ path: filePath, reason: "missing-before-implementation" });
+      continue;
+    }
+    if (!after?.exists) {
+      notUpdated.push({ path: filePath, reason: "missing-now" });
+      continue;
+    }
+    if (before.sha256 === after.sha256) {
+      notUpdated.push({ path: filePath, reason: "unchanged-since-validation" });
+    }
+  }
+
+  if (notUpdated.length) {
+    return {
+      ok: false,
+      code: "FULL_DOCS_NOT_UPDATED",
+      message: tr(options, "Done finalization evidence is incomplete. matspec/specs/spec.md and matspec/specs/design.md must both be updated after validation before archive/done.", "done finalization 证据不完整。archive/done 前，matspec/specs/spec.md 和 matspec/specs/design.md 都必须在 validation 后更新。"),
+      notUpdated,
+      notMerged: notUpdated,
+      next: isZh(options)
+        ? ["done finalization: 更新 matspec/specs/spec.md", "done finalization: 更新 matspec/specs/design.md", "确认测试结果后再执行 matspec done"]
+        : ["Done finalization: update matspec/specs/spec.md", "Done finalization: update matspec/specs/design.md", "Confirm verification, then run matspec done"]
+    };
+  }
+
+  return { ok: true, change };
+}
+
+function captureFullDocumentBaseline(root) {
+  const documents = {};
+  for (const filePath of ["matspec/specs/spec.md", "matspec/specs/design.md"]) {
+    const absolute = path.join(root, filePath);
+    documents[filePath] = fs.existsSync(absolute)
+      ? { exists: true, sha256: sha256(absolute), path: rel(root, absolute) }
+      : { exists: false, sha256: null, path: filePath };
+  }
+  return {
+    capturedAt: new Date().toISOString(),
+    documents
   };
 }
 
@@ -184,6 +255,8 @@ export function archiveChange(options = {}, explicitChange) {
         throw new Error(tr(options, `Missing stage file; cannot archive: ${stage.file}`, `缺少阶段文件，不能归档：${stage.file}`));
       }
     }
+    const fullDocs = validateFullDocumentUpdatesForDone(options, change);
+    if (!fullDocs.ok) return fullDocs;
   }
   fs.mkdirSync(paths.archives, { recursive: true });
   const target = path.join(paths.archives, `${today()}-${change}`);
@@ -194,6 +267,6 @@ export function archiveChange(options = {}, explicitChange) {
     change,
     archive: path.relative(paths.root, target).replaceAll(path.sep, "/"),
     message: tr(options, `Archived change: ${change}`, `已归档变更：${change}`),
-    next: isZh(options) ? ["将 delta-spec.md 合并到全量 spec.md", "将 delta-design.md 合并到全量 design.md"] : ["Merge delta-spec.md into the full spec.md", "Merge delta-design.md into the full design.md"]
+    next: isZh(options) ? ["变更已归档", "继续下一个 matspec change"] : ["Change archived", "Continue with the next MatSpec change"]
   };
 }

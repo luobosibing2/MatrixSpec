@@ -104,10 +104,10 @@ const outputPath = outputIndex >= 0 ? args[outputIndex + 1] || "" : "";
 const isSpec = outputPath.includes("-spec-") || (!outputPath && (previousCalls > 0 || prompt.includes("Generated design.md") || prompt.includes("spec.md")));
 const isModule = outputPath.includes("-module-");
 const content = isSpec
-  ? "# Mock Codex SPEC\\n\\nDerived from design by mock codex.\\n\\n## 1. 组件定位\\nMock spec.\\n\\n## 2. 领域术语\\nMock terms.\\n\\n## 3. 角色与边界\\nMock boundaries.\\n\\n## 4. DFX 约束\\nMock DFX.\\n\\n## 5. 核心能力\\nMock capabilities.\\n\\n## 6. 数据约束\\nMock data constraints.\\n"
+  ? "# Mock Codex SPEC\\n\\nDerived from design by mock codex.\\n\\n## 1. Component Purpose\\nMock spec.\\n\\n## 2. Domain Terminology\\nMock terms.\\n\\n## 3. Actors and Boundaries\\nMock boundaries.\\n\\n## 4. DFX Constraints\\nMock DFX.\\n\\n## 5. Core Capabilities\\nMock capabilities.\\n\\n## 6. Data Constraints\\nMock data constraints.\\n"
   : isModule
-    ? "# Mock Codex Module\\n\\n## 1. 模块定位\\nModule path: src/auth\\n\\n## 2. 核心流程\\nMock module flow.\\n"
-    : "# Mock Codex Design\\n\\nModule path: src/auth\\n\\n## 1. 设计概述\\nMock design.\\n\\n## 2. 系统架构\\nMock architecture.\\n\\n## 3. 数据模型\\nMock data.\\n\\n## 4. 接口设计\\nMock interfaces.\\n\\n## 5. 核心流程设计\\nMock flow.\\n\\n## 6. 算法设计\\nMock algorithms.\\n\\n## 7. 缓存设计\\nMock cache.\\n\\n## 8. 异常处理设计\\nMock errors.\\n\\n## 9. 监控与日志\\nMock observability.\\n\\n## 10. 安全设计\\nMock security.\\n";
+    ? "# Mock Codex Module\\n\\n## 1. Module Purpose\\nModule path: src/auth\\n\\n## 2. Core Flow\\nMock module flow.\\n"
+    : "# Mock Codex Design\\n\\nModule path: src/auth\\n\\n## 1. Design Overview\\nMock design.\\n\\n## 2. System Architecture\\nMock architecture.\\n\\n## 3. Data Model\\nMock data.\\n\\n## 4. Interface Design\\nMock interfaces.\\n\\n## 5. Core Flow Design\\nMock flow.\\n\\n## 6. Algorithm Design\\nMock algorithms.\\n\\n## 7. Caching Design\\nMock cache.\\n\\n## 8. Error Handling Design\\nMock errors.\\n\\n## 9. Observability\\nMock observability.\\n\\n## 10. Security Design\\nMock security.\\n";
 if (outputIndex >= 0) fs.writeFileSync(args[outputIndex + 1], content, "utf8");
 else process.stdout.write(content);
 `;
@@ -126,8 +126,8 @@ if (process.env.MOCK_EMPTY === "1") process.exit(0);
 const prompt = args[args.indexOf("-p") + 1] || "";
 const isSpec = previousCalls > 0 || prompt.includes("Generated design.md") || prompt.includes("spec.md");
 const result = isSpec
-  ? "# Mock Claude SPEC\\n\\nDerived from design by mock claude.\\n\\n## 1. 组件定位\\nMock spec.\\n\\n## 2. 领域术语\\nMock terms.\\n\\n## 3. 角色与边界\\nMock boundaries.\\n\\n## 4. DFX 约束\\nMock DFX.\\n\\n## 5. 核心能力\\nMock capabilities.\\n\\n## 6. 数据约束\\nMock data constraints.\\n"
-  : "# Mock Claude Design\\n\\nModule path: src/auth\\n\\n## 1. 设计概述\\nMock design.\\n\\n## 2. 系统架构\\nMock architecture.\\n\\n## 3. 数据模型\\nMock data.\\n\\n## 4. 接口设计\\nMock interfaces.\\n\\n## 5. 核心流程设计\\nMock flow.\\n\\n## 6. 算法设计\\nMock algorithms.\\n\\n## 7. 缓存设计\\nMock cache.\\n\\n## 8. 异常处理设计\\nMock errors.\\n\\n## 9. 监控与日志\\nMock observability.\\n\\n## 10. 安全设计\\nMock security.\\n";
+  ? "# Mock Claude SPEC\\n\\nDerived from design by mock claude.\\n\\n## 1. Component Purpose\\nMock spec.\\n\\n## 2. Domain Terminology\\nMock terms.\\n\\n## 3. Actors and Boundaries\\nMock boundaries.\\n\\n## 4. DFX Constraints\\nMock DFX.\\n\\n## 5. Core Capabilities\\nMock capabilities.\\n\\n## 6. Data Constraints\\nMock data constraints.\\n"
+  : "# Mock Claude Design\\n\\nModule path: src/auth\\n\\n## 1. Design Overview\\nMock design.\\n\\n## 2. System Architecture\\nMock architecture.\\n\\n## 3. Data Model\\nMock data.\\n\\n## 4. Interface Design\\nMock interfaces.\\n\\n## 5. Core Flow Design\\nMock flow.\\n\\n## 6. Algorithm Design\\nMock algorithms.\\n\\n## 7. Caching Design\\nMock cache.\\n\\n## 8. Error Handling Design\\nMock errors.\\n\\n## 9. Observability\\nMock observability.\\n\\n## 10. Security Design\\nMock security.\\n";
 process.stdout.write(JSON.stringify({ result }));
 `;
 }
@@ -290,7 +290,11 @@ test("status, go, accept, and archive follow the stage model", () => {
   assert.match(go.message, /implementation may start/);
   assert.ok(go.next.some((item) => item.includes("tasks.md")));
 
-  const archived = json(run(["--path", root, "archive", "--json"]));
+  const blockedArchive = run(["--path", root, "archive", "--json"]);
+  assert.equal(blockedArchive.status, 1);
+  assert.equal(JSON.parse(blockedArchive.stdout).code, "FULL_DOCS_NOT_UPDATED");
+
+  const archived = json(run(["--path", root, "archive", "--force", "--json"]));
   assert.match(archived.archive, /matspec\/changes\/archives\/\d{4}-\d{2}-\d{2}-REQ20260428-user-login/);
 });
 
@@ -321,17 +325,23 @@ test("integration install supports Claude Code and Codex repository commands", (
   assert.match(mainCommand, /matspec generate && matspec apply/);
   assert.match(mainCommand, /Clarification guardrails/);
   assert.match(mainCommand, /vague language/);
+  assert.match(mainCommand, /done finalization/);
   const proposalCommand = fs.readFileSync(path.join(root, ".claude/commands/matspec-proposal.md"), "utf8");
   assert.match(proposalCommand, /generate/);
   assert.match(proposalCommand, /stage.allowedWritePath/);
   assert.match(proposalCommand, /Clarification question card/);
   assert.match(proposalCommand, /decision ledger/);
   assert.match(proposalCommand, /agent inference|agent-inferred/);
+  assert.match(proposalCommand, /Requested Change vs Real Need/);
+  assert.match(proposalCommand, /search, filter, sort, form input/);
   assert.ok(fs.existsSync(path.join(root, ".claude/skills/matspec/SKILL.md")));
 
   const codex = json(run(["--path", root, "integration", "install", "codex", "--json"]));
   assert.equal(codex.integration, "codex");
   assert.ok(fs.existsSync(path.join(root, ".agents/skills/matspec/SKILL.md")));
+  const proposalSkill = fs.readFileSync(path.join(root, ".agents/skills/matspec-proposal/SKILL.md"), "utf8");
+  assert.match(proposalSkill, /real-need discovery/);
+  assert.match(proposalSkill, /exact vs partial matching/);
   const designSkill = fs.readFileSync(path.join(root, ".agents/skills/matspec-delta-design/SKILL.md"), "utf8");
   assert.match(designSkill, /generate/);
   assert.match(designSkill, /full design\.md is missing/);
@@ -340,6 +350,7 @@ test("integration install supports Claude Code and Codex repository commands", (
   const tasksSkill = fs.readFileSync(path.join(root, ".agents/skills/matspec-tasks/SKILL.md"), "utf8");
   assert.match(tasksSkill, /Ask at most 3 clarification questions per turn/);
   assert.match(tasksSkill, /task boundaries, file scope/);
+  assert.match(tasksSkill, /Do not use matspec generate\/apply for accepted-change evolution/);
   const validationSkill = fs.readFileSync(path.join(root, ".agents/skills/matspec-validation/SKILL.md"), "utf8");
   assert.match(validationSkill, /whether implementation may start/);
   assert.match(validationSkill, /Generation approval|generation approval/);
@@ -369,6 +380,166 @@ test("validate reports required structure errors", () => {
   assert.equal(result.status, 1);
   const payload = JSON.parse(result.stdout);
   assert.ok(payload.findings.some((finding) => finding.code === "CS001"));
+});
+
+test("validate reports lightweight proposal quality warnings", () => {
+  const root = tempProject();
+  const change = "REQ20260428-owner-phone-search";
+  json(run(["init", root, "--integration", "none", "--json"]));
+  json(run(["--path", root, "start", change, "--json"]));
+
+  const proposalFile = path.join(root, "matspec/changes", change, "proposal.md");
+  fs.writeFileSync(proposalFile, "# Proposal\n\nAdd phone search.\n", "utf8");
+
+  let payload = json(run(["--path", root, "validate", change, "--json"]));
+  const warningCodes = payload.findings.map((finding) => finding.code);
+  for (const code of ["CS111", "CS112", "CS113", "CS114", "CS115", "CS116"]) {
+    assert.ok(warningCodes.includes(code), `${code} should be reported`);
+  }
+
+  fs.writeFileSync(
+    proposalFile,
+    [
+      "# Proposal",
+      "",
+      "## 0. User Clarification Log",
+      "### 0.1 Confirmed Decisions",
+      "- Exact telephone matching is confirmed.",
+      "### 0.2 Open Questions",
+      "- None",
+      "### 0.3 Decision Ledger",
+      "| Decision | Source | Status | Impact |",
+      "|----------|--------|--------|--------|",
+      "| Exact telephone matching | user | confirmed | acceptance |",
+      "",
+      "## 1. Requested Change vs Real Need",
+      "The requested change is phone search. The real need is faster owner lookup when last names are uncertain.",
+      "",
+      "## 5. Scope Boundary",
+      "- In scope: Find Owners phone lookup.",
+      "",
+      "## 6. Non-Goals",
+      "- No fuzzy search.",
+      "",
+      "## 8. Assumptions and Open Questions",
+      "- None"
+    ].join("\n"),
+    "utf8"
+  );
+
+  payload = json(run(["--path", root, "validate", change, "--json"]));
+  const proposalCodes = payload.findings.map((finding) => finding.code).filter((code) => /^CS11/.test(code));
+  assert.deepEqual(proposalCodes, []);
+});
+
+test("done requires full spec and design to be refreshed after validation", () => {
+  const root = tempProject();
+  const change = "REQ20260428-owner-phone-search";
+  json(run(["init", root, "--integration", "none", "--json"]));
+  writeProjectFile(root, "matspec/specs/spec.md", "# Existing SPEC\n\n## 1. Component Purpose\nExisting.\n");
+  writeProjectFile(root, "matspec/specs/design.md", "# Existing DESIGN\n\n## 1. Design Overview\nExisting.\n");
+  json(run(["--path", root, "start", change, "--json"]));
+
+  const changeDir = path.join(root, "matspec/changes", change);
+  const files = [
+    [
+      "proposal.md",
+      [
+        "# Proposal",
+        "## 0. User Clarification Log",
+        "### 0.1 Confirmed Decisions",
+        "- Exact phone lookup.",
+        "### 0.2 Open Questions",
+        "- None",
+        "### 0.3 Decision Ledger",
+        "| Decision | Source | Status | Impact |",
+        "|---|---|---|---|",
+        "| Phone lookup | user | confirmed | scope |",
+        "## 1. Requested Change vs Real Need",
+        "Real need: find owners when last names are uncertain.",
+        "## 5. Scope Boundary",
+        "- Find Owners only.",
+        "## 6. Non-Goals",
+        "- No fuzzy search.",
+        "## 8. Assumptions and Open Questions",
+        "- None"
+      ].join("\n")
+    ],
+    ["delta-spec.md", "# Delta Spec\n\n## ADDED Requirements\n- Phone lookup.\n## MODIFIED Requirements\nNone\n## REMOVED Requirements\nNone\n"],
+    ["delta-design.md", "# Delta Design\n\nUse existing owner repository pattern.\n"],
+    [
+      "tasks.md",
+      [
+        "# Tasks",
+        "- Implement phone lookup.",
+        "- Add tests and validation.",
+        "- Done finalization refreshes matspec/specs/spec.md from delta-spec.md.",
+        "- Done finalization refreshes matspec/specs/design.md from delta-design.md."
+      ].join("\n")
+    ],
+    ["validation.md", "# Validation\n\nImplementation may start.\n"]
+  ];
+
+  for (const [file, body] of files) {
+    fs.writeFileSync(path.join(changeDir, file), body, "utf8");
+    json(run(["--path", root, "accept", "--json"]));
+  }
+
+  let result = run(["--path", root, "done", change, "--json"]);
+  assert.equal(result.status, 1);
+  let payload = JSON.parse(result.stdout);
+  assert.equal(payload.code, "FULL_DOCS_NOT_UPDATED");
+  assert.deepEqual(
+    payload.notUpdated.map((item) => item.path),
+    ["matspec/specs/spec.md", "matspec/specs/design.md"]
+  );
+  assert.deepEqual(payload.notMerged, payload.notUpdated);
+
+  result = run(["--path", root, "done", change, "--force", "--json"]);
+  assert.equal(result.status, 1);
+  payload = JSON.parse(result.stdout);
+  assert.equal(payload.code, "DONE_FORCE_NOT_SUPPORTED");
+  assert.ok(fs.existsSync(changeDir));
+
+  fs.appendFileSync(path.join(root, "matspec/specs/spec.md"), "\n## Phone Lookup\nMerged from delta-spec.\n", "utf8");
+  fs.appendFileSync(path.join(root, "matspec/specs/design.md"), "\n## Phone Lookup Design\nMerged from delta-design.\n", "utf8");
+
+  result = run(["--path", root, "done", change, "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  payload = JSON.parse(result.stdout);
+  assert.ok(payload.ok);
+  assert.match(payload.archive, /matspec\/changes\/archives\/\d{4}-\d{2}-\d{2}-REQ20260428-owner-phone-search/);
+});
+
+test("archive enforces done finalization unless force is used", () => {
+  const root = tempProject();
+  const change = "REQ20260428-archive-gate";
+  json(run(["init", root, "--integration", "none", "--json"]));
+  writeProjectFile(root, "matspec/specs/spec.md", "# Existing SPEC\n\n## 1. Component Purpose\nExisting.\n");
+  writeProjectFile(root, "matspec/specs/design.md", "# Existing DESIGN\n\n## 1. Design Overview\nExisting.\n");
+  json(run(["--path", root, "start", change, "--json"]));
+
+  const changeDir = path.join(root, "matspec/changes", change);
+  for (const [file, body] of [
+    ["proposal.md", "# Proposal\n\n## 1. Requested Change vs Real Need\nReal need.\n## 5. Scope Boundary\nScope.\n## 6. Non-Goals\nNone.\n## 7. Confirmed Decisions\nConfirmed.\n## 8. Assumptions and Open Questions\nNone.\n## 0. User Clarification Log\n### 0.3 Decision Ledger\nLedger.\n"],
+    ["delta-spec.md", "# Delta Spec\n\n## ADDED Requirements\n- Rule.\n## MODIFIED Requirements\nNone\n## REMOVED Requirements\nNone\n"],
+    ["delta-design.md", "# Delta Design\n\nDesign.\n"],
+    ["tasks.md", "# Tasks\n\n- Add validation tests.\n- Done finalization refreshes matspec/specs/spec.md from delta-spec.md.\n- Done finalization refreshes matspec/specs/design.md from delta-design.md.\n"],
+    ["validation.md", "# Validation\n\nImplementation may start.\n"]
+  ]) {
+    fs.writeFileSync(path.join(changeDir, file), body, "utf8");
+    json(run(["--path", root, "accept", "--json"]));
+  }
+
+  let result = run(["--path", root, "archive", change, "--json"]);
+  assert.equal(result.status, 1);
+  assert.equal(JSON.parse(result.stdout).code, "FULL_DOCS_NOT_UPDATED");
+
+  result = run(["--path", root, "archive", change, "--force", "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.ok(payload.ok);
+  assert.match(payload.archive, /matspec\/changes\/archives\/\d{4}-\d{2}-\d{2}-REQ20260428-archive-gate/);
 });
 
 test("show reports a clear message when no generated run exists", () => {
@@ -584,6 +755,15 @@ test("help advertises the minimal generate runner options", () => {
   const result = run(["help"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /matspec generate \[--runner auto\|codex\|claude\|opencode\]/);
+  assert.match(result.stdout, /Common workflow/);
+  assert.doesNotMatch(result.stdout, /常用流程/);
+});
+
+test("help supports Chinese output through the language option", () => {
+  const result = run(["--lang", "zh-CN", "help"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /常用流程/);
+  assert.match(result.stdout, /输出语言，默认 en/);
 });
 
 test("show --json returns the latest run manifest", () => {

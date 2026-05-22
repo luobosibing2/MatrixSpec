@@ -181,8 +181,8 @@ function goCommand(options, explicit) {
       ok: true,
       change,
       nextAction: "implementation",
-      message: tr(options, "The document chain is validated; implementation may start. Archive only after implementation and verification pass.", "文档链已验证，可进入实现。实现完成并验证通过后再归档。"),
-      next: isZh(options) ? ["按 tasks.md 执行实现", "运行必要测试和验证", "完成后执行 matspec done"] : ["Implement the tasks in tasks.md", "Run the required tests and verification", "Run matspec done after completion"]
+      message: tr(options, "The document chain is validated; implementation may start. Archive only after implementation, verification, and done finalization pass.", "文档链已验证，可进入实现。实现、验证和 done finalization 完成后再归档。"),
+      next: isZh(options) ? ["按 tasks.md 执行实现", "运行必要测试和验证", "done finalization 更新 full spec/design 后执行 matspec done"] : ["Implement the tasks in tasks.md", "Run the required tests and verification", "Run matspec done after done finalization"]
     };
   }
   const nextAction = current.status === "draft" ? "await_user_accept" : current.status === "blocked" ? "complete_previous_stage" : "open_agent_stage";
@@ -242,6 +242,14 @@ function findingsCommand(findings, options = {}) {
 }
 
 function doneCommand(options, explicit) {
+  if (options.force) {
+    return {
+      ok: false,
+      code: "DONE_FORCE_NOT_SUPPORTED",
+      message: tr(options, "matspec done does not support --force. Use matspec archive --force only for explicit manual recovery.", "matspec done 不支持 --force。仅在明确手工恢复时使用 matspec archive --force。"),
+      next: ["matspec archive --force"]
+    };
+  }
   const findings = validateProject(options, explicit);
   if (hasError(findings)) {
     return {
@@ -307,7 +315,7 @@ Project changes:
   matspec confirm <stage> [change]
   matspec validate [change]
   matspec doctor
-  matspec done [change]                         archive after implementation and verification
+  matspec done [change]                         archive after implementation, verification, and done finalization
   matspec archive [change] [--force]
 
 Integrations:
@@ -351,7 +359,7 @@ function helpZh() {
   matspec confirm <stage> [change]
   matspec validate [change]
   matspec doctor
-  matspec done [change]                         实现完成并验证通过后归档
+  matspec done [change]                         实现、验证和 done finalization 完成后归档
   matspec archive [change] [--force]
 
 集成：
