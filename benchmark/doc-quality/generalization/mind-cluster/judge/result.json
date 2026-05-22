@@ -1,0 +1,65 @@
+{
+  "winner": "MatrixSpec",
+  "ranking": [
+    "MatrixSpec",
+    "CodeWiki community",
+    "DeepWiki"
+  ],
+  "scores": {
+    "MatrixSpec": {
+      "coverage": 92,
+      "source_grounding": 95,
+      "module_validity": 94,
+      "architecture_clarity": 93,
+      "developer_usability": 90,
+      "hallucination_control": 91,
+      "operational_completeness": 89,
+      "total": 644
+    },
+    "CodeWiki community": {
+      "coverage": 68,
+      "source_grounding": 55,
+      "module_validity": 70,
+      "architecture_clarity": 72,
+      "developer_usability": 61,
+      "hallucination_control": 48,
+      "operational_completeness": 54,
+      "total": 428
+    },
+    "DeepWiki": {
+      "coverage": 62,
+      "source_grounding": 65,
+      "module_validity": 60,
+      "architecture_clarity": 73,
+      "developer_usability": 58,
+      "hallucination_control": 45,
+      "operational_completeness": 52,
+      "total": 415
+    }
+  },
+  "rationale": {
+    "MatrixSpec": "Best aligned with the sampled source. It accurately captures the GOPATH-style build flow from build_all.sh/build_each.sh, the single mind-cluster-version field in service_config.ini, ascend-device-plugin startup flags and kubelet device-plugin behavior, ascend-for-volcano session hooks, and clusterd informers/gRPC/fault processing. It uses concrete source anchors and states uncertainty boundaries.",
+    "CodeWiki community": "Readable and useful at a high level, but substantially weaker grounding. It invents or overgeneralizes build/config behavior: service_config.ini is described as containing component switches, image registry, dependency versions, output controls, etc., while the sampled file only contains mind-cluster-version=6.0.0. It also gives inferred YAML/RBAC examples as if practically actionable, despite partial disclaimers.",
+    "DeepWiki": "Contains some accurate component-level answers and source citations, especially for ascend-common and device-plugin abstractions, but the documentation set is QA-style rather than cohesive developer documentation. It includes unrelated RecSDK content in the mind-cluster answer set and unsupported notes such as sunset dates, which significantly hurts hallucination control and module validity."
+  },
+  "weaknesses": {
+    "MatrixSpec": [
+      "Very broad and sometimes heavier than needed for quick onboarding.",
+      "Some lower-priority components are covered by evidence-based inference rather than full source expansion.",
+      "Operational guidance is strong but still partly runbook-level rather than verified execution output."
+    ],
+    "CodeWiki community": [
+      "Misrepresents service_config.ini as a rich build configuration file when the sampled source only has mind-cluster-version.",
+      "Overstates build_each.sh as configurable component-list tooling rather than a script taking GOPATH, config, and servicename.",
+      "Uses many inferred deployment/RBAC snippets that are not proven from the sampled files.",
+      "Go version guidance conflicts with README, which says Go 1.21."
+    ],
+    "DeepWiki": [
+      "Polluted with unrelated RecSDK answers in the mind-cluster documentation set.",
+      "Several claims are unsupported or too broad for the sampled source.",
+      "Less cohesive as architecture/developer documentation because it is organized as discrete Q&A.",
+      "Operational build/config/debug guidance is incomplete compared with MatrixSpec."
+    ]
+  },
+  "fairness_notes": "Judgment used a bounded local sample as requested: README.md, build scripts/config, and representative files from ascend-device-plugin, ascend-for-volcano, and clusterd. Scores favor evidence that matched those files and penalize claims contradicted by them."
+}

@@ -1,0 +1,63 @@
+{
+  "winner": "CodeWiki community",
+  "ranking": [
+    "CodeWiki community",
+    "MatrixSpec",
+    "DeepWiki"
+  ],
+  "scores": {
+    "MatrixSpec": {
+      "coverage": 72,
+      "source_grounding": 82,
+      "module_validity": 60,
+      "architecture_clarity": 78,
+      "developer_usability": 82,
+      "hallucination_control": 74,
+      "operational_completeness": 86,
+      "total": 534
+    },
+    "CodeWiki community": {
+      "coverage": 85,
+      "source_grounding": 76,
+      "module_validity": 82,
+      "architecture_clarity": 84,
+      "developer_usability": 76,
+      "hallucination_control": 68,
+      "operational_completeness": 62,
+      "total": 533
+    },
+    "DeepWiki": {
+      "coverage": 0,
+      "source_grounding": 0,
+      "module_validity": 0,
+      "architecture_clarity": 0,
+      "developer_usability": 0,
+      "hallucination_control": 0,
+      "operational_completeness": 0,
+      "total": 0
+    }
+  },
+  "rationale": {
+    "MatrixSpec": "Strongest operational runbook: it cites real build, presmoke, custom-op, packaging, pre-commit, and release paths, and it marks source-confirmed versus inferred versus missing evidence. However, its plan.json collapses this large mixed TensorFlow/PyTorch/C++ repository into a single fallback Project Root module, and spec.md frames RecSDK mainly as a top-level delivery orchestration component, which under-covers real API surfaces such as mxrec, dynamic_emb, hybrid_torchrec, validators, and custom operator packages.",
+    "CodeWiki community": "Best overall repo understanding: it covers the real top-level split between cust_op and training, the four RecSDK variants, TensorFlow graph modification, torch_rec_v2 dynamic embedding, custom operator extension, tests, and QA navigation. Its module set is more valid than MatrixSpec's single fallback module and maps to real source/docs. The main penalty is hallucination risk: several sections say files were missing or rely on inferred snippets while still describing detailed call chains, ASC responsibilities, lifecycle behavior, and production recommendations that are not always directly verified in the sampled source.",
+    "DeepWiki": "The inspected answers.md is for Ascend/mind-cluster, not Ascend/RecSDK. It discusses NodeD, Volcano, ClusterD, Go devmanager APIs, Kubernetes ConfigMaps, and DCMI versioning, none of which match the sampled RecSDK source tree or docs. It receives no credit for this repository evaluation."
+  },
+  "weaknesses": {
+    "MatrixSpec": [
+      "plan.json says this is a small project with no obvious modules, contradicting the actual large repo structure with cust_op, training/common, tf_rec_v1/v2, torch_rec_v1/v2, docs, tests, and packaging metadata.",
+      "spec.md over-abstracts RecSDK as a delivery orchestration system and invents business requirements around CI/CD, rollback, audit, and status events without enough direct source evidence.",
+      "Coverage of real developer APIs is thinner than CodeWiki: dynamic_emb exports, EmbeddingTableSaver, validators, C++ tests, and framework-specific package entry points are not treated as first-class modules."
+    ],
+    "CodeWiki community": [
+      "Some detailed claims are explicitly inferred from snippets or docs rather than direct source inspection, especially around missing saver, ASC, graph patching, and pipeline internals.",
+      "Operational guidance is weaker than MatrixSpec: it has less concrete build, presmoke, packaging, dependency, and rollback detail despite the repo having build.sh, CMake, setup.py, pyproject.toml, and component install guides.",
+      "Several sections describe likely behavior at a high level but do not consistently tie claims to line-level or exact source references."
+    ],
+    "DeepWiki": [
+      "Wrong repository content: answers are about MindCluster rather than RecSDK.",
+      "No valid RecSDK module boundaries, API entry points, build/config guidance, or source-grounded references.",
+      "High hallucination risk if used for RecSDK because component names and architecture are unrelated."
+    ]
+  },
+  "fairness_notes": "I sampled the current RecSDK root README, CMakeLists.txt, setup.py, build.sh, pyproject.toml files, representative Python APIs under mxrec and dynamic_emb, shared validator code, a C++ unit test, and the three generated documentation directories. CodeWiki community and MatrixSpec are very close: CodeWiki wins on repository/module coverage, while MatrixSpec wins on operational completeness and explicit confidence boundaries. DeepWiki is disqualified in practice because the provided output targets a different repository."
+}
