@@ -1,118 +1,106 @@
+# [REQ ID] Requirement Clarification
 
-# [REQ编号] 需求澄清
+## 0. User Clarification Log
 
-## 0. 用户澄清记录
+### 0.1 Confirmed Decisions
 
-### 0.1 已确认结论
+- [Decision 1: confirmed by the user, existing spec/design, or repository facts]
+- [Decision 2: confirmed by the user, existing spec/design, or repository facts]
 
-- [结论1：来源于用户确认或现有文档]
-- [结论2：来源于用户确认或现有文档]
+### 0.2 Open Questions
 
-### 0.2 待确认问题
+- [ ] [Question 1: must be answered before later stages]
+- [ ] [Question 2: write "None" when there are no open questions]
 
-- [ ] [问题1：需要用户确认后才能进入后续阶段]
-- [ ] [问题2：如无待确认问题可写“无”]
+### 0.3 Decision Ledger
 
-### 0.3 决策台账
+| Decision | Source | Status | Impact |
+|----------|--------|--------|--------|
+| [Key decision 1] | [user/spec/design/code fact/agent inference] | [confirmed/needs-confirmation] | [scope, acceptance, or implementation impact] |
+| [Key decision 2] | [source] | [status] | [impact] |
 
-| 决策 | 来源 | 状态 | 影响 |
-|------|------|------|------|
-| [关键决策1] | [用户确认/现有spec/design/代码事实/agent推导] | [confirmed/needs-confirmation] | [影响范围、验收或实现边界] |
-| [关键决策2] | [来源] | [状态] | [影响] |
+> Any agent inference that affects business scope, data model, migration, compatibility, permissions, testability, or acceptance criteria must be confirmed before the next stage.
 
-> 规则：影响业务边界、数据模型、迁移、兼容性、权限、测试或验收口径的 agent 推导决策，必须在进入下一阶段前由用户确认。
+## 1. Requested Change vs Real Need
 
-## 1. 背景与动机
+### 1.1 Requested Change
 
-### 1.1 现状痛点
+[Restate what the user asked for in their own terms.]
 
-[描述当前系统的不足、用户痛点]
+### 1.2 Real Need
 
-### 1.2 业务驱动
+[Describe the pain, workflow failure, business goal, or operational issue the requested change is meant to solve.]
 
-[描述业务驱动因素、期望价值]
+### 1.3 Solution-vs-Problem Check
 
-## 2. 变更内容
+- **Surface request**: [feature/UI/API/configuration/performance request]
+- **Confirmed real problem**: [yes/no; if no, list the blocking question]
 
-### 2.1 功能清单
+## 2. Problem Statement
 
-| 功能ID | 功能名称 | 优先级 | 说明 |
-|--------|----------|--------|------|
-| F-01 | [功能名] | P0 | [一句话说明] |
-| F-02 | [功能名] | P0 | [一句话说明] |
-| F-03 | [功能名] | P1 | [一句话说明] |
+[State the problem in observable terms. Avoid vague words such as improve, optimize, flexible, simple, smart, support, or better unless the expected outcome is measurable.]
 
-> **优先级定义**
-> - P0：MVP必须，没有此功能产品无法上线
-> - P1：重要增强，显著提升核心体验
-> - P2：未来优化，锦上添花
+## 3. User, Actor, and Scenario
 
-### 2.2 用户故事
+| Item | Description |
+|------|-------------|
+| Primary actor | [Who experiences the problem or uses the capability] |
+| Scenario | [When and why the actor needs the change] |
+| Current behavior | [Relevant existing behavior to preserve or modify] |
+| Desired outcome | [Observable end state] |
 
-**US-01**：作为[角色]，我希望[做什么]，以便[获得什么价值]。
+## 4. Success Criteria
 
-**验收标准**：
-- [ ] [标准1]
-- [ ] [标准2]
+- [ ] [Criterion 1: observable and testable]
+- [ ] [Criterion 2: observable and testable]
 
-**US-02**：作为[角色]，我希望[做什么]，以便[获得什么价值]。
+## 5. Scope Boundary
 
-**验收标准**：
-- [ ] [标准1]
-- [ ] [标准2]
+### 5.1 In Scope
 
-### 2.3 不在范围内
+- [Required behavior or capability]
 
-- [明确排除的功能点1]
-- [明确排除的功能点2]
+### 5.2 Existing Behavior to Preserve
 
-## 3. 影响分析
+- [Compatibility rule, existing workflow, API behavior, data behavior, or user-facing behavior]
 
-### 3.1 受影响的规格
+### 5.3 Input and Interaction Semantics
 
-| 规格章节 | 变更类型 | 说明 |
-|----------|----------|------|
-| 5.X 核心能力 | 新增 | [说明] |
-| 6.X 数据约束 | 修改 | [说明] |
+For new search, filter, sort, form input, API parameter, or configuration changes, record:
 
-### 3.2 受影响的设计
+- **Combination with existing inputs**: [AND / OR / priority / mutual exclusion / not applicable]
+- **Empty value behavior**: [preserve existing behavior or define new behavior]
+- **No-result behavior**: [preserve existing behavior or define new behavior]
+- **Match semantics**: [exact / partial / fuzzy / range / not applicable]
+- **Format normalization**: [case, whitespace, punctuation, locale, units, or not applicable]
+- **Compatibility**: [existing users, links, APIs, data, or workflows that must not change]
 
-| 设计章节 | 变更类型 | 说明 |
-|----------|----------|------|
-| 3.X 数据模型 | 新增 | [说明] |
-| 4.X 接口设计 | 新增 | [说明] |
+## 6. Non-Goals
 
-### 3.3 破坏性变更
+- [Explicitly excluded capability]
+- [Deferred capability]
 
-- **是否有破坏性变更**：[是/否]
-- **影响范围**：[描述影响范围]
-- **迁移方案**：[如有破坏性变更，描述迁移方案]
+## 7. Confirmed Decisions
 
-### 3.4 依赖关系
+| Decision | Confirmed By | Notes |
+|----------|--------------|-------|
+| [Decision] | [user/spec/design/code fact] | [Notes] |
 
-- [依赖项1：如需要其他团队配合]
-- [依赖项2：如依赖其他系统变更]
+## 8. Assumptions and Open Questions
 
-## 4. DFX约束（本次新增）
+### 8.1 Assumptions
 
-### 4.1 性能
+- [Assumption and why it is safe, or write "None"]
 
-| 约束项 | 指标 | 优先级 |
-|--------|------|--------|
-| [操作名] | [响应时间/吞吐量] | P0 |
+### 8.2 Open Questions
 
-### 4.2 可靠性
+- [ ] [Question that would affect spec, design, implementation boundaries, or acceptance, or write "None"]
 
-| 约束项 | 要求 | 优先级 |
-|--------|------|--------|
-| [场景] | [可靠性要求] | P0 |
+## 9. Impact Preview
 
-## 5. 里程碑
-
-| 里程碑 | 交付内容 | 完成标志 |
-|--------|----------|----------|
-| M1 | [功能集合] | [可验证的完成标准] |
-| M2 | [功能集合] | [可验证的完成标准] |
-
-
-
+| Area | Expected Impact | Notes |
+|------|-----------------|-------|
+| Spec behavior | [added/modified/removed/none] | [Notes] |
+| Design areas | [UI/API/data/model/workflow/none] | [Notes] |
+| DFX constraints | [performance/reliability/security/compatibility/none] | [Notes] |
+| Breaking changes | [yes/no/unknown] | [Impact and migration note] |
