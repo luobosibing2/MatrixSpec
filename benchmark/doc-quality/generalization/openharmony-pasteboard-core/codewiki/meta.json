@@ -1,0 +1,78 @@
+{
+  "sourcePath": "C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\distributeddatamgr_pasteboard\\services\\core",
+  "repoUrl": "https://gitcode.com/openharmony/distributeddatamgr_pasteboard",
+  "language": "cpp",
+  "commitId": "9a5388ae5edf2a487634aea6ecbd1910f147a4ba",
+  "inputTokens": 62860,
+  "outputTokens": 26017,
+  "totalTokens": 88877,
+  "durationSeconds": 1209.518,
+  "moduleCount": 4,
+  "modules": [
+    {
+      "name": "Observer & IPC Interfaces",
+      "path": "include",
+      "chars": 7878,
+      "codeLines": 1169
+    },
+    {
+      "name": "Core Service",
+      "path": "src",
+      "chars": 379,
+      "codeLines": 0
+    },
+    {
+      "name": "Data & System Managers",
+      "path": "src",
+      "chars": 389,
+      "codeLines": 0
+    },
+    {
+      "name": "Pattern Detection",
+      "path": "src",
+      "chars": 318,
+      "codeLines": 0
+    }
+  ],
+  "plan": {
+    "projectName": "PasteboardService",
+    "language": "C++",
+    "modules": [
+      {
+        "name": "Observer & IPC Interfaces",
+        "path": "include",
+        "description": "Interface definitions for clipboard change observers, entity recognition callbacks, disposable operations, delayed data retrieval, and IPC interface codes."
+      },
+      {
+        "name": "Core Service",
+        "path": "src",
+        "description": "Main pasteboard system service implementing clipboard data management, distributed cross-device sync, permission verification, and P2P link establishment."
+      },
+      {
+        "name": "Data & System Managers",
+        "path": "src",
+        "description": "Supporting managers for delayed data retrieval, disposable paste operations, ability lifecycle management, window focus detection, and progress dialog display."
+      },
+      {
+        "name": "Pattern Detection",
+        "path": "src",
+        "description": "Content pattern detection utility for recognizing URLs, email addresses, flight numbers, and numeric patterns in clipboard text."
+      }
+    ]
+  },
+  "template": {
+    "baseSections": [
+      "模块简介",
+      "功能描述",
+      "目录结构",
+      "架构图"
+    ],
+    "dynamicSections": [
+      "IPC接口设计",
+      "权限管理机制",
+      "分布式同步流程",
+      "观察者订阅机制"
+    ],
+    "projectType": "system-service"
+  }
+}

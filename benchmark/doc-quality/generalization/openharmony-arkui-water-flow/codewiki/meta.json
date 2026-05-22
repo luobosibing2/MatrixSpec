@@ -1,0 +1,46 @@
+{
+  "sourcePath": "C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\arkui_ace_engine\\frameworks\\core\\components_v2\\water_flow",
+  "repoUrl": "https://gitcode.com/openharmony/arkui_ace_engine",
+  "language": "cpp",
+  "commitId": "921b268f57eedfb68126fe0bdedd91a3f01a8047",
+  "inputTokens": 51467,
+  "outputTokens": 20792,
+  "totalTokens": 72259,
+  "durationSeconds": 494.38,
+  "moduleCount": 1,
+  "modules": [
+    {
+      "name": "WaterFlow Core",
+      "path": "./",
+      "chars": 10315,
+      "codeLines": 2794
+    }
+  ],
+  "plan": {
+    "projectName": "WaterFlow Component",
+    "language": "C++",
+    "modules": [
+      {
+        "name": "WaterFlow Core",
+        "path": "./",
+        "description": "A UI component implementing waterfall/masonry-style layout for the ACE framework, providing efficient rendering and scrolling for heterogeneous content grids."
+      }
+    ]
+  },
+  "template": {
+    "baseSections": [
+      "模块简介",
+      "功能描述",
+      "目录结构",
+      "架构图"
+    ],
+    "dynamicSections": [
+      "公共 API",
+      "渲染流程",
+      "滚动控制",
+      "事件处理",
+      "使用示例"
+    ],
+    "projectType": "library"
+  }
+}

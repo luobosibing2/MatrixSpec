@@ -1,0 +1,79 @@
+{
+  "sourcePath": "C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview\\ohos_nweb",
+  "repoUrl": "https://gitcode.com/openharmony/web_webview",
+  "language": "cpp",
+  "commitId": "113588bf08178843da2a2dde72dc2990bd91afb1",
+  "inputTokens": 125465,
+  "outputTokens": 44297,
+  "totalTokens": 169762,
+  "durationSeconds": 997.053,
+  "moduleCount": 4,
+  "modules": [
+    {
+      "name": "Web Engine Core",
+      "path": "include",
+      "chars": 9268,
+      "codeLines": 1570
+    },
+    {
+      "name": "Rendering & Configuration",
+      "path": "include",
+      "chars": 8508,
+      "codeLines": 1570
+    },
+    {
+      "name": "Diagnostics & Utilities",
+      "path": "include",
+      "chars": 8488,
+      "codeLines": 1570
+    },
+    {
+      "name": "Core (src)",
+      "path": "src",
+      "chars": 7115,
+      "codeLines": 3189
+    }
+  ],
+  "plan": {
+    "projectName": "nweb_adapter",
+    "language": "C++",
+    "modules": [
+      {
+        "name": "Web Engine Core",
+        "path": "include",
+        "description": "Core web engine initialization, NWeb instance management, and download C API interface."
+      },
+      {
+        "name": "Rendering & Configuration",
+        "path": "include",
+        "description": "Surface buffer adapters for web rendering output and XML configuration parsing system."
+      },
+      {
+        "name": "Diagnostics & Utilities",
+        "path": "include",
+        "description": "HiSysEvent reporting, crash handling, value types, logging macros, and callback interfaces."
+      },
+      {
+        "name": "Core (src)",
+        "path": "src",
+        "description": "Core source code in src/"
+      }
+    ]
+  },
+  "template": {
+    "baseSections": [
+      "模块简介",
+      "功能描述",
+      "目录结构",
+      "架构图"
+    ],
+    "dynamicSections": [
+      "公共 API",
+      "初始化流程",
+      "配置说明",
+      "回调接口",
+      "错误处理策略"
+    ],
+    "projectType": "library"
+  }
+}
