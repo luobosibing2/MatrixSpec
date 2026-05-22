@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { ensureDir, rel, slugify, writeJson } from "../util.js";
-import { commonOutputRules, readFullTemplates, specBlackBoxRules } from "./templates.js";
+import { commonOutputRules, readFullTemplates, repositoryEvidence, specBlackBoxRules } from "./templates.js";
 
 export function runExternalGeneration({ paths, run, scan, plan, strategy, options = {} }) {
   const executable = strategy.executable || findExecutable(strategy.runner);
@@ -257,6 +257,9 @@ ${templates.design}
 Project: ${plan.projectName}
 Modules:
 ${plan.modules.map((module) => `- ${module.name}: ${module.path}`).join("\n")}
+
+Repository evidence:
+${repositoryEvidence(scan)}
 
 File tree:
 ${scan.fileTree}

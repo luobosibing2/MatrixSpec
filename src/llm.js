@@ -38,25 +38,12 @@ export function resolveGenerationStrategy(paths, options = {}, env = process.env
     };
   }
 
-  if (["openai", "anthropic"].includes(provider)) {
-    const apiKey = env.MATSPEC_LLM_API_KEY || env.LLM_API_KEY;
-    if (!apiKey) {
-      return {
-        ok: false,
-        code: "LLM_NOT_CONFIGURED",
-        provider,
-        message: `Missing ${provider} LLM configuration. Set MATSPEC_LLM_API_KEY or use MATSPEC_LLM_PROVIDER=fake.`,
-        next: ["unset MATSPEC_LLM_PROVIDER", "matspec generate --runner auto"]
-      };
-    }
-  }
-
   if (provider && provider !== "stub") {
     return {
       ok: false,
       code: "LLM_PROVIDER_NOT_IMPLEMENTED",
       provider,
-      message: `LLM provider is not implemented: ${provider}.`,
+      message: `LLM provider is not supported: ${provider}. MatSpec generation uses local Codex, Claude Code, or opencode CLI runners.`,
       next: ["unset MATSPEC_LLM_PROVIDER", "matspec generate --runner auto"]
     };
   }

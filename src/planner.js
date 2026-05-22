@@ -1,7 +1,8 @@
 import path from "node:path";
 
-const CORE_DIRS = ["src", "lib", "packages", "app", "server", "cmd", "pkg"];
+const CORE_DIRS = ["src", "lib", "pkg", "packages", "app", "server", "cmd"];
 const SKIP_MODULE_DIRS = new Set(["__tests__", "__mocks__", "test", "tests", "spec", "fixtures", "fixture", "demo", "examples"]);
+const LARGE_FILE_LINES = 2000;
 
 const LANGUAGE_BY_EXTENSION = {
   ".js": "JavaScript",
@@ -25,7 +26,7 @@ const LANGUAGE_BY_EXTENSION = {
 };
 
 export function planModules(root, scan) {
-  const modules = discoverModules(scan.includedFiles || [], scan.primaryExtension || null);
+  const modules = validateAndFixModules(discoverModules(scan.includedFiles || [], scan.primaryExtension || null), scan);
   const primaryExtension = scan.primaryExtension || null;
   return {
     projectName: path.basename(root),
@@ -41,6 +42,41 @@ export function planModules(root, scan) {
           }
         ]
   };
+}
+
+export function validateAndFixModules(modules, scan) {
+  const sourceStats = scan.sourceFileStats || fallbackSourceStats(scan.includedFiles || []);
+  const sourceFiles = sourceStats.map((file) => file.path);
+  const result = [];
+  const seen = new Set();
+
+  for (const module of modules) {
+    if (isSkippedModulePath(module.path)) continue;
+    const fixedPath = fixModulePath(module.path, module.name, sourceFiles);
+    if (!fixedPath || isSkippedModulePath(fixedPath)) continue;
+    addValidatedModule(result, seen, { ...module, path: fixedPath }, sourceStats);
+  }
+
+  const allSkipped = result.length > 0 && result.every((module) => isSkippedModulePath(module.path));
+  if (allSkipped) result.length = 0;
+
+  for (const coreDir of CORE_DIRS) {
+    const coreFiles = sourceFiles.filter((file) => file === coreDir || file.startsWith(`${coreDir}/`));
+    if (!coreFiles.length || isCoreCovered(coreDir, result)) continue;
+    const childDirs = firstLevelDirectories(coreFiles, coreDir);
+    if (coreDir === "packages" && childDirs.length) {
+      for (const dir of childDirs) {
+        addValidatedModule(result, seen, { name: moduleName(dir), path: dir, description: `Core package source code in ${dir}/.` }, sourceStats);
+      }
+    } else if (childDirs.length === 1) {
+      const dir = childDirs[0];
+      addValidatedModule(result, seen, { name: moduleName(dir), path: dir, description: `Core source code in ${dir}/.` }, sourceStats);
+    } else {
+      addValidatedModule(result, seen, { name: moduleName(coreDir), path: coreDir, description: `Core source code in ${coreDir}/.` }, sourceStats);
+    }
+  }
+
+  return result;
 }
 
 function discoverModules(files, primaryExtension) {
@@ -144,6 +180,88 @@ function addModule(modules, seen, modulePath, name, description) {
   if (seen.has(modulePath)) return;
   seen.add(modulePath);
   modules.push({ name, path: modulePath, description });
+}
+
+function addValidatedModule(modules, seen, module, sourceStats) {
+  if (seen.has(module.path)) return;
+  const stats = statsForModule(module.path, sourceStats);
+  if (!stats.files) return;
+  seen.add(module.path);
+  modules.push({
+    ...module,
+    sourceFiles: stats.files,
+    sourceLines: stats.lines,
+    largeFile: stats.files <= 3 && stats.lines > LARGE_FILE_LINES
+  });
+}
+
+function fixModulePath(modulePath, name, sourceFiles) {
+  if (moduleHasSource(modulePath, sourceFiles)) return modulePath;
+  const parent = parentPath(modulePath);
+  if (parent && moduleHasSource(parent, sourceFiles)) return parent;
+  const keywords = extractKeywords(name);
+  if (keywords.length) {
+    const matched = sourceFiles.filter((file) => {
+      const lower = file.toLowerCase();
+      return keywords.some((keyword) => lower.includes(keyword));
+    });
+    if (matched.length) return commonAncestorDir(matched);
+  }
+  return null;
+}
+
+function moduleHasSource(modulePath, sourceFiles) {
+  return sourceFiles.some((file) => file === modulePath || file.startsWith(`${modulePath}/`));
+}
+
+function parentPath(modulePath) {
+  const normalized = String(modulePath || "").replace(/\/+$/, "");
+  const index = normalized.lastIndexOf("/");
+  return index > 0 ? normalized.slice(0, index) : null;
+}
+
+function extractKeywords(name) {
+  return String(name || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .split(/[\s_-]+/)
+    .map((part) => part.toLowerCase())
+    .filter((part) => part.length > 2);
+}
+
+function commonAncestorDir(files) {
+  const split = files.map((file) => file.split("/"));
+  const first = split[0] || [];
+  const common = [];
+  for (let index = 0; index < first.length - 1; index += 1) {
+    if (split.every((parts) => parts[index] === first[index])) common.push(first[index]);
+    else break;
+  }
+  return common.join("/") || ".";
+}
+
+function isSkippedModulePath(modulePath) {
+  return String(modulePath || "")
+    .split("/")
+    .some((part) => SKIP_MODULE_DIRS.has(part.toLowerCase()));
+}
+
+function isCoreCovered(coreDir, modules) {
+  return modules.some((module) => module.path === coreDir || module.path.startsWith(`${coreDir}/`) || coreDir.startsWith(`${module.path}/`));
+}
+
+function statsForModule(modulePath, sourceStats) {
+  const files = sourceStats.filter((file) => file.path === modulePath || file.path.startsWith(`${modulePath}/`));
+  return {
+    files: files.length,
+    lines: files.reduce((total, file) => total + (file.lines || 0), 0)
+  };
+}
+
+function fallbackSourceStats(files) {
+  return files
+    .filter((file) => !isSkippedModulePath(file))
+    .map((file) => ({ path: file, lines: 0 }));
 }
 
 function moduleName(modulePath) {

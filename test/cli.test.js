@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { scanRepository } from "../src/scanner.js";
+import { planModules } from "../src/planner.js";
 
 const CLI = path.resolve("bin/matspec.js");
 const EMPTY_PATH = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-empty-path-"));
@@ -20,8 +22,6 @@ function run(args, options = {}) {
       ...process.env,
       MATSPEC_LLM_PROVIDER: "",
       LLM_PROVIDER: "",
-      MATSPEC_LLM_API_KEY: "",
-      LLM_API_KEY: "",
       MATSPEC_LLM_MODEL: "",
       LLM_MODEL: "",
       MATSPEC_GENERATION_MODE: "",
@@ -653,6 +653,50 @@ test("generate scans repository and plans src modules", () => {
   assert.equal(manifest.scanSummary.includedFiles, scan.includedFiles.length);
 });
 
+test("scanner returns source directory stats, core coverage, and line-numbered excerpts", () => {
+  const root = tempProject();
+  writeProjectFile(root, "README.md", "# Demo\n\nRun with npm test.\n");
+  writeProjectFile(root, "docs/deploy.md", "# Deploy\n\nUse the release job.\n");
+  writeProjectFile(root, "src/auth/login.js", "export function login() {\n  return true;\n}\n");
+  writeProjectFile(root, "src/auth/session.js", "export function session() {\n  return null;\n}\n");
+  writeProjectFile(root, "tests/auth.test.js", "test('auth', () => {});\n");
+
+  const scan = scanRepository(root);
+
+  assert.match(scan.dirStats, /src\/auth\/\s+\(2 files, 6 lines\)/);
+  assert.equal(scan.sourceFileStats.find((file) => file.path === "src/auth/login.js").lines, 3);
+  assert.deepEqual(scan.coreDirStats.find((dir) => dir.path === "src").files, 2);
+  assert.match(scan.sourceExcerpts.find((item) => item.path === "src/auth/login.js").content, /1: export function login/);
+  assert.match(scan.docsFiles.find((file) => file.path === "docs/deploy.md").content, /release job/);
+});
+
+test("planner validates modules, avoids test-only coverage, and marks large-file modules", () => {
+  const scan = {
+    includedFiles: [
+      "tests/auth/login.test.js",
+      "examples/demo.js",
+      "src/auth/login.js",
+      "src/auth/session.js",
+      "src/large/big.js"
+    ],
+    primaryExtension: ".js",
+    sourceFileStats: [
+      { path: "tests/auth/login.test.js", lines: 20, size: 200, extension: ".js" },
+      { path: "examples/demo.js", lines: 30, size: 300, extension: ".js" },
+      { path: "src/auth/login.js", lines: 10, size: 100, extension: ".js" },
+      { path: "src/auth/session.js", lines: 10, size: 100, extension: ".js" },
+      { path: "src/large/big.js", lines: 2200, size: 30000, extension: ".js" }
+    ]
+  };
+
+  const plan = planModules("C:/repo/demo", scan);
+
+  assert.ok(plan.modules.some((module) => module.path === "src/auth"));
+  assert.ok(plan.modules.some((module) => module.path === "src/large" && module.largeFile));
+  assert.equal(plan.modules.some((module) => module.path.startsWith("tests/")), false);
+  assert.equal(plan.modules.some((module) => module.path.startsWith("examples/")), false);
+});
+
 test("generate planning falls back to Project Root when no obvious module exists", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
@@ -866,6 +910,8 @@ test("fake direct generate writes prompts, llm log, and design-derived spec", ()
   json(run(["init", root, "--integration", "none", "--json"]));
   writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
   writeProjectFile(root, "src/payment/pay.js", "export function pay() {}\n");
+  writeProjectFile(root, "README.md", "# Demo App\n\n## Quick Start\nRun npm test.\n");
+  writeProjectFile(root, "docs/security.md", "# Security\n\nUse least privilege.\n");
 
   const generated = json(run(["--path", root, "generate", "--mode", "direct", "--json"], { env: { MATSPEC_LLM_PROVIDER: "fake" } }));
   const runDir = path.join(root, ".matspec-cli/runs", generated.runId);
@@ -892,6 +938,12 @@ test("fake direct generate writes prompts, llm log, and design-derived spec", ()
   const designPrompt = fs.readFileSync(path.join(runDir, "logs/prompts/design.md"), "utf8");
   assert.match(designPrompt, /DESIGN template/);
   assert.match(designPrompt, /# \[组件名称\] 实现设计/);
+  assert.match(designPrompt, /Directory Source File Stats/);
+  assert.match(designPrompt, /src\/auth\/\s+\(1 files, 1 lines\)/);
+  assert.match(designPrompt, /Source excerpts with line numbers/);
+  assert.match(designPrompt, /1: export function login/);
+  assert.match(designPrompt, /Quick Start/);
+  assert.match(designPrompt, /least privilege/);
   const specPrompt = fs.readFileSync(path.join(runDir, "logs/prompts/spec.md"), "utf8");
   assert.match(specPrompt, /Generated design\.md:/);
   assert.match(specPrompt, /src\/auth/);
@@ -920,6 +972,10 @@ test("fake react generate writes module documents and react log", () => {
   assert.ok(fs.existsSync(path.join(runDir, "logs/react.json")));
   assert.ok(fs.existsSync(path.join(runDir, "modules/src-auth.md")));
   assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/modules/src-auth.md")));
+  const modulePrompt = fs.readFileSync(path.join(runDir, "logs/prompts/modules/src-auth.md"), "utf8");
+  assert.match(modulePrompt, /Directory Source File Stats/);
+  assert.match(modulePrompt, /Source excerpts with line numbers/);
+  assert.match(modulePrompt, /1: export function login/);
   assert.match(fs.readFileSync(path.join(runDir, "spec.md"), "utf8"), /Derived from design/);
 });
 
@@ -1053,7 +1109,7 @@ test("show displays fake direct generation metadata", () => {
   assert.match(shown.stdout, /model: fake-matspec-model/);
 });
 
-test("explicit real provider without API key fails before creating a run", () => {
+test("explicit LLM API provider is not supported", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
 
@@ -1062,8 +1118,9 @@ test("explicit real provider without API key fails before creating a run", () =>
   assert.equal(result.stderr, "");
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, false);
-  assert.equal(payload.code, "LLM_NOT_CONFIGURED");
+  assert.equal(payload.code, "LLM_PROVIDER_NOT_IMPLEMENTED");
   assert.equal(payload.provider, "openai");
+  assert.match(payload.message, /local Codex, Claude Code, or opencode CLI runners/);
   assert.equal(fs.readdirSync(path.join(root, ".matspec-cli/runs")).filter((entry) => entry !== "latest.json").length, 0);
 });
 

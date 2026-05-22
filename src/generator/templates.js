@@ -65,6 +65,34 @@ export function specBlackBoxRules(options = {}) {
   );
 }
 
+export function repositoryEvidence(scan, module = null) {
+  const sourceExcerpts = module
+    ? (scan.sourceExcerpts || []).filter((item) => module.path === "." || item.path === module.path || item.path.startsWith(`${module.path}/`))
+    : scan.sourceExcerpts || [];
+  const coreStats = (scan.coreDirStats || []).map((item) => `- ${item.path}/: ${item.files} files, ${item.lines} lines`).join("\n") || "- none";
+  const readmeContext = (scan.readmeFiles || []).map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n") || "(none)";
+  const docsContext = (scan.docsFiles || []).map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n") || "(none)";
+  const excerptContext =
+    sourceExcerpts
+      .slice(0, module ? 12 : 24)
+      .map((item) => `--- ${item.path}${item.truncated ? " (truncated)" : ""} ---\n${item.content}`)
+      .join("\n\n") || "(none)";
+  return `Directory Source File Stats:
+${scan.dirStats || "(none)"}
+
+Core Directory Coverage:
+${coreStats}
+
+README context:
+${readmeContext}
+
+Docs context:
+${docsContext}
+
+Source excerpts with line numbers:
+${excerptContext}`;
+}
+
 function readTemplate(templateDir, name) {
   return fs.readFileSync(path.join(templateDir, name), "utf8").trim();
 }

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fakeCompletion } from "../llm.js";
 import { ensureDir, rel, writeJson } from "../util.js";
-import { commonOutputRules, readFullTemplates, specBlackBoxRules } from "./templates.js";
+import { commonOutputRules, readFullTemplates, repositoryEvidence, specBlackBoxRules } from "./templates.js";
 
 export function runDirectGeneration({ paths, run, scan, plan, strategy, options = {} }) {
   const promptsDir = path.join(run.dir, "logs/prompts");
@@ -102,6 +102,9 @@ ${scan.readmeFiles.map((file) => `- ${file.path}`).join("\n") || "- none"}
 
 Docs files:
 ${scan.docsFiles.map((file) => `- ${file.path}`).join("\n") || "- none"}
+
+Repository evidence:
+${repositoryEvidence(scan)}
 
 File tree:
 ${scan.fileTree}

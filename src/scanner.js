@@ -31,6 +31,7 @@ const WORKSPACE_ARTIFACT_DIRS = new Set([
 ]);
 
 const SOURCE_DIR_NAMES = new Set(["src", "source", "lib", "app", "server", "cmd", "pkg"]);
+const CORE_DIR_NAMES = ["src", "lib", "pkg", "packages", "app", "server", "cmd"];
 
 const IGNORED_PATHS = new Set(["matspec/changes/archives"]);
 
@@ -122,12 +123,47 @@ const ANALYZABLE_EXTENSIONS = new Set([
   ".astro"
 ]);
 
+const SOURCE_EXTENSIONS = new Set([
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".mjs",
+  ".cjs",
+  ".py",
+  ".go",
+  ".rs",
+  ".java",
+  ".kt",
+  ".kts",
+  ".cs",
+  ".php",
+  ".rb",
+  ".c",
+  ".h",
+  ".cpp",
+  ".hpp",
+  ".cc",
+  ".swift",
+  ".sh",
+  ".ps1",
+  ".sql",
+  ".html",
+  ".css",
+  ".scss",
+  ".vue",
+  ".svelte",
+  ".astro"
+]);
+
 const MAX_FILE_SIZE = 256 * 1024;
 const MAX_README_FILES = 3;
 const MAX_DOC_FILES = 10;
 const MAX_DOC_TOTAL_BYTES = 128 * 1024;
 const MAX_DOC_FILE_BYTES = 32 * 1024;
 const MAX_IGNORED_SAMPLE = 50;
+const MAX_SOURCE_EXCERPTS = 24;
+const MAX_SOURCE_EXCERPT_LINES = 80;
 
 export function scanRepository(root) {
   const includedFiles = [];
@@ -180,6 +216,10 @@ export function scanRepository(root) {
     includedFiles.filter((file) => file.startsWith("docs/") && /\.mdx?$/i.test(file)),
     MAX_DOC_FILES
   );
+  const sourceFileStats = buildSourceFileStats(root, includedFiles);
+  const dirStats = buildDirStats(sourceFileStats);
+  const coreDirStats = buildCoreDirStats(sourceFileStats);
+  const sourceExcerpts = buildSourceExcerpts(root, sourceFileStats);
 
   return {
     totalFiles,
@@ -192,7 +232,11 @@ export function scanRepository(root) {
     docsFiles,
     fileTree: buildFileTree(includedFiles),
     extensionCounts,
-    primaryExtension: primaryExtension(extensionCounts)
+    primaryExtension: primaryExtension(extensionCounts),
+    sourceFileStats,
+    dirStats,
+    coreDirStats,
+    sourceExcerpts
   };
 }
 
@@ -288,6 +332,88 @@ function readProjectDocs(root, files, limit) {
     });
   }
   return results;
+}
+
+function buildSourceFileStats(root, files) {
+  return files
+    .filter(isSourceFile)
+    .map((file) => {
+      const absolute = path.join(root, file);
+      const stat = fs.statSync(absolute);
+      const content = fs.readFileSync(absolute, "utf8");
+      return {
+        path: file,
+        extension: path.extname(file).toLowerCase(),
+        size: stat.size,
+        lines: countLines(content)
+      };
+    });
+}
+
+function isSourceFile(file) {
+  if (isTestOrExamplePath(file)) return false;
+  return SOURCE_EXTENSIONS.has(path.extname(file).toLowerCase());
+}
+
+function isTestOrExamplePath(file) {
+  const parts = file.split("/").map((part) => part.toLowerCase());
+  return parts.some((part, index) => {
+    if (["test", "tests", "__tests__", "spec", "fixtures", "fixture", "demos", "examples", "benchmark", "benchmarks"].includes(part)) return true;
+    return ["demo", "example"].includes(part) && index <= 1;
+  });
+}
+
+function countLines(content) {
+  if (!content) return 0;
+  return content.split(/\r?\n/).length - (content.endsWith("\n") ? 1 : 0);
+}
+
+function buildDirStats(sourceFileStats) {
+  const stats = new Map();
+  for (const file of sourceFileStats) {
+    const dir = file.path.includes("/") ? `${file.path.slice(0, file.path.lastIndexOf("/"))}/` : "./";
+    const current = stats.get(dir) || { files: 0, lines: 0 };
+    current.files += 1;
+    current.lines += file.lines;
+    stats.set(dir, current);
+  }
+  return [...stats.entries()]
+    .sort((a, b) => b[1].files - a[1].files || b[1].lines - a[1].lines || a[0].localeCompare(b[0]))
+    .map(([dir, stat]) => `${dir.padEnd(40)} (${stat.files} files, ${stat.lines} lines)`)
+    .join("\n");
+}
+
+function buildCoreDirStats(sourceFileStats) {
+  return CORE_DIR_NAMES.map((coreDir) => {
+    const files = sourceFileStats.filter((file) => file.path === coreDir || file.path.startsWith(`${coreDir}/`));
+    return {
+      path: coreDir,
+      files: files.length,
+      lines: files.reduce((total, file) => total + file.lines, 0)
+    };
+  }).filter((stat) => stat.files > 0);
+}
+
+function buildSourceExcerpts(root, sourceFileStats) {
+  return sourceFileStats
+    .slice()
+    .sort((a, b) => a.path.localeCompare(b.path))
+    .slice(0, MAX_SOURCE_EXCERPTS)
+    .map((file) => {
+      const content = fs.readFileSync(path.join(root, file.path), "utf8");
+      return {
+        path: file.path,
+        lines: file.lines,
+        truncated: file.lines > MAX_SOURCE_EXCERPT_LINES,
+        content: addLineNumbers(content, MAX_SOURCE_EXCERPT_LINES)
+      };
+    });
+}
+
+function addLineNumbers(content, limit) {
+  const lines = content.split(/\r?\n/);
+  const visible = lines.slice(0, limit);
+  return visible.map((line, index) => `${index + 1}: ${line}`).join("\n");
 }
 
 function buildFileTree(files) {

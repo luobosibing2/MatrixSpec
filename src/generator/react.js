@@ -3,7 +3,7 @@ import path from "node:path";
 import { fakeCompletion } from "../llm.js";
 import { ensureDir, rel, slugify, writeJson } from "../util.js";
 import { createWorkspaceGuard, runRunnerTask } from "./external.js";
-import { commonOutputRules, readFullTemplates, specBlackBoxRules } from "./templates.js";
+import { commonOutputRules, readFullTemplates, repositoryEvidence, specBlackBoxRules } from "./templates.js";
 import { isZh } from "../i18n.js";
 
 export function runReactGeneration({ paths, run, scan, plan, strategy, progress = null, options = {} }) {
@@ -53,7 +53,7 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
   }
 
   progress?.("Composing design.md");
-  const designPrompt = buildDesignPrompt(plan, moduleResults, options);
+  const designPrompt = buildDesignPrompt(scan, plan, moduleResults, options);
   const designPromptFile = path.join(promptsDir, "design.md");
   fs.writeFileSync(designPromptFile, designPrompt, "utf8");
   const designResult = isFake
@@ -158,8 +158,6 @@ function externalCompletion({ paths, run, strategy, task, prompt }) {
 function buildModulePrompt(scan, module, options = {}) {
   const moduleFiles = scan.includedFiles.filter((file) => module.path === "." || file === module.path || file.startsWith(`${module.path}/`));
   const moduleTree = buildTree(moduleFiles);
-  const readmeContext = scan.readmeFiles.map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n");
-  const docsContext = scan.docsFiles.map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n");
   return `You are the MatSpec module documentation runner.
 Task: generate an intermediate module design document for later design.md synthesis.
 
@@ -180,15 +178,15 @@ ${moduleFiles.slice(0, 40).map((file) => `- ${file}`).join("\n") || "- none"}
 Module tree:
 ${moduleTree || "(empty)"}
 
-README context:
-${readmeContext || "(none)"}
+Repository evidence:
+${repositoryEvidence(scan, module)}
 
-Docs context:
-${docsContext || "(none)"}
+${module.largeFile ? `Large-file module guidance:
+This module has few files but many source lines. Split the analysis into functional regions with exact line ranges, core functions, interactions, and risks.` : ""}
 `;
 }
 
-function buildDesignPrompt(plan, moduleResults, options = {}) {
+function buildDesignPrompt(scan, plan, moduleResults, options = {}) {
   const templates = readFullTemplates(options);
   return `You are the MatSpec design.md generation runner.
 Task: synthesize a project-level implementation design document from module documents.
@@ -211,6 +209,9 @@ ${moduleResults.map((module) => `- ${module.module.name}: ${module.module.path}`
 
 Module documents:
 ${moduleResults.map((module) => module.content).join("\n\n")}
+
+Project README/docs evidence:
+${repositoryEvidence(scan)}
 `;
 }
 
