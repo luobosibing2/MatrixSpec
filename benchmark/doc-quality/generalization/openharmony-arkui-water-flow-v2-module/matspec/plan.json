@@ -1,0 +1,71 @@
+{
+  "projectName": "arkui_ace_engine",
+  "language": "C/C++",
+  "primaryExtension": ".cpp",
+  "modules": [
+    {
+      "name": "Inspector",
+      "path": "frameworks/core/components_v2/inspector",
+      "description": "OpenHarmony component module discovered under frameworks/core/components_v2.",
+      "sourceFiles": 107,
+      "sourceLines": 15059,
+      "largeFile": false
+    },
+    {
+      "name": "Indexer",
+      "path": "frameworks/core/components_v2/indexer",
+      "description": "OpenHarmony component module discovered under frameworks/core/components_v2.",
+      "sourceFiles": 27,
+      "sourceLines": 3371,
+      "largeFile": false
+    },
+    {
+      "name": "Water Flow",
+      "path": "frameworks/core/components_v2/water_flow",
+      "description": "OpenHarmony component module discovered under frameworks/core/components_v2.",
+      "sourceFiles": 20,
+      "sourceLines": 2744,
+      "largeFile": false
+    },
+    {
+      "name": "Grid",
+      "path": "frameworks/core/components_v2/grid",
+      "description": "OpenHarmony component module discovered under frameworks/core/components_v2.",
+      "sourceFiles": 13,
+      "sourceLines": 2721,
+      "largeFile": false
+    },
+    {
+      "name": "Pattern Lock",
+      "path": "frameworks/core/components_v2/pattern_lock",
+      "description": "OpenHarmony component module discovered under frameworks/core/components_v2.",
+      "sourceFiles": 10,
+      "sourceLines": 1297,
+      "largeFile": false
+    },
+    {
+      "name": "Ability Component",
+      "path": "frameworks/core/components_v2/ability_component",
+      "description": "OpenHarmony component module discovered under frameworks/core/components_v2.",
+      "sourceFiles": 8,
+      "sourceLines": 449,
+      "largeFile": false
+    },
+    {
+      "name": "Foreach",
+      "path": "frameworks/core/components_v2/foreach",
+      "description": "OpenHarmony component module discovered under frameworks/core/components_v2.",
+      "sourceFiles": 4,
+      "sourceLines": 239,
+      "largeFile": false
+    },
+    {
+      "name": "Common",
+      "path": "frameworks/core/components_v2/common",
+      "description": "OpenHarmony component module discovered under frameworks/core/components_v2.",
+      "sourceFiles": 3,
+      "sourceLines": 1904,
+      "largeFile": false
+    }
+  ]
+}

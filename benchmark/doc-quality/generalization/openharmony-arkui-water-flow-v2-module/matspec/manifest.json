@@ -1,0 +1,39 @@
+{
+  "runId": "20260522211619151",
+  "type": "generate",
+  "status": "failed",
+  "createdAt": "2026-05-22T13:16:19.153Z",
+  "root": "C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\arkui_ace_engine",
+  "commitId": "921b268f",
+  "runner": "codex",
+  "generationMode": "stub",
+  "provider": null,
+  "model": "gpt-5.3-codex-spark",
+  "probeModels": {
+    "requested": false,
+    "status": "not_requested"
+  },
+  "artifacts": {
+    "spec": null,
+    "design": null,
+    "plan": null,
+    "modules": []
+  },
+  "logs": {
+    "scan": null,
+    "llm": null,
+    "prompts": {}
+  },
+  "warnings": [
+    "P0 deterministic stub output; no LLM was called."
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  },
+  "applied": false,
+  "error": {
+    "code": "EXTERNAL_RUNNER_FAILED",
+    "message": "External runner failed: codex design"
+  }
+}
