@@ -1,0 +1,12 @@
+{
+  "projectName": "web_webview",
+  "language": "C/C++",
+  "primaryExtension": ".h",
+  "modules": [
+    {
+      "name": "Project Root",
+      "path": ".",
+      "description": "Fallback module for a small project without obvious source module directories."
+    }
+  ]
+}

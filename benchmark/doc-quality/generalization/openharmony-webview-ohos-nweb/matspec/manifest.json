@@ -1,0 +1,58 @@
+{
+  "runId": "20260522193335898",
+  "type": "generate",
+  "status": "generated",
+  "createdAt": "2026-05-22T11:33:35.898Z",
+  "root": "C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview",
+  "commitId": "113588b",
+  "runner": "codex",
+  "generationMode": "react",
+  "provider": "codex",
+  "model": "gpt-5.3-codex-spark",
+  "probeModels": {
+    "requested": false,
+    "status": "not_requested"
+  },
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "plan": "plan.json",
+    "modules": [
+      "modules/..md"
+    ]
+  },
+  "logs": {
+    "scan": "logs/scan.json",
+    "llm": null,
+    "prompts": {
+      "design": "logs/prompts/design.md",
+      "spec": "logs/prompts/spec.md"
+    },
+    "react": "logs/react.json"
+  },
+  "warnings": [
+    "P3 CLI runner react output; module artifacts were staged under the run directory."
+  ],
+  "tokens": {
+    "input": 80814,
+    "output": 10096
+  },
+  "applied": false,
+  "generationReason": "forced_module_first",
+  "scanSummary": {
+    "totalFiles": 3253,
+    "includedFiles": 2552,
+    "ignoredFiles": 704,
+    "readmeFiles": [
+      "README.md",
+      "README_ZH.md",
+      "arkweb_utils/README.md"
+    ],
+    "docsFiles": []
+  },
+  "planSummary": {
+    "modules": 1,
+    "language": "C/C++",
+    "primaryExtension": ".h"
+  }
+}

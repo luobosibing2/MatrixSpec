@@ -1,0 +1,142 @@
+# `services/dfx` 模块中间设计文档（供 `design.md` 合并）
+
+## 模块目的与定位
+- 核心目标：为剪贴板服务提供可观测性能力（故障上报、行为上报、时耗统计、事件上报、CLI dump/命令和执行追踪），并统一入口分发这些上报行为。[已确认]
+  - 主要分发器：[`services/dfx/src/reporter.h:Reporter`](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/reporter.h:25) 维护故障、行为、时耗三类报告器实例并提供单例访问。[已确认]
+- 模块不承载核心剪贴板业务逻辑，而是“旁路观察/埋点”层，消费来自其他服务层的调用参数并写入 HiSysEvent/HiAppEvent/Trace。 [已确认]
+
+## 目录结构（实际文件）
+| 相对路径 | 角色 |
+|---|---|
+| [services/dfx/src/reporter.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/reporter.h) | 三类上报器统一入口 |
+| [services/dfx/src/reporter.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/reporter.cpp) | 上报器单例构造与返回实现 |
+| [services/dfx/src/dfx_types.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/dfx_types.h) | 核心数据类型与枚举 |
+| [services/dfx/src/dfx_code_constant.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/dfx_code_constant.h) | 事件码常量 |
+| [services/dfx/src/hiview_adapter.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.h) | 事件写入网关 |
+| [services/dfx/src/hiview_adapter.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.cpp) | 时耗/行为聚合与周期上报实现 |
+| [services/dfx/src/calculate_time_consuming.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/calculate_time_consuming.h) | 时耗指标构造与 RAII 聚合入口 |
+| [services/dfx/src/calculate_time_consuming.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/calculate_time_consuming.cpp) | 数据量和耗时分桶映射 |
+| [services/dfx/src/behaviour/behaviour_reporter.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/behaviour/behaviour_reporter.h) | 行为上报抽象接口 |
+| [services/dfx/src/behaviour/pasteboard_behaviour_reporter_impl.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/behaviour/pasteboard_behaviour_reporter_impl.h) | 行为上报具体实现类 |
+| [services/dfx/src/behaviour/pasteboard_behaviour_reporter_impl.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/behaviour/pasteboard_behaviour_reporter_impl.cpp) | 行为上报到 HiViewAdapter 的桥接 |
+| [services/dfx/src/fault/fault_reporter.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/fault/fault_reporter.h) | 故障上报抽象接口 |
+| [services/dfx/src/fault/pasteboard_fault_impl.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/fault/pasteboard_fault_impl.h) | 故障上报具体实现类 |
+| [services/dfx/src/fault/pasteboard_fault_impl.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/fault/pasteboard_fault_impl.cpp) | 故障事件写入网关 |
+| [services/dfx/src/statistic/statistic_reporter.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/statistic/statistic_reporter.h) | 通用统计上报模板 |
+| [services/dfx/src/statistic/time_consuming_statistic_impl.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/statistic/time_consuming_statistic_impl.h) | 时耗统计上报实现声明 |
+| [services/dfx/src/statistic/time_consuming_statistic_impl.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/statistic/time_consuming_statistic_impl.cpp) | 时耗统计上报实现 |
+| [services/dfx/src/pasteboard_event_common.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_common.h) | Radar/UE 共享数据结构 |
+| [services/dfx/src/pasteboard_event_dfx.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_dfx.h) | Radar 阶段化事件宏和枚举 |
+| [services/dfx/src/pasteboard_event_dfx.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_dfx.cpp) | 匿名化工具实现 |
+| [services/dfx/src/pasteboard_event_ue.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_ue.h) | UE 事件宏与属性定义 |
+| [services/dfx/src/pasteboard_app_event_dfx.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_app_event_dfx.h) | API 级别 AppEvent 生命周期对象 |
+| [services/dfx/src/pasteboard_app_event_dfx.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_app_event_dfx.cpp) | AppEvent 处理器初始化与事件提交 |
+| [services/dfx/src/pasteboard_trace.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_trace.h) | bytrace 生命周期封装 |
+| [services/dfx/src/pasteboard_trace.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_trace.cpp) | bytrace 启停逻辑 |
+| [services/dfx/src/command.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/command.h) | 命令对象定义 |
+| [services/dfx/src/command.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/command.cpp) | 命令行为实现 |
+| [services/dfx/src/pasteboard_dump_helper.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_dump_helper.h) | CLI 命令注册与分发（dump helper） |
+| [services/dfx/src/pasteboard_dump_helper.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_dump_helper.cpp) | CLI 调度逻辑 |
+| [services/dfx/src/pasteboard_deduplicate_memory.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_deduplicate_memory.h) | 去重记忆体（模板） |
+
+## 核心组件设计（按职责链）
+| 组件 | 关键符号 | 说明 | 影响范围 |
+|---|---|---|---|
+| 报告器分发 | [Reporter](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/reporter.h:25), [Reporter::GetInstance](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/reporter.cpp:31) | 统一暴露 `PasteboardFault()`、`TimeConsumingStatistic()`、`PasteboardBehaviour()`，各返回静态实现对象 | 全模块共享访问 |
+| 故障上报链 | [FaultReporter](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/fault/fault_reporter.h:23), [PasteboardFaultImpl::Report](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/fault/pasteboard_fault_impl.cpp:21), [HiViewAdapter::ReportPasteboardFault](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.cpp:103) | 将 `PasteboardFaultMsg` 转为 HiSysEvent fault 写入 | 故障诊断 |
+| 行为上报链 | [BehaviourReporter](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/behaviour/behaviour_reporter.h:23), [PasteboardBehaviourReporterImpl::Report](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/behaviour/pasteboard_behaviour_reporter_impl.cpp:21), [HiViewAdapter::ReportPasteboardBehaviour](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.cpp:251) | 按应用名统计 copy/paste 计数，周期写入 top-N | 行为统计 |
+| 时耗统计链 | [CalculateTimeConsuming](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/calculate_time_consuming.h:36), [~CalculateTimeConsuming](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/calculate_time_consuming.cpp:38), [TimeConsumingStatisticImpl::Report](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/statistic/time_consuming_statistic_impl.cpp:21), [HiViewAdapter::ReportTimeConsumingStatistic](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.cpp:149) | 通过 RAII 在析构时落库上报时耗与数据量分桶 | 性能分析 |
+| 周期聚合上报 | [HiViewAdapter::StartTimerThread](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.cpp:551), [HiViewAdapter::InvokeTimeConsuming](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.cpp:325), [HiViewAdapter::InvokePasteBoardBehaviour](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.cpp:371) | 通过定时线程触发时耗/行为统计清桶与上报 | 全量汇总 |
+| 事件上报抽象 | [pasteboard_event_dfx.h: RADAR_REPORT/COPY_RADAR_REPORT/PASTE_RADAR_REPORT](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_dfx.h), [PasteboardDfxUntil::GetAnonymousID](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_dfx.cpp:21) | 定义 Radar 阶段事件的参数拼装与匿名化 | 远端协同事件 |
+| UE 事件 | [UE_SWITCH](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_ue.h:38), [UE_REPORT](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_ue.h:44), [UeReportInfo](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_common.h:54) | UE 域事件宏 + 数据结构 | UE 侧观测 |
+| CLI 调试入口 | [Command::DoAction](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/command.cpp:35), [PasteboardDumpHelper::Dump](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_dump_helper.cpp:8), [RegisterCommand](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_dump_helper.cpp:20) | 命令路由+输出机制，支持 `-h` 等帮助 | CLI/运维入口 |
+| Trace + AppEvent | [PasteboardTrace](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_trace.h:23), [DfxAppEvent](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_app_event_dfx.h:27), [DfxAppEvent::~DfxAppEvent](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_app_event_dfx.cpp:23) | bytrace 生命周期自动 start/finish；应用事件通过 RAII 写入 | 端到端耗时与 API 级行为 |
+| 内存去重工具 | [DeduplicateMemory](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_deduplicate_memory.h:25), [IsDuplicate](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_deduplicate_memory.h:57) | 时间窗内去重判断（泛型模板） | 防抖/重复上报控制 |
+
+## 核心流程
+1. 外部流程完成后，调用 `Reporter::GetInstance()` 获取统一实例。[确认]
+2. 对应场景提交具体上报：故障走 `PasteboardFaultImpl::Report`，时耗走 `TimeConsumingStatisticImpl::Report`，行为走 `PasteboardBehaviourReporterImpl::Report`。[确认]
+3. `TimeConsuming` 场景通过 RAII 方式记录，调用 `CalculateTimeConsuming::SetBeginTime` 标记开始，析构时自动计算耗时并提交 `TimeConsumingStat`。[确认+推断]
+   - `CalculateTimeConsuming` 构造函数接收 `calPasteboardData` 和 `calPasteboardState`，并将数据量转为 `DataRange`。[确认]
+   - 析构函数使用 `Reporter::GetInstance().TimeConsumingStatistic().Report(...)` 进行最终汇总提交。[确认]
+4. 上报网关 `HiViewAdapter` 按类型将数据转为 HiSysEvent，并在 `StartTimerThread` 中定时执行行为/时耗聚合 flush。[确认]
+5. 事件宏层构建 Radar/UE 事件字段（bizscene/stage/misc 属性）并输出到对应域。[确认]
+6. CLI 场景下，`PasteboardDumpHelper::Dump` 解析参数并用 `Command` 实例分发执行，未命中返回 false。[确认]
+7. 执行周期和资源控制：`HiViewAdapter` 使用互斥锁保护计数容器，`running_` 和线程名用于避免重复启动定时任务。[确认]
+
+## 接口与数据结构
+### 数据类型（核心）
+| 名称 | 位置 | 结构/枚举 | 说明 |
+|---|---|---|---|
+| `TimeConsumingStatistic` | [dfx_types.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/dfx_types.h:23) | enum | 时耗桶（1..11） |
+| `BehaviourPasteboardState` | 同上 | enum | 0 copy / 1 paste / 2 remote paste / 3 invalid |
+| `StatisticPasteboardState` | 同上 | enum | 时耗路径状态 |
+| `DataRange` | 同上 | enum | 数据量分桶（0KB~>50MB） |
+| `PasteboardFaultMsg` | 同上 | struct | `{userId,errorCode}` |
+| `PasteboardBehaviourMsg` | 同上 | struct | `{pasteboardState,bundleName}` |
+| `TimeConsumingStat` | 同上 | struct | `{pasteboardState,dataSize,timeConsuming}` |
+| `ReportStatus` | 同上 | enum class | `SUCCESS`/`ERROR` |
+| `DataDescription` | [pasteboard_event_common.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_common.h:24) | struct | 记录数/类型信息 |
+| `CommonInfo` | 同上 | struct | 设备类型、账号、数据量 |
+| `RadarPasteInfo` | 同上 | struct | 分发场景中的分布式相关字段 |
+| `RadarReportInfo` | 同上 | struct | Radar 事件聚合参数 |
+| `UeReportInfo` | 同上 | struct | UE 事件统计参数 |
+
+### 面向命令/服务的接口
+| 接口 | 位置 | 行为 |
+|---|---|---|
+| `Command::Command(...)` | [command.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/command.h:27) | 持有参数格式与回调 |
+| `Command::DoAction` | [command.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/command.cpp:35) | 执行 action |
+| `PasteboardDumpHelper::Dump` | [pasteboard_dump_helper.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_dump_helper.cpp:8) | 解析命令参数并输出结果 |
+| `PasteboardDumpHelper::RegisterCommand` | 同上 | 注册命令对象到 `cmdHandler` |
+| `PasteboardTrace::PasteboardTrace(const string&)` | [pasteboard_trace.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_trace.h:24) | 构造时开启 Trace |
+| `PasteboardTrace::~PasteboardTrace` | 同上 | 析构时结束 Trace |
+| `DfxAppEvent::SetEvent` | [pasteboard_app_event_dfx.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_app_event_dfx.h:32) | 记录 api_name/error/result |
+| `DfxAppEvent::~DfxAppEvent` | [pasteboard_app_event_dfx.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_app_event_dfx.cpp:11) | 写出 AppEvent |
+
+## 关键约束与设计边界
+- 单例与静态生命周期约束：多个报告器使用函数局部静态单例，需避免跨模块析构顺序导致悬空访问。[已确认]
+- 并发约束：`HiViewAdapter` 中多个 `mutex` 保护时耗/行为统计容器，周期线程与调用线程可并发更新，需要保持互斥。[已确认]
+- 事件码映射约束：`DfxCodeConstant` 中 4 个主事件码在 `EVENT_COVERT_TABLE` 中需要保持一致；当前映射在 `hiview_adapter.cpp` 已显式配置。[已确认]
+- 统计桶映射约束：时长/数据量均采用分桶，细粒度归并在 `CalculateTimeConsuming` 与 `HiViewAdapter` 之间耦合，可能会丢失原始精度。[已确认]
+- 时间单位约束：`CalculateTimeConsuming::GetCurrentTimeMicros` 使用 `gettimeofday` 并按 `SEC_TO_MILLISEC` 及 `MICROSEC_TO_MILLISEC` 组合为微秒级时间。[已确认]
+- 定时线程行为约束：`StartTimerThread` 是分离线程，使用 `sleep` 驱动；对时钟漂移和进程生命周期敏感。[已确认]
+- 配置文件证据约束：仅能确认存在 `pasteboardEvent.yaml` 事件定义模板（字段说明与事件元数据注释），但未从源码直接看到 YAML 载入流程。[已确认]
+- 未发现本路径内可见的外部网络/权限处理入口；此类策略依赖调用方传入参数和平台能力。 [推断]
+- `DeduplicateMemory::IsDuplicate` 在 `timestamp < expirationMS_` 情况下直接返回 false，这是一种防御式早退，行为与初始化窗口长度有关。[确认]
+
+## 调试指导（按主要模块）
+| 模块 | 常见症状 | 可能来源 | 排查文件/符号 |
+|---|---|---|---|
+| 报告分发层 | 上报调用后无任何事件 | Reporter 未进入正确实现或单例未触达 | [reporter.cpp: GetInstance/PasteboardFault/TimeConsumingStatistic/PasteboardBehaviour](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/reporter.cpp), [reporter.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/reporter.h) |
+| 时耗统计层 | 某些接口缺少时耗上报 | `SetBeginTime` 未调用或生命周期未覆盖 | [calculate_time_consuming.h/.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/calculate_time_consuming.h), [calculate_time_consuming.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/calculate_time_consuming.cpp) |
+| HiView 聚合层 | 周期性统计缺失/重复偏差 | 定时线程未启动、互斥阻塞、`running_` 状态未正确 | [hiview_adapter.cpp: StartTimerThread/InvokeTimeConsuming/InvokePasteBoardBehaviour](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.cpp), [hiview_adapter.h::running_](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.h) |
+| CLI/Dump 入口 | CLI 不响应或帮助不显示 | 命令未注册或 `args` 为空分支异常 | [pasteboard_dump_helper.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_dump_helper.cpp), [command.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/command.cpp) |
+| 事件宏 | 上报字段缺失/事件名错误 | 宏参数未对齐或常量拼写 | [pasteboard_event_dfx.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_dfx.h), [pasteboard_event_ue.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/pasteboard_event_ue.h) |
+
+## 运行手册（基于现有运行证据）
+- Build（已确认）
+  - 该模块当前只确认了命令侧目标与命名：`ohos-pasteboard` 构建目标/安装路径来自工具文档（见工具说明）。[确认]
+  - `services/dfx` 模块自身的构建入口、具体 hb/ninja 命令、模块开关未在当前证据中直接出现。[缺失证据]
+- Validation（已确认）
+  - 使用 `ohos-pasteboard` CLI 验证时，可在命令返回中检查 `type/result` 与 `status`、`data` 字段是否符合工具文档约定（如 `set-data/get-data/has-data` 等）。[确认, 证据来源为 tools/README]
+  - 对时耗/行为/故障事件，可在平台事件日志侧观察 HiSysEvent 是否写入 `DfxCodeConstant` 对应事件码（`950001100/105/106/107`）。[已确认到常量映射]
+- Deployment（已确认）
+  - CLI 侧安装路径文档显示为 `/system/bin/cli_tool/executable/ohos-pasteboard`（仅 CLI 视角）。[确认]
+  - 服务侧观测能力启用通常依赖系统服务整体部署与权限/进程策略，无该模块内可直接确认的独立部署步骤。[缺失证据]
+- Rollback（缺失证据）
+  - 未在当前证据中看到该模块级回滚开关或版本开关参数；建议回滚策略按服务包整体回退并禁用新版本 DFX 命令注册。 [缺失证据]
+- 故障模式（已确认+推断）
+  - 事件写失败：`OH_HiSysEvent_Write`/写入 API 返回值非成功码时记录错误日志并丢弃该次事件。[已确认]
+  - 无输出或帮助异常：`PasteboardDumpHelper::Dump` 在未匹配命令时返回 false；需确认 `RegisterCommand` 已执行且 `GetOption` 能返回有效 key。[已确认]
+  - 周期上报停滞：`StartTimerThread` 未启动、`running_` 锁定或循环阻塞会导致统计不能清桶。[推断]
+
+## 源码确认边界
+- 源码确认
+  - 模块边界、类名、方法、枚举、常量、主要控制流路径以上文链接的源文件为准。[已确认]
+  - 事件上报常量码与事件映射关系在 [dfx_code_constant.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/dfx_code_constant.h) 与 [hiview_adapter.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/distributeddatamgr_pasteboard/services/dfx/src/hiview_adapter.cpp) 可直接对齐。[已确认]
+- 推断
+  - 调用方在何处创建 `CalculateTimeConsuming`、`SetBeginTime`、何时触发 `StartTimerThread`，当前模块视图未给出完整调用链，需要结合上层服务代码确认。[推断]
+  - `DeduplicateMemory` 的具体上游用途（例如用于去重何种 payload）未在该路径内见到直接调用点。[推断]
+- 缺失证据
+  - 完整的构建/发布流水线、服务级部署清单、以及 dfx 与 `services/core` 的直接入口绑定点没有在本次证据内出现。[缺失证据]

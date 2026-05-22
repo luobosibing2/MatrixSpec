@@ -1,0 +1,184 @@
+# 中间模块设计文档：Project Root（回退模块聚合编排）
+
+## 1. 模块目的与边界
+
+`Project Root` 是 RecSDK 的顶层编排模块，作为“无明显单一源模块目录”的退化入口，聚合算子、训练框架、构建、测试、文档与发布约束，并提供统一的工程入口与协同关系。  
+[[C]]: 根级说明见 [README.md](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/README.md) 的“目录结构”与“组件说明”。  
+[[C]]: 算子子系统说明见 [cust_op/README.md](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/README.md)。  
+
+## 2. 顶层目录结构（高层结构与职责）
+
+| 目录 | 来源锚点 | 职责 |
+|---|---|---|
+| [build](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/build) | `build.sh` 根脚本入口 | 版本打包、TF构建、镜像/安装产物组织、预冒烟流程脚本。 |
+| [cust_op](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op) | `cust_op/README.md` | AscendC 自定义算子开发、适配与测试。 |
+| [training](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/training) | `README.md` 中组件定义、`docs/zh/rec_full_stack.md` | TensorFlow/Torch 训练子系统与公共核心运行时。 |
+| [docs](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/docs) | `docs/zh/overview.md` | 全栈文档、安装、API、调优与版本说明。 |
+| [test](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/test) | 测试目录树 | 自定义算子端到端功能/性能/正确性测试。 |
+| [.gitcode/.pre-commit-config.yaml](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/.pre-commit-config.yaml) | 预提交钩子定义 | 代码质量与静态检查治理。 |
+| 根脚本与配置 | [build.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/build.sh), [.gitignore](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/.gitignore), [contributing.md](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/contributing.md), [config.ini](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/config.ini) | 仓库级治理、打包/协作契约和运行时参数入口。 |
+
+## 3. 核心子模块与运行流
+
+### 3.1 自定义算子子系统（cust_op）
+
+1) 代码与版本双轨  
+`cust_op/ascendc_op/ai_core_op` 下按算子名组织，且多数算子具有 `c310` 与 `v220` 两套实现目录，体现芯片/编译 profile 区分。  
+[[C]]: 例如 `asynchronous_complete_cumsum` 下同时存在 [c310](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310) 与 [v220](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/v220) 目录。  
+[[C]]: `run.sh` 调用统一构建库函数 `build_and_install_operator` 的通用流程，路径见 [asynchronous_complete_cumsum/v220/run.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/v220/run.sh) 与 [asynchronous_complete_cumsum/c310/run.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/run.sh)。  
+
+2) Host/Kernal 拆分  
+每个算子通常包含 `op_host` 与 `op_kernel`，对应参数裁剪/分块与执行内核。  
+[[C]]: 以 [asynchronous_complete_cumsum/c310](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310) 为例存在 `op_host/asynchronous_complete_cumsum.cpp` 与 `op_kernel/asynchronous_complete_cumsum.cpp`。  
+
+3) PyTorch 适配层  
+`cust_op/framework/torch_plugin/torch_library` 下按算子目录提供 `build_ops.sh` 与 C++ binding 源码；common 目录可批量构建并安装聚合 so。  
+[[C]]: [torch_library/common/build_ops.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/framework/torch_plugin/torch_library/common/build_ops.sh) 中 `cmake -B build -DBUILD_VER` 与 `cmake --build build -j`。  
+[[C]]: `cmake` 输出复制到 `sysconfig` `purelib` 路径。  
+
+4) 适配层回退与加载模式  
+`README` 中给出单算子 `torch.ops.load_library("...xxx.so")` 与多算子 `libfbgemm_npu_api.so` 的加载模式。  
+[[C]]: [cust_op/README.md](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/README.md) 的“算子适配层编译/加载”。  
+
+### 3.2 训练框架子系统（training）
+
+1) 多框架并行  
+顶层设计是 TF 与 Torch 两套框架并行演进，包括 `tf_rec_v1/tf_rec_v2` 与 `torch_rec_v1/torch_rec_v2`。  
+[[C]]: [docs/zh/rec_full_stack.md](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/docs/zh/rec_full_stack.md) 与 [README.md](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/README.md) 的组件定义。  
+
+2) 组件分层  
+- `training/common` 提供通用绑定与基础设施。  
+- `training/tf_rec_v1` 与 `training/tf_rec_v2` 提供 TensorFlow 侧 API、图改写与缓存/表管理。  
+- `training/torch_rec_v1` 与 `training/torch_rec_v2` 提供 TorchRec/Torch 侧表结构与动态 Embedding 功能。  
+[[C]]: `docs/zh/overview.md` 与 `docs/zh/rec_full_stack.md` 中的组件职责说明。  
+
+### 3.3 构建与验证流（Root + build/预冒烟）
+
+1) 根构建清理入口  
+`[build.sh](.../build.sh)` 的 `clean()` 会清空 `dist`、`build`、`install`、`bdist` 等关键产物。  
+[[C]]: [build.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/build.sh) 中 `clean()` 的删除路径。  
+
+2) TF 版本构建入口  
+`build/build_tf1.sh` 与 `build/build_tf2.sh` 作为 TF1/TF2 分支构建主流程入口。  
+[[C]]: 这两个脚本前部注释约束构建环境（Python/CMake/GCC）与依赖准备逻辑。  
+
+3) 算子构建入口  
+`cust_op/ascendc_op/build/build_ai_core_op.sh` 约束可编译版本（A2/A3/A5/310P/A2-TF）。  
+[[C]]: [cust_op/ascendc_op/build/build_ai_core_op.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/build/build_ai_core_op.sh) 的参数校验与执行 `build_and_install_operator` 前置流程。  
+
+4) 冒烟验证  
+`build/run_presmoke.sh` 与 `build/run_presmoke_tf.sh` 定义环境设置、安装 torch_npu、运行构建与测试目录。  
+[[C]]: 见 [build/run_presmoke.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/build/run_presmoke.sh) 与 [build/run_presmoke_tf.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/build/run_presmoke_tf.sh)。  
+
+## 4. 关键接口、类与数据结构
+
+### 4.1 自定义算子核心接口（以 AsynchronousCompleteCumsum 为代表）
+
+- `op_host` Tiling 数据定义  
+  - `AsynchronousCompleteCumsumTilingData`（c310）: `totalLength`, `totalBlocks`, `blocksPerCore`, `remainderBlocks`, `elementsPerBlock`, `isSmall`, `isFullCore`。  
+  [[C]]: [cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/op_host/asynchronous_complete_cumsum_tiling.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/op_host/asynchronous_complete_cumsum_tiling.h) `BEGIN_TILING_DATA_DEF`。  
+  - `AsynchronousCompleteCumsumTilingData`（v220）: `totalLength`, `totalBlocks`, `blocksPerCore`, `remainderBlocks`。  
+  [[C]]: [cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/v220/op_host/asynchronous_complete_cumsum_tiling.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/v220/op_host/asynchronous_complete_cumsum_tiling.h)。
+
+- Host tiling 逻辑  
+  - `TilingFunc(gert::TilingContext* context)` 完成输入shape/type校验、block 划分、workspace 估算、tiling 数据回填。  
+  [[C]]: `TilingFunc` 在 [c310/op_host/asynchronous_complete_cumsum.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/op_host/asynchronous_complete_cumsum.cpp) 与 [v220/op_host/...](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/v220/op_host/asynchronous_complete_cumsum.cpp) 中可见。  
+  - `AsynchronousCompleteCumsum` 算子在注册时约束输入为 1D、类型为 int32/int64。  
+  [[C]]: `TilingFunc` 中的 `dimNum != 1` 与 `DT_INT32/DT_INT64` 校验。  
+
+- Kernel 参数与执行入口  
+  - `struct Args { GM_ADDR x; GM_ADDR y; GM_ADDR workspace; GM_ADDR tiling; }`（c310）和 `Args { input/output/workspace/tiling }`（v220）。  
+  [[C]]: [c310/op_kernel/asynchronous_complete_cumsum_kernel.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/op_kernel/asynchronous_complete_cumsum_kernel.h)、[v220/op_kernel/asynchronous_complete_cumsum_kernel.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/v220/op_kernel/asynchronous_complete_cumsum_kernel.h)。  
+  - Kernel 入口统一为 `extern "C" __global__ __aicore__ void asynchronous_complete_cumsum(...)`。  
+  [[C]]: 两版 `op_kernel/asynchronous_complete_cumsum.cpp`。  
+
+### 4.2 构建/测试接口与脚本 API（脚本级）
+
+- `parse_arguments` / `build_and_install_operator`  
+  [[C]]: `run.sh` 调用链可见于 [cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/run.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/run.sh) 与 [v220/run.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/v220/run.sh)。  
+  - 具体定义不在当前证据片段中展开，但定义位于 [cust_op/ascendc_op/scripts/op_builder_utils.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/scripts/op_builder_utils.sh)。  
+
+- `build_ops.sh` 统一编译插件  
+  [[C]]: `torch_library/common/build_ops.sh` 的 `cmake -B build -DBUILD_VER` 与 `cmake --build build -j`。  
+
+## 5. 约束与边界条件
+
+### 5.1 运行环境与版本约束
+
+1. 根目录发布与兼容说明显示目标版本为 `26.0.0`，CANN 9.0.0，Ascend HDK 版本矩阵列于 [docs/zh/release_notes_rec.md](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/docs/zh/release_notes_rec.md)。  
+2. TF1/TF2 构建脚本在注释中明确依赖旧版构建工具链（Python3.7.5、GCC7.3.0、CMake3.20.6）。  
+[[C]]: [build/build_tf1.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/build/build_tf1.sh) 与 [build/build_tf2.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/build/build_tf2.sh)。  
+3. 自定义算子对输入要求明确：一维张量、int32/int64。  
+[[C]]: [asynchronous_complete_cumsum README](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/README.md)。  
+
+### 5.2 架构与组织约束
+
+1. 同一算子多版本目录是常态（例：`c310`/`v220`），编译 profile 与内核实现不完全同构。  
+2. 顶层模块不单一承担功能实现，属于协调器角色：build/test/docs/training/ops 共存。  
+3. 预设质量门控依赖预提交 + ruff + codespell + pylint。  
+[[C]]: [.pre-commit-config.yaml](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/.pre-commit-config.yaml) 与 [pre-commit/pyproject.toml](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/pre-commit/pyproject.toml)。  
+
+## 6. 调试指导（按主要模块）
+
+| 模块 | 常见症状 | 可能来源 | 建议排查项 |
+|---|---|---|---|
+| 根构建与清理 | 产物混入旧版本、重复包冲突 | `build.sh` 清理未执行或未生效 | 检查 [build.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/build.sh) 中 `clean()` 列表是否覆盖目标目录 |
+| 自定义算子编译（c310/v220） | 编译中途报 profile 不匹配、参数不被识别 | `run.sh` profile/env 配置不一致 | 查 [asynchronous_complete_cumsum/c310/run.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/run.sh) 与 [v220/run.sh](...)，确认 `AI_CORE_PROFILE`、`parse_arguments` |
+| 自定义算子类型/shape 报错 | dim 或 dtype 检查失败 | host 侧 `TilingFunc` 参数校验 | 查看 [op_host/asynchronous_complete_cumsum.cpp](...) 中 `dimNum`、`DT_INT32/DT_INT64` 分支 |
+| kernel 运行结果错位或越界 | block 分配/输出偏移错误 | `totalBlocks / blocksPerCore / remainderBlocks` 分配逻辑 | 比对 [op_kernel/asynchronous_complete_cumsum_kernel.h](...) 中 `coreId` 分配与 `outputGT` 长度边界 |
+| Torch 插件加载失败 | `torch.ops.load_library` 报找不到符号 | so 文件未构建/路径不在 site-packages | 参考 [torch_library/common/build_ops.sh](...) 的 `PACKAGE_PATH` 分发逻辑；核对 `libfbgemm_npu_api.so` |
+| 训练侧 API 报缺失 | 调用 API 接口失败 | 版本包缺失或接口未按文档初始化 | 对照 [docs/zh/tensorflow/tf_rec_v1/api](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/docs/zh/tensorflow/tf_rec_v1/api) 与相应训练子模块版本 |
+| 预冒烟失败 | 测试环境初始化异常 | 依赖环境脚本未执行或路径未设置 | 检查 [build/run_presmoke.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/RecSDK/build/run_presmoke.sh) 的环境导出与目录变量 |
+| 常见 Python 依赖问题 | `Could NOT find Python3` | Python软链接缺失 | [cust_op/README.md](...) 的 FAQ 说明给出软链接修复建议 |
+
+## 7. 运行手册（Operational Runbook）
+
+### 7.1 Build（构建）
+
+1. 根清理：执行 [build.sh](...)，触发 `clean()` 删除历史产物。  
+2. 算子编译：对单算子执行其 `run.sh`（示例 `cust_op/ascendc_op/ai_core_op/.../asynchronous_complete_cumsum/v220/run.sh`）；对框架插件执行 `cust_op/framework/torch_plugin/torch_library/.../build_ops.sh`。  
+3. 训练框架构建：执行 `build/build_tf1.sh` 或 `build/build_tf2.sh`。  
+
+### 7.2 Validation（验证）
+
+1. 算子级测试通过 `pytest` 运行 `cust_op/test/...`、`test/...`、`training/...` 下对应测试脚本。  
+2. 冒烟验证可按 `build/run_presmoke.sh` 与 `build/run_presmoke_tf.sh` 的流程执行。  
+
+### 7.3 Deployment（部署）
+
+1. 成功构建后 `build.sh`/各模块构建脚本输出 wheel 或 so 后，按适配层说明在 Python 环境加载 `torch.ops.load_library(...)`。  
+2. TensorFlow/Torch 侧功能开启以对应 `docs` 指南为准。  
+
+### 7.4 Rollback（回退）
+
+1. 清理本地/工作目录产物（`build.sh`）。  
+2. 回退到上一个可用 wheel 或 so，删除冲突版本并重新 `build_and_install_operator`/`pip install`。  
+3. 如涉及多算子库，优先回退 `common` 聚合库再回退单算子。  
+
+### 7.5 Failure modes（故障模式）
+
+1. 构建版本不兼容（如 profile 未匹配、Python/CMAKE/GCC 不一致）→ 先对照脚本注释和 `release_notes_rec.md` 的版本矩阵。  
+2. 环境未设置导致找不到依赖（NPU/编译器路径）→ 对照 `run.sh` 及构建文档中的 env 约束。  
+3. 权限/权限位导致可执行或链接失败 → 检查脚本 `chmod 550` 执行点。  
+4. 形状与类型不合法导致 tiling 构建失败 → 按对应 `TilingFunc` 的检查点回归输入契约。  
+
+## 8. 关键能力与数据流摘要
+
+1. 输入输出主链路  
+[asynchronous_complete_cumsum] 的 Host 将输入元数据映射为 tiling，再将 kernel 参数打包为 `Args`，Kernel 按 core/block 粒度并发计算并写回 `y`。  
+[[C]]: [op_host/...cpp](...), [op_kernel/...cpp](...), [simt_kernel.h](...).  
+
+2. 版本兼容与发布链路  
+`build.py`/`build_tf*.sh` + `pre-commit` + docs + release notes 形成“代码-构建-验证-发布说明”闭环。  
+[[C]]: `build`, `.pre-commit-config.yaml`, `docs/zh/release_notes_rec.md`。  
+
+## 9. 置信度边界（Source / Inferred）
+
+| 级别 | 内容 | 说明 |
+|---|---|---|
+| Source-Confirmed（源代码确认） | 根目录组件关系、算子目录结构、核心构建脚本行为、主要约束与字段定义 | 由仓库文件与代码片段直接可见 |
+| Source-Confirmed（源代码确认） | AsynchronousCompleteCumsum 的接口签名、Host 验证逻辑、kernel入口、tiling字段 | `*.cpp/h` 与 `simt_kernel.h` 片段 |
+| Inferred（推断） | 各模块在复杂发布链路中的真实调用顺序与默认部署时序 | 从脚本/文档组合推导，未见完整端到端脚本日志 |
+| Inferred（推断） | 全量算子间性能/正确性协同表现 | 未提供基准测试总汇，只能基于 README 与个别算子证明 |
+| Missing-Evidence（缺失证据） | `op_builder_utils.sh` 中 `parse_arguments` 与 `build_and_install_operator` 的完整实现 | 本上下文中只展示了调用方与部分文件顶部，未展示完整实现 |
+| Missing-Evidence（缺失证据） | 所有算子的一致性行为（跨每个 op 目录） | 目录规模巨大，仅展示了部分代表性算子与文件 |

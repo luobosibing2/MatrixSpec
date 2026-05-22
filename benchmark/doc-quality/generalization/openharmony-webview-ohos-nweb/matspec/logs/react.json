@@ -1,0 +1,104 @@
+{
+  "runner": "codex",
+  "provider": "codex",
+  "model": "gpt-5.3-codex-spark",
+  "reason": "forced_module_first",
+  "modules": [
+    {
+      "name": "Project Root",
+      "path": ".",
+      "artifact": "modules/..md",
+      "prompt": "logs/prompts/modules/..md",
+      "usage": {
+        "input": 46539,
+        "output": 3750
+      },
+      "runnerLog": {
+        "task": "module-.",
+        "model": "gpt-5.3-codex-spark",
+        "status": 0,
+        "command": "codex exec -C C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview --model gpt-5.3-codex-spark --sandbox read-only --output-last-message C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview\\.matspec-cli\\runs\\20260522193335898\\logs\\codex-module-.-last-message.md -",
+        "stdoutLog": "logs/codex-module-..stdout.log",
+        "stderrLog": "logs/codex-module-..stderr.log",
+        "attempts": [
+          {
+            "task": "module-.",
+            "model": "gpt-5.3-codex-spark",
+            "status": 0,
+            "command": "codex exec -C C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview --model gpt-5.3-codex-spark --sandbox read-only --output-last-message C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview\\.matspec-cli\\runs\\20260522193335898\\logs\\codex-module-.-last-message.md -",
+            "stdoutLog": "logs/codex-module-..stdout.log",
+            "stderrLog": "logs/codex-module-..stderr.log"
+          }
+        ],
+        "outputSource": "codex-module-.-last-message.md"
+      }
+    }
+  ],
+  "prompts": {
+    "design": "logs/prompts/design.md",
+    "spec": "logs/prompts/spec.md"
+  },
+  "calls": [
+    {
+      "task": "module-.",
+      "model": "gpt-5.3-codex-spark",
+      "status": 0,
+      "command": "codex exec -C C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview --model gpt-5.3-codex-spark --sandbox read-only --output-last-message C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview\\.matspec-cli\\runs\\20260522193335898\\logs\\codex-module-.-last-message.md -",
+      "stdoutLog": "logs/codex-module-..stdout.log",
+      "stderrLog": "logs/codex-module-..stderr.log",
+      "attempts": [
+        {
+          "task": "module-.",
+          "model": "gpt-5.3-codex-spark",
+          "status": 0,
+          "command": "codex exec -C C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview --model gpt-5.3-codex-spark --sandbox read-only --output-last-message C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview\\.matspec-cli\\runs\\20260522193335898\\logs\\codex-module-.-last-message.md -",
+          "stdoutLog": "logs/codex-module-..stdout.log",
+          "stderrLog": "logs/codex-module-..stderr.log"
+        }
+      ],
+      "outputSource": "codex-module-.-last-message.md"
+    },
+    {
+      "task": "design",
+      "model": "gpt-5.3-codex-spark",
+      "status": 0,
+      "command": "codex exec -C C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview --model gpt-5.3-codex-spark --sandbox read-only --output-last-message C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview\\.matspec-cli\\runs\\20260522193335898\\logs\\codex-design-last-message.md -",
+      "stdoutLog": "logs/codex-design.stdout.log",
+      "stderrLog": "logs/codex-design.stderr.log",
+      "attempts": [
+        {
+          "task": "design",
+          "model": "gpt-5.3-codex-spark",
+          "status": 0,
+          "command": "codex exec -C C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview --model gpt-5.3-codex-spark --sandbox read-only --output-last-message C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview\\.matspec-cli\\runs\\20260522193335898\\logs\\codex-design-last-message.md -",
+          "stdoutLog": "logs/codex-design.stdout.log",
+          "stderrLog": "logs/codex-design.stderr.log"
+        }
+      ],
+      "outputSource": "codex-design-last-message.md"
+    },
+    {
+      "task": "spec",
+      "model": "gpt-5.3-codex-spark",
+      "status": 0,
+      "command": "codex exec -C C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview --model gpt-5.3-codex-spark --sandbox read-only --output-last-message C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview\\.matspec-cli\\runs\\20260522193335898\\logs\\codex-spec-last-message.md -",
+      "stdoutLog": "logs/codex-spec.stdout.log",
+      "stderrLog": "logs/codex-spec.stderr.log",
+      "attempts": [
+        {
+          "task": "spec",
+          "model": "gpt-5.3-codex-spark",
+          "status": 0,
+          "command": "codex exec -C C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview --model gpt-5.3-codex-spark --sandbox read-only --output-last-message C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\web_webview\\.matspec-cli\\runs\\20260522193335898\\logs\\codex-spec-last-message.md -",
+          "stdoutLog": "logs/codex-spec.stdout.log",
+          "stderrLog": "logs/codex-spec.stderr.log"
+        }
+      ],
+      "outputSource": "codex-spec-last-message.md"
+    }
+  ],
+  "tokens": {
+    "input": 80814,
+    "output": 10096
+  }
+}

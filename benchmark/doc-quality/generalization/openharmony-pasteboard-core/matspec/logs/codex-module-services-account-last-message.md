@@ -1,0 +1,156 @@
+# 模块中间设计文档：Account（services/account）
+
+## 1. 模块目的与边界
+
+- 该模块是 `distributeddatamgr_pasteboard` 仓库中的独立子模块，目录仅包含 `include/account_manager.h` 与 `src/account_manager.cpp` 两个文件，定位为“账户信息获取/会话上下文服务”的薄封装层。
+- 从源代码可确认该模块当前只暴露并实现了一个单例类型 `AccountManager` 与 `GetCurrentAccount()` 接口，尚未在此模块内实现真实账户读取逻辑。
+- 该模块在当前仓库证据中未看到与外部系统能力、进程生命周期、事件总线或序列化流程的直接绑定代码，因此更像是其他业务模块的“账户依赖占位注入点”。
+
+## 2. 目录结构
+
+`services/account` 目录结构（基于给定树）：
+
+```text
+services/account/
+  include/
+    account_manager.h
+  src/
+    account_manager.cpp
+```
+
+## 3. 核心组件
+
+### 3.1 `AccountManager` 类
+
+- 文件锚点：`[services/account/include/account_manager.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\account\include\account_manager.h)`
+- 符号锚点：`OHOS::MiscServices::AccountManager`
+- 关键原因：
+  - 该类定义了模块对外可见的唯一公共能力（单例工厂与账户查询接口），可作为该模块功能边界的最高层入口。
+
+### 3.2 单例访问：`GetInstance()`
+
+- 文件锚点：`[services/account/src/account_manager.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\account\src\account_manager.cpp)`
+- 符号锚点：`AccountManager::GetInstance`
+- 关键原因：
+  - 使用函数内静态局部变量实现单例，保证进程内统一实例点。
+  - 当前实现不依赖外部注入参数，返回引用类型，易于被调用方直接复用。
+
+### 3.3 账户查询：`GetCurrentAccount()`
+
+- 文件锚点：`[services/account/src/account_manager.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\account\src\account_manager.cpp)`
+- 符号锚点：`AccountManager::GetCurrentAccount`
+- 关键原因：
+  - 当前返回常量空字符串，表明功能未落地或由上层按场景接管，意味着模块行为在生产路径中可能只用于“兼容接口”。
+
+## 4. 核心流程
+
+## 4.1 典型调用流程（当前实现）
+
+1. 调用方通过 `AccountManager::GetInstance()` 获取实例（单例）。
+2. 调用 `GetCurrentAccount()` 获取账户标识字符串。
+3. 当前返回值固定为空串，后续逻辑若依赖非空账号需要做好兼容处理。
+
+## 4.2 未来可扩展路径（推断）
+
+1. 在 `GetCurrentAccount()` 内接入系统账户服务/用户管理服务。
+2. 引入账户变更监听并缓存最小化更新策略。
+3. 与剪贴板服务主流程打通，实现基于账号的隔离/策略控制。
+
+> 以上 2 的流程为推断，当前代码未体现具体依赖或监听机制。
+
+## 5. 接口与数据结构
+
+### 5.1 接口表
+
+| 接口 | 定义位置 | 说明 | 输入/输出 |
+|---|---|---|---|
+| `OHOS::MiscServices::AccountManager &GetInstance()` | `services/account/include/account_manager.h` | 获取 `AccountManager` 单例引用 | 输入：无；输出：`AccountManager&` |
+| `std::string GetCurrentAccount()` | `services/account/include/account_manager.h` | 获取当前账号信息 | 输入：无；输出：`std::string` |
+| `AccountManager()` / `~AccountManager()`（私有） | `services/account/include/account_manager.h` | 禁止外部实例化/销毁 | 默认构造/析构实现 |
+
+### 5.2 数据结构
+
+- 无复杂结构体、枚举或成员变量；`AccountManager` 为无状态（stateless）单例封装。
+- 无额外缓存字段、配置参数或持久化字段可见。
+
+## 6. 关键约束与风险
+
+## 约束（源文件确认）
+
+- 私有构造函数与析构函数限制类外实例化/销毁，确保单例访问模式。
+- 当前实现不包含线程安全修饰；依赖 C++ 局部静态变量的线程安全语义。
+- 返回值约束：`GetCurrentAccount()` 目前固定返回 `""`，与“真实账号查询”语义不一致。
+
+## 风险（推断 + 源码支持）
+
+- 上游逻辑若假设非空账号，会触发跨用户策略或审计决策偏差。
+- 若未来改为查询系统账户服务，需明确错误路径（无账户、服务不可用、超时）与降级策略。
+- 由于该模块当前缺少输入参数与错误码，接口在失败场景中表达能力有限。
+
+## 7. 与其他模块关系（当前证据视角）
+
+- 仓库整体文档定位为剪贴板服务，但 `Account` 子模块未在当前可见代码中出现直接服务调用链。
+- 因而可理解为：
+  - 低耦合提供侧。
+  - 在上层服务/客户端适配层中按需替换实现或补齐逻辑。
+
+## 8. 调试与问题定位指引（按模块：Account）
+
+| 症状 | 可能源区域 | 检查点 |
+|---|---|---|
+| 始终拿不到账号信息或空账号 | `AccountManager::GetCurrentAccount` 实现 | 查看 `[services/account/src/account_manager.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\account\src\account_manager.cpp)` 的返回值与未来接入逻辑 |
+| 多次调用返回行为不一致（若后续实现有状态） | `GetInstance` 生命周期 | 检查单例函数 `[services/account/src/account_manager.cpp](...)` 与编译单元链接一致性 |
+| 链接/链接期符号重复或未定义 | 头文件/实现声明不一致 | 对照 `[services/account/include/account_manager.h](...)` 与 `[services/account/src/account_manager.cpp](...)` 声明-定义一致性 |
+
+## 9. 运行手册（Runbook）
+
+> 该小节基于现有证据能力编写；仓库中未提供 `services/account` 的独立构建、验证、部署、回滚脚本证据。
+
+## 9.1 构建（Build）
+
+- 源证据状态：未发现 `services/account` 独立构建脚本或目标定义。
+- 建议：将模块与 `distributeddatamgr_pasteboard` 的整体构建流程挂接，确认该文件是否被编译进对应服务 target。
+
+## 9.2 验证（Validation）
+
+- 源证据状态：未提供模块级单测/集成测试文件。
+- 建议（待实现）：新增最小单测覆盖
+  - `GetInstance()` 返回同一实例引用。
+  - `GetCurrentAccount()` 默认行为可断言（当前应为空串）。
+- 验证项（现阶段推断）：在上层业务中模拟无账户/多用户场景，确认容错。
+
+## 9.3 部署（Deployment）
+
+- 源证据状态：未见账户子模块部署说明。
+- 关联配置证据仅有行为事件规范文件 `[pasteboardEvent.yaml]`（非部署脚本）。
+- 建议：将本模块纳入服务镜像构建产物时保持 `account_manager.cpp` 的链接一致性，避免按头文件优化删除。
+
+## 9.4 回滚（Rollback）
+
+- 回滚对象：`account_manager.cpp` 与 `account_manager.h`。
+- 建议：回滚时优先恢复到“返回空字符串的稳定基线”，并回退调用方对该接口的严格账号依赖分支。
+- 风险：若上游调用方已假设非空账号，需同步回滚调用方校验逻辑。
+
+## 9.5 失败模式与处理（Failure-mode notes）
+
+- 失败模式 A：上层出现“空账号”异常行为  
+  处理：在调用点判空，走匿名或本地默认策略，并记录告警。
+- 失败模式 B：剪贴板相关功能在多用户场景混淆  
+  处理：在后续实现中加入用户上下文参数或显式账号来源标记，避免依赖隐式返回值。
+- 失败模式 C：编译链接时未包含该文件  
+  处理：检查目标编译清单是否包含 `services/account/src/account_manager.cpp`。
+
+## 10. 证据边界与确定性
+
+### Source-Confirmed（源确认）
+
+- `AccountManager` 类定义与方法签名见 `services/account/include/account_manager.h`。
+- `GetInstance()` 与 `GetCurrentAccount()` 定义见 `services/account/src/account_manager.cpp`。
+- `GetCurrentAccount()` 当前返回空字符串为源码可见事实。
+- 模块目录仅含一对头文件/实现文件。
+
+### Inferred / Missing Evidence（推断或缺失证据）
+
+- 当前是否有上游调用方、调用链、构建目标与服务部署方式未在给定证据中直接出现。
+- 与系统账户服务真正联动、跨用户策略、权限校验与事件埋点未见实现。
+- 运行命令、回归命令、部署步骤为按仓库缺省实践推断，不构成当前证据直接确认。

@@ -1,0 +1,12 @@
+{
+  "projectName": "arkui_ace_engine",
+  "language": "C/C++",
+  "primaryExtension": ".cpp",
+  "modules": [
+    {
+      "name": "Project Root",
+      "path": ".",
+      "description": "Fallback module for a small project without obvious source module directories."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "projectName": "RecSDK",
+  "language": "Python",
+  "primaryExtension": ".py",
+  "modules": [
+    {
+      "name": "Project Root",
+      "path": ".",
+      "description": "Fallback module for a small project without obvious source module directories."
+    }
+  ]
+}

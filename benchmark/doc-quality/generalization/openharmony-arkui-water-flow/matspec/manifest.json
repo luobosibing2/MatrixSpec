@@ -1,0 +1,65 @@
+{
+  "runId": "20260522192212559",
+  "type": "generate",
+  "status": "generated",
+  "createdAt": "2026-05-22T11:22:12.560Z",
+  "root": "C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\arkui_ace_engine",
+  "commitId": "921b268f",
+  "runner": "codex",
+  "generationMode": "react",
+  "provider": "codex",
+  "model": "gpt-5.3-codex-spark",
+  "probeModels": {
+    "requested": false,
+    "status": "not_requested"
+  },
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "plan": "plan.json",
+    "modules": [
+      "modules/..md"
+    ]
+  },
+  "logs": {
+    "scan": "logs/scan.json",
+    "llm": null,
+    "prompts": {
+      "design": "logs/prompts/design.md",
+      "spec": "logs/prompts/spec.md"
+    },
+    "react": "logs/react.json"
+  },
+  "warnings": [
+    "P3 CLI runner react output; module artifacts were staged under the run directory."
+  ],
+  "tokens": {
+    "input": 306918,
+    "output": 15844
+  },
+  "applied": false,
+  "generationReason": "forced_module_first",
+  "scanSummary": {
+    "totalFiles": 25192,
+    "includedFiles": 16066,
+    "ignoredFiles": 9130,
+    "readmeFiles": [
+      ".claude/skills/build-error-analyzer/README.md",
+      ".claude/skills/capi-test-fixer/README.md",
+      ".claude/skills/capi-test-naming-verifier/README.md"
+    ],
+    "docsFiles": [
+      "docs/NavRouter组件知识库.md",
+      "docs/Navigation组件知识库.md",
+      "docs/SideBarContainer组件知识库.md",
+      "docs/Stepper组件知识库.md",
+      "docs/accessibility/accessibility_base_README.md",
+      "docs/api/api_KnowLedge_Base.md"
+    ]
+  },
+  "planSummary": {
+    "modules": 1,
+    "language": "C/C++",
+    "primaryExtension": ".cpp"
+  }
+}

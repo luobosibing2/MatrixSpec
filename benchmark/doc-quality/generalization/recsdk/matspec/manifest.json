@@ -1,0 +1,69 @@
+{
+  "runId": "20260522192050231",
+  "type": "generate",
+  "status": "generated",
+  "createdAt": "2026-05-22T11:20:50.235Z",
+  "root": "C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\RecSDK",
+  "commitId": "d9d5efab",
+  "runner": "codex",
+  "generationMode": "react",
+  "provider": "codex",
+  "model": "gpt-5.3-codex-spark",
+  "probeModels": {
+    "requested": false,
+    "status": "not_requested"
+  },
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "plan": "plan.json",
+    "modules": [
+      "modules/..md"
+    ]
+  },
+  "logs": {
+    "scan": "logs/scan.json",
+    "llm": null,
+    "prompts": {
+      "design": "logs/prompts/design.md",
+      "spec": "logs/prompts/spec.md"
+    },
+    "react": "logs/react.json"
+  },
+  "warnings": [
+    "P3 CLI runner react output; module artifacts were staged under the run directory."
+  ],
+  "tokens": {
+    "input": 116857,
+    "output": 10353
+  },
+  "applied": false,
+  "generationReason": "forced_module_first",
+  "scanSummary": {
+    "totalFiles": 1815,
+    "includedFiles": 1608,
+    "ignoredFiles": 211,
+    "readmeFiles": [
+      "README.md",
+      "cust_op/README.md",
+      "cust_op/ascendc_op/ai_core_op/asynchronous_complete_cumsum/c310/README.md"
+    ],
+    "docsFiles": [
+      "docs/zh/overview.md",
+      "docs/zh/performance_tuning.md",
+      "docs/zh/rec_full_stack.md",
+      "docs/zh/release_notes_rec.md",
+      "docs/zh/tensorflow/build_mxRec_images/README.md",
+      "docs/zh/tensorflow/tf_rec_v1/api/README.md",
+      "docs/zh/tensorflow/tf_rec_v1/api/api_description.md",
+      "docs/zh/tensorflow/tf_rec_v1/api/automatic_graph_modification.md",
+      "docs/zh/tensorflow/tf_rec_v1/api/class_reference.md",
+      "docs/zh/tensorflow/tf_rec_v1/api/constant_reference.md"
+    ]
+  },
+  "planSummary": {
+    "modules": 1,
+    "language": "Python",
+    "primaryExtension": ".py"
+  }
+}

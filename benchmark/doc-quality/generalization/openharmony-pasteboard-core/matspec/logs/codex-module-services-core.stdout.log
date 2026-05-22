@@ -1,0 +1,254 @@
+# Core 模块中间设计文档（服务端实现）
+
+## 模块目标与边界
+1. `services/core` 是分布式粘贴板服务的内核服务域，承担系统级剪贴板内容的持久化内存态管理、权限校验、延迟/一次性数据处理、分布式获取与通知分发。  
+   锚点：`[services/core/include/pasteboard_service.h:PasteboardService](services/core/include/pasteboard_service.h)`  
+   依据：该头文件定义了服务入口类、生命周期、关键能力方法与大量成员状态变量。
+
+2. `services/core` 不直接暴露应用层 API（高层 API 在 `framework/` 与 `interfaces/`），而通过 ZIDL/IPC 与客户端交互。  
+   锚点：`[services/core/include/pasteboard_service.h:PasteboardServiceStub](services/core/include/pasteboard_service.h)`  
+   依据：`PasteboardService` 继承自 `PasteboardServiceStub`，并实现多组远端调用方法（如 `SetPasteData`, `GetPasteData`, `HasPasteData` 等）。
+
+3. 该模块与分布式粘贴、窗口焦点、URI 权限、事件订阅链路耦合强，属于“状态机 + 管道”式服务边界，不是单纯的存储层。  
+   锚点：`[services/core/src/pasteboard_service.cpp:SaveData](services/core/src/pasteboard_service.cpp)` / `[services/core/src/pasteboard_service.cpp:GetData](services/core/src/pasteboard_service.cpp)` / `[services/core/include/pasteboard_common_event_subscriber.h:PasteBoardCommonEventSubscriber](services/core/include/pasteboard_common_event_subscriber.h)`
+
+## 目录结构（仅基于给定文件）
+1. 接口/能力声明（include）
+   - `pasteboard_service.h`（核心服务类）
+   - `pasteboard_delay_manager.h`（延迟记录聚合策略）
+   - `pasteboard_disposable_manager.h`（一次性粘贴监听/回调）
+   - `pasteboard_pattern.h`（文本实体识别模式引擎）
+   - `pasteboard_dialog.h`（跨进程进度弹框能力）
+   - `pasteboard_window_manager.h`（焦点窗口查询）
+   - `pasteboard_ability_manager.h`（能力启动与焦点检查）
+   - `pasteboard_common_event_subscriber.h`（公共事件订阅）
+   - `pasteboard_account_state_subscriber.h`（账户状态订阅）
+   - `pasteboard_serv_ipc_interface_code.h`（IPC 命令码）
+   - `ipasteboard_*.h` 系列（观察者与延迟/实体回调接口）
+
+2. 实现（src）
+   - `pasteboard_service.cpp`（主服务实现）
+   - `pasteboard_delay_manager.cpp`（延迟记录排序、取值）
+   - `pasteboard_disposable_manager.cpp`（一次性回调生命周期）
+   - `pasteboard_pattern.cpp`（正则识别规则与 HTML 文本提取）
+   - `pasteboard_dialog.cpp`（弹框能力拉起）
+   - `pasteboard_ability_manager.cpp`（能力管理器远端请求封装）
+   - `pasteboard_window_manager.cpp`（窗口焦点 ID 获取）
+
+## 核心组件（白盒层面）
+1. `PasteboardService`（主控服务）
+   - 主要角色：  
+     - 处理 `Set/Get/Has/Clear/订阅/权限` 等请求入口。  
+     - 组织本地/远端数据路径和状态机（超时、链接、事件通知）。
+   - 关键锚点：
+     - `[services/core/include/pasteboard_service.h:Clear](services/core/include/pasteboard_service.h)`
+     - `[services/core/include/pasteboard_service.h:SetPasteData](services/core/include/pasteboard_service.h)`
+     - `[services/core/include/pasteboard_service.h:GetPasteData](services/core/include/pasteboard_service.h)`
+     - `[services/core/src/pasteboard_service.cpp:ClearInner](services/core/src/pasteboard_service.cpp)`
+     - `[services/core/src/pasteboard_service.cpp:SetPasteData](services/core/src/pasteboard_service.cpp)`
+     - `[services/core/src/pasteboard_service.cpp:GetPasteDataInner](services/core/src/pasteboard_service.cpp)`
+
+2. `DelayManager`（延迟值记录管理）
+   - 关键角色：  
+     - 按记录/条目层级筛选 `std::monostate` 形式的延迟值条目。  
+     - 按 MIME/UTD 优先级排序并回填。  
+   - 关键锚点：
+     - `[services/core/include/pasteboard_delay_manager.h:DelayManager](services/core/include/pasteboard_delay_manager.h)`
+     - `[services/core/src/pasteboard_delay_manager.cpp:GetAllDelayEntryInfo](services/core/src/pasteboard_delay_manager.cpp)`
+     - `[services/core/src/pasteboard_delay_manager.cpp:GetLocalEntryValue](services/core/src/pasteboard_delay_manager.cpp)`
+
+3. `DisposableManager`（一次性读取窗口联动）
+   - 关键角色：  
+     - 注册一次性监听器并按焦点窗口匹配派发。  
+     - 到期后超时回调清理。  
+   - 关键锚点：
+     - `[services/core/include/pasteboard_disposable_manager.h:DisposableManager](services/core/include/pasteboard_disposable_manager.h)`
+     - `[services/core/src/pasteboard_disposable_manager.cpp:AddDisposableInfo](services/core/src/pasteboard_disposable_manager.cpp)`
+     - `[services/core/src/pasteboard_disposable_manager.cpp:TryProcessDisposableData](services/core/src/pasteboard_disposable_manager.cpp)`
+     - `[services/core/src/pasteboard_disposable_manager.cpp:ProcessMatchedInfo](services/core/src/pasteboard_disposable_manager.cpp)`
+
+4. `PatternDetection`（内容识别）
+   - 关键角色：  
+     - 从文本/HTML 中识别 URL、电话号码、邮箱、航班号等。  
+     - 对 HTML 内容先抽取文本再做正则匹配。  
+   - 关键锚点：
+     - `[services/core/include/pasteboard_pattern.h:PatternDetection::Detect](services/core/include/pasteboard_pattern.h)`
+     - `[services/core/src/pasteboard_pattern.cpp:Detect](services/core/src/pasteboard_pattern.cpp)`
+     - `[services/core/src/pasteboard_pattern.cpp:ExtractHtmlContent](services/core/src/pasteboard_pattern.cpp)`
+
+5. `PasteboardDialog` + `PasteboardAbilityManager`
+   - 关键角色：  
+     - 将进度展示参数打包为 `Want`，通过 `AbilityManager` 拉起预置能力。  
+   - 关键锚点：
+     - `[services/core/include/pasteboard_dialog.h:PasteboardDialog::ShowProgress](services/core/include/pasteboard_dialog.h)`
+     - `[services/core/src/pasteboard_dialog.cpp:ShowProgress](services/core/src/pasteboard_dialog.cpp)`
+     - `[services/core/include/pasteboard_ability_manager.h:PasteboardAbilityManager::StartAbility](services/core/include/pasteboard_ability_manager.h)`
+     - `[services/core/src/pasteboard_ability_manager.cpp:CheckUIExtensionIsFocused](services/core/src/pasteboard_ability_manager.cpp)`
+     - `[services/core/src/pasteboard_ability_manager.cpp:StartAbility](services/core/src/pasteboard_ability_manager.cpp)`
+
+6. 观察者与回调接口
+   - 关键角色：  
+     - `IPasteboardChangedObserver`：本地/远端变更与事件回调。  
+     - `IPasteboardDisposableObserver`：一次性读取返回文本/错误码。  
+     - `IEntityRecognitionObserver`：实体识别事件回调。  
+     - `IPasteboardDelayGetter` / `IPasteboardEntryGetter`：延迟内容回拉回调。  
+   - 关键锚点：
+     - `[services/core/include/ipasteboard_changed_observer.h](services/core/include/ipasteboard_changed_observer.h)`
+     - `[services/core/include/ipasteboard_disposable_observer.h](services/core/include/ipasteboard_disposable_observer.h)`
+     - `[services/core/include/ientity_recognition_observer.h](services/core/include/ientity_recognition_observer.h)`
+     - `[services/core/include/ipasteboard_delay_getter.h](services/core/include/ipasteboard_delay_getter.h)`
+     - `[services/core/include/ipasteboard_entry_getter.h](services/core/include/ipasteboard_entry_getter.h)`
+
+## 核心流程
+
+### 流程 A：写入（SetPasteData）
+1. 客户端请求落到 `PasteboardService::SetPasteData(int fd, int64_t rawDataSize, ...)`。  
+   锚点：`[services/core/src/pasteboard_service.cpp:SetPasteData](services/core/src/pasteboard_service.cpp)`
+2. 服务端校验文件描述符和大小后，调用 `WritePasteData` 反序列化 `PasteData`。  
+   锚点：`[services/core/src/pasteboard_service.cpp:WritePasteData](services/core/src/pasteboard_service.cpp)`（在调用链可见）
+3. 通过 `GetDataTokenId` 识别调用方 token 与来源权限约束，再交给 `SaveData` 入仓。  
+   锚点：`[services/core/src/pasteboard_service.cpp:GetDataTokenId](services/core/src/pasteboard_service.cpp)` / `SaveData`
+4. 入仓时会进行：
+   - 数据归属设置、Webview 切片处理、分片记录等；
+   - 设置超时销毁计时器；
+   - 延迟数据回填策略；
+   - 分布式数据设置与本地观察者通知。  
+   锚点：`[services/core/src/pasteboard_service.cpp:SaveData](services/core/src/pasteboard_service.cpp)`
+5. 若注册了 `DisposableManager`，在 `TryProcessDisposableData` 命中时可提前触发一次性回调并结束后续入库路径。  
+   锚点：`[services/core/src/pasteboard_service.cpp:SetPasteData](services/core/src/pasteboard_service.cpp)` / `[services/core/src/pasteboard_disposable_manager.cpp:TryProcessDisposableData](services/core/src/pasteboard_disposable_manager.cpp)`
+
+### 流程 B：读取（GetPasteData）
+1. 调用 `GetPasteData`，并返回 `fd/size/rawData`。  
+   锚点：`[services/core/src/pasteboard_service.cpp:GetPasteData](services/core/src/pasteboard_service.cpp)`
+2. 进入 `GetPasteDataInner` 后做权限校验（`VerifyPermission`）和应用信息映射。  
+   锚点：`[services/core/src/pasteboard_service.cpp:GetPasteDataInner](services/core/src/pasteboard_service.cpp)`
+3. 依据分布式事件与屏幕状态，在 `GetData` 内决策本地数据或远端数据路径：
+   - 有本地可用 + 条件满足：直接 `GetLocalData`
+   - 远端可用：尝试 `GetRemoteData` 并建立/复用 P2P 链路。  
+   锚点：`[services/core/src/pasteboard_service.cpp:GetData](services/core/src/pasteboard_service.cpp)` / `[services/core/include/pasteboard_service.h:OpenP2PLink]`
+4. 将 `PasteData` 编码为 TLV；大数据走 ashmem，小数据走内存向量返回。  
+   锚点：`[services/core/src/pasteboard_service.cpp:DealData](services/core/src/pasteboard_service.cpp)`
+
+### 流程 C：查询/清空
+1. `HasPasteData`、`HasRemoteData` 通过用户态/分发事件+`clips_` 缓存判断。  
+   锚点：`[services/core/src/pasteboard_service.cpp:HasPasteData](services/core/src/pasteboard_service.cpp)` / `[services/core/src/pasteboard_service.cpp:HasRemoteData](services/core/src/pasteboard_service.cpp)`
+2. `HasDataType / HasUtdType / GetMimeTypes` 依赖本地数据或事件路径获取 MIME/UTD。  
+   锚点：`[services/core/include/pasteboard_service.h:HasDataType](services/core/include/pasteboard_service.h)` / `[services/core/src/pasteboard_service.cpp:HasDataType](services/core/src/pasteboard_service.cpp)`（及衍生实现）
+3. `Clear` 与 `ClearByUser` 触发本地/分布式清理，并通知变更事件。  
+   锚点：`[services/core/src/pasteboard_service.cpp:Clear](services/core/src/pasteboard_service.cpp)` / `[services/core/src/pasteboard_service.cpp:ClearInner](services/core/src/pasteboard_service.cpp)`
+
+### 流程 D：观察者与事件
+1. `SubscribeObserver/UnsubscribeObserver/UnsubscribeAllObserver` 按本地/远端/事件位图更新不同观察者 map。  
+   锚点：`[services/core/src/pasteboard_service.cpp:SubscribeObserver](services/core/src/pasteboard_service.cpp)`
+2. 事件发起点从读写和安全检查后，统一调用 `NotifyObservers` 派发。  
+   锚点：`[services/core/src/pasteboard_service.cpp:NotifyObservers](services/core/src/pasteboard_service.cpp)`
+3. 实体识别订阅通过 `SubscribeEntityObserver` 与 `NotifyEntityObservers` 按数据长度过滤触发。  
+   锚点：`[services/core/include/pasteboard_service.h:SubscribeEntityObserver](services/core/include/pasteboard_service.h)` / `[services/core/src/pasteboard_service.cpp:NotifyEntityObservers](services/core/src/pasteboard_service.cpp)`
+
+### 流程 E：延迟数据回填
+1. `DelayManager` 按优先级映射记录延迟字段。  
+   锚点：`[services/core/src/pasteboard_delay_manager.cpp:GetEntryPriority](services/core/src/pasteboard_delay_manager.cpp)`
+2. `GetAllDelayEntryInfo / GetPrimaryDelayEntryInfo` 过滤 monostate entry 并排序。  
+   锚点：`[services/core/src/pasteboard_delay_manager.cpp:GetAllDelayEntryInfo](services/core/src/pasteboard_delay_manager.cpp)`
+3. `GetLocalEntryValue` 调用远端/注入回调 `IPasteboardEntryGetter` 实际抓取缺失内容。  
+   锚点：`[services/core/src/pasteboard_delay_manager.cpp:GetLocalEntryValue](services/core/src/pasteboard_delay_manager.cpp)`
+
+### 流程 F：实体识别与一次性回调
+1. `PatternDetection::Detect` 遍历主记录与可用文本片段，使用正则集合识别实体类型。  
+   锚点：`[services/core/src/pasteboard_pattern.cpp:Detect](services/core/src/pasteboard_pattern.cpp)`
+2. `RecognizePasteData` 触发实体识别后，按监听条件回调 `IEntityRecognitionObserver::OnRecognitionEvent`。  
+   锚点：`[services/core/include/pasteboard_service.h:RecognizePasteData](services/core/include/pasteboard_service.h)` / `pasteboard_service.cpp` 中对应实现链
+3. `DisposableManager` 使用焦点窗口 ID 过滤，一旦匹配立即尝试返回文本，否则清空队列并回报不匹配。  
+   锚点：`[services/core/src/pasteboard_disposable_manager.cpp:TryProcessDisposableData](services/core/src/pasteboard_disposable_manager.cpp)`  
+   锚点：`[services/core/include/pasteboard_window_manager.h:GetFocusWindowId](services/core/include/pasteboard_window_manager.h)`
+
+## 核心结构与关键约束
+1. 数据模型锚点：
+   - `AppInfo`/`HistoryInfo`：应用和历史追踪上下文。  
+     锚点：`[services/core/include/pasteboard_service.h:AppInfo](services/core/include/pasteboard_service.h)`
+   - `PasteDateTime/PasteDateResult`：远端拉取返回元信息。  
+     锚点：`[services/core/include/pasteboard_service.h:PasteDateTime](services/core/include/pasteboard_service.h)`
+   - `DelayEntryInfo`：延迟字段优先级与 record 关系。  
+     锚点：`[services/core/include/pasteboard_delay_manager.h:DelayEntryInfo](services/core/include/pasteboard_delay_manager.h)`
+   - `DisposableInfo`：一次性回调注册元数据（窗口/长度/类型/超时反馈）。  
+     锚点：`[services/core/include/pasteboard_disposable_manager.h:DisposableInfo](services/core/include/pasteboard_disposable_manager.h)`
+
+2. 并发控制：
+   - `pasteDataMutex_`、多个 `std::mutex`、`shared_mutex`、`ConcurrentMap` 在 `PasteboardService` 与管理器内用于并发保护。  
+   - `setting_` 原子位用于防止并发写入竞态。  
+   锚点：`[services/core/include/pasteboard_service.h:pasteDataMutex_](services/core/include/pasteboard_service.h)` / `setting_` / `SetPasteData`
+
+3. 生命周期与容量约束：
+   - 本地最大容量、默认容量、最小容量等在服务头文件定义。  
+     锚点：`[services/core/include/pasteboard_service.h:MIN_LOCAL_CAPACITY](services/core/include/pasteboard_service.h)` / `MAX_LOCAL_CAPACITY`
+   - `AGE` 清理与延时清理 timer 由 `SetDataExpirationTimer` 和 `ClearAgedData` 执行。  
+     锚点：`[services/core/src/pasteboard_service.cpp:SetDataExpirationTimer](services/core/src/pasteboard_service.cpp)` / `ClearAgedData`
+   - 一次性回调超时时间支持参数 `pasteboard.disposable_expiration` 与上下界。  
+     锚点：`[services/core/src/pasteboard_disposable_manager.cpp:AddDisposableInfo](services/core/src/pasteboard_disposable_manager.cpp)`
+
+4. IPC 约束：
+   - 服务命令码、观察者回调码、一次性回调码、实体码集中在 `pasteboard_serv_ipc_interface_code.h`。  
+     锚点：`[services/core/include/pasteboard_serv_ipc_interface_code.h:PasteboardServiceInterfaceCode](services/core/include/pasteboard_serv_ipc_interface_code.h)`
+
+5. 安全与权限约束：
+   - 读写操作与报告路径存在 `VERIFY_PERMISSION` / `Read/Secure` 分支与 App 权限映射。  
+     锚点：`[services/core/src/pasteboard_service.cpp:GetPasteDataInner](services/core/src/pasteboard_service.cpp)`  
+     （内部引用了 `SECURE_PASTE_PERMISSION`、`READ_PASTEBOARD_PERMISSION` 常量）
+
+## 运行手册（含构建 / 校验 / 发布 / 回滚）
+
+### 构建（Build）
+1. 【确认】仓库内存在服务实现与发布配置文件路径（非完整证据）：
+   - Core 实现文件位于 `services/core/src`，声明在 `services/core/include`。  
+2. 【推断】建议按 OpenHarmony 模块标准进行整仓/子系统构建（需结合当前分支的实际构建脚本执行），优先构建 `distributeddatamgr` 相关目标或组件单元。  
+3. 【推断】未在当前证据中检出明确的 `core` 独立 build 命令；如需最小化验证，可在集成流水线中构建该模块所在系统包。
+
+### 校验（Validation）
+1. 【确认】服务启动会执行 `Init` 与 `OnStart` 注册路径，含 `Publish`、监听注册与命令注册。  
+   锚点：`[services/core/src/pasteboard_service.cpp:Init](services/core/src/pasteboard_service.cpp)` / `OnStart`
+2. 【确认】可用以下行为点做冒烟：
+   - `SetPasteData` 后 `HasPasteData` 为真；
+   - `GetMimeTypes` 返回非空；
+   - `GetPasteData` 能获取可反序列化 TLV；
+   - 清空后 `HasPasteData` 变为假。
+3. 【推断】验证方式可通过系统测试或 CLI：`ohos-pasteboard` 命令层可反查服务状态与内容（命令文档在工具子目录）。  
+   依据：`tools/ohos-pasteboard/docs/README.md` 定义 set/get/has/clear 流程。
+
+### 发布（Deployment）
+1. 【确认】服务为 `SystemAbility` 注册对象，需与系统能力启动生命周期配合。  
+   锚点：`[services/core/src/pasteboard_service.cpp:G_REGISTER_RESULT](services/core/src/pasteboard_service.cpp)` / `SystemAbility`
+2. 【推断】部署路径：系统镜像更新后重启相关 system ability；对线上验证需观察 `pasteboard_service` 发布日志与 subscriber 注册状态。
+
+### 回滚（Rollback）
+1. 【推断】回滚策略：
+   - 回退到上一版本二进制；
+   - 重置服务侧配置参数；
+   - 清理或关闭新增回调窗口/事件订阅，避免旧逻辑残留。
+2. 【确认】服务具备 `OnStop`/`~PasteboardService` 的退出清理入口与事件解订阅动作，可用于最小影响回退。  
+   锚点：`[services/core/src/pasteboard_service.cpp:OnStop](services/core/src/pasteboard_service.cpp)`
+
+### 失败模式与处理建议
+1. 写入返回 `invalid param / serialization / prohibit copy / no permission`：优先检查 fd/长度、调用方 token、目标 MIME 与权限。  
+2. 获取返回空或超时：检查 `GetData` 的本地/远端分支是否走中断路径，重点看 `GetValidDistributeEvent`、屏幕状态、P2P 建链状态。  
+3. 一次性回调无响应：检查焦点窗口匹配及参数 `targetWindowId`、`maxLen`、订阅时长配置。  
+4. 观察者不触发：核对 `ObserverType` 组合位与用户 ID 映射是否正确。  
+   锚点：`SubscribeObserver` / `NotifyObservers`
+
+## 调试指引（按模块）
+| 模块 | 常见症状 | 可能根因 | 优先检查文件 |
+|---|---|---|---|
+| `PasteboardService` | `SetPasteData` 成功返回但读取失败 | `SaveData` 后通知链路或分布式状态不一致 | `services/core/src/pasteboard_service.cpp`（`SetPasteData`, `SaveData`, `NotifyObservers`）, `services/core/include/pasteboard_service.h` |
+| `PasteboardService` | `HasRemoteData` 总是 false/false-positive | 屏幕锁状态、`GetValidDistributeEvent` 分支、`HasRemoteUri` 判定 | `services/core/src/pasteboard_service.cpp`（`HasRemoteData`, `GetData`, `HasRemoteUri`） |
+| `DelayManager` | 某些延迟内容一直不回填 | 未命中 monostate 条目或优先级过滤/排序 | `services/core/include/pasteboard_delay_manager.h`, `services/core/src/pasteboard_delay_manager.cpp` |
+| `DisposableManager` | 订阅后无回调或提前超时 | `targetWindowId` 不匹配、权限不符、超时参数 | `services/core/include/pasteboard_disposable_manager.h`, `services/core/src/pasteboard_disposable_manager.cpp`, `services/core/include/pasteboard_window_manager.h` |
+| `PatternDetection` | 实体识别漏报/误报 | 正则表未覆盖、HTML 清洗失败、`hasPlain/hasHTML` 输入不完整 | `services/core/src/pasteboard_pattern.cpp` |
+| 观察者订阅 | 回调不触发 | `ObserverType` 位掩码错误、用户维度 map 错误、注册 UID 校验 | `services/core/src/pasteboard_service.cpp:SubscribeObserver/UnsubscribeObserver/NotifyObservers` |
+| 进度弹框 | 预置弹框不出现 | 参数 `Want` 缺失或 `StartAbility` 失败 | `services/core/src/pasteboard_dialog.cpp`, `services/core/include/pasteboard_ability_manager.h`, `services/core/src/pasteboard_ability_manager.cpp` |
+
+## 确认度与边界
+1. 【确认】本模块文件清单与主要方法、类和常量的来源直接来自 `services/core/include` 与 `services/core/src` 的源码片段；上述结构与流程以代码符号为准。  
+2. 【确认】`pasteboard_event`/`clipPlugin` 的全部实现细节在本范围外未展开，涉及分发链路细节采用接口与调用链推导。  
+3. 【推断】关于 build 命令、系统级重启与部署步骤，当前证据不含确凿命令模板，故采用“流程级”描述并标注为操作链路推断。  
+4. 【缺失证据】源码中未提供 `src` 下部分函数（如完整 `SetPasteData` 上游/下游所有调用点）完整 1:1 运行链条；文档中未超过已读到的函数体范围的行为细节。  
+
+

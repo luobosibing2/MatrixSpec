@@ -1,0 +1,199 @@
+# web_webview 根模块中间设计文档（用于 design.md 合成）
+
+## 1. 模块定位与职责
+
+`web_webview` 是 OpenHarmony WebView 的根聚合模块，承担 Native Web 内核（`nweb`）与多语言运行时（ANI/NAPI/CJ）、系统适配层（OHOS Adapter）、IDL/桥接层（ohos_interface）以及服务侧扩展能力（如 Web Native Messaging）的统一组织与构建输入。其 README 明确目标为基于 Chromium/CEF 的 Native Web 引擎能力（nweb）承载与对外导出（[README](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/README.md)）。
+
+该根目录属于“无显式单一 source module 目录”的工程形态：核心能力分散于 `arkweb_utils`、`interfaces`、`ohos_*`、`sa`、`test` 等并行子树（[模块树](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview)）。
+
+## 2. 目录结构（高层）
+
+### 2.1 核心分区
+
+| 分区 | 主要内容 | 核心职责 |
+|---|---|---|
+| `arkweb_utils/` | 工具与启动辅助库实现 | 引擎版本选择、路径解析、预加载与动态库加载、RELRO 策略 |
+| `interfaces/kits/` | 对外能力定义与多运行时接口（ANI/NAPI/CJ/nativecommon） | 提供 JavaScript/ArkTS/NAPI/CJ 的调用入口与胶水对象 |
+| `ohos_nweb/` | nweb 适配与主入口侧头文件/实现 | OpenHarmony 侧 nweb 对接与辅助封装 |
+| `ohos_interface/` | 公共接口声明 + Ohos glue 生成脚本与桥接实现 | 建立 C++ 与 JS/ABI/桥接层类型系统映射 |
+| `ohos_adapter/` | 众多平台能力适配模块（音频、显示、网络、传感器等） | 为 nweb 运行时提供系统 API 适配 |
+| `ohos_wrapper/` | 外部回调/包装小模块 | 将内部功能向上层暴露的最小包装 |
+| `sa/` | Service Ability 与 Web Native Messaging 服务链路 | 扩展能力的服务端/客户端对接 |
+| `test/` | fuzz / unitest | API 与边界输入验证、稳定性测试 |
+| `copy_files.py`、`bundle.json`、`hisysevent.yaml` | 构建与部署辅助 | 头文件/接口同步、事件定义、模块打包元信息 |
+
+### 2.2 目录覆盖特征（基于给定统计）
+
+- `ohos_interface/ohos_glue/...` 系列包含大量桥接代码（bridge wrappers/ctocpp/cpptoc/脚本），是系统型连接层（数量级最高）。
+- `interfaces/kits/napi` 与 `interfaces/kits/ani/webview/src` 为主调用层，NAPI/ANI 分别提供 JS/ARKTS 入口。
+- `ohos_adapter` 下每个子目录聚焦一个系统领域能力，接口目录与实现目录成对出现（adapter 模式明显）。
+
+## 3. 核心组件与关键实现锚点
+
+## 3.1 `arkweb_utils`（引擎与启动工具核心）
+
+### 3.1.1 关键职责（源确认）
+- 引擎版本抽象与选择：`ArkWebEngineVersion` / `ArkWebEngineType`（含 SYSTEM_DEFAULT、M114、M132、PLAYGROUND、SYSTEM_EVERGREEN），见头文件中的设计说明与约束（[arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h)）。
+- 版本兼容宏（`RETURN_IF_UNSUPPORTED_ENGINE`、`IS_CALLING_FROM_M114`、`IS_CALLING_FROM_M132`）用于运行时 API 兼容隔离（[arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h)）。
+- 应用/命令行参数解析与缓存：`APP_ENGINE_VERSION_PREFIX` 与全局应用元数据变量（`g_bundleName/g_apiVersion/g_appVersion`）存在全局状态与互斥保护（[arkweb_utils.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.cpp)）。
+- 预加载路径与库加载常量、架构分支：`webview_arm64/webview_x86_64/webview_arm` 条件编译下的路径路径常量（[arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp)、[arkweb_utils.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.cpp)）。
+
+### 3.1.2 关键函数/数据（可见符号）
+- `GetArkwebBundleInstallLibPath()`（路径生成）
+- `GetOhosAdptGlueSrcLibPath()`（适配 glue 路径）
+- `PreloadArkWebLibForRender()`（渲染进程预加载入口）
+- `getActiveWebEngineVersion()/getActiveWebEngineType()`（版本决策入口）
+- `SelectWebcoreBeforeProcessRun()`（README 中列出的典型流程，需与源码实现交叉确认）
+- 预加载枚举（`RenderPreLoadMode`）及 `PreloadArkWebEngineLib()`（[arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp)）
+
+## 3.2 `interfaces/kits`（跨运行时接口层）
+
+### 3.2.1 ANI 子系统（Native Messaging）
+- `ETSWebNativeMessagingExtension` 类定义与生命周期方法（`Create`/`Init`/`OnConnect`/`OnStop`/`ConnectNative`/`DisconnectNative`）（[ets_web_native_messaging_extension.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/include/ets_web_native_messaging_extension.h)）。
+- 上下文包装与析构 finalizer：`ETSWebNativeMessagingExtensionContext` + `Finalizer` 使用 `nativeEtsContext` 并在销毁时 `delete`（[ets_web_native_messaging_extension_context.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/ets_web_native_messaging_extension_context.cpp)）。
+- ANI 注册入口：`StsExtensionContextInit` 与 `ANI_Constructor`（[web_native_messaging_extension_context_ani.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/web_native_messaging_extension_context_ani.cpp)）。
+- 连接管理器状态与错误模型：`ConnectNativeAsyncContext`、`AniExtensionConnectionCallback`、`ConnectCallbackType`、`NmErrorCode`（[ani_web_native_messaging_extension_manager.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/manager/include/ani_web_native_messaging_extension_manager.h)）。
+
+### 3.2.2 NAPI / CJ / nativecommon 子树（观察）
+- 文件列表显示完整的 WebView 控制器、Cookie、下载、代理、脚本执行、Scheme Handler、扩展等能力向 JS/CJ/C++ 暴露。
+- 由于未给出实现细节，当前只能在设计层确认“能力域齐全”与“分层实现存在多个语言绑定（napi/cj/ani）”两类事实。
+
+## 3.3 `ohos_interface`（公共接口与桥接层）
+
+- `ohos_interface/include/ohos_nweb` 与 `ohos_interface/include/ohos_adapter` 提供接口类型边界（跨层调用约束）。
+- `ohos_interface/ohos_glue` 提供大量桥接实现与生成文件（`bridge/`、`cpptoc`、`ctocpp`、`scripts`）；
+- 桥接脚本 `ohos_interface/ohos_glue/scripts/bridge_gen.sh` 明确用于生成桥接文件，参数包括模块名与日志/stamp（[bridge_gen.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_interface/ohos_glue/scripts/bridge_gen.sh)）。
+
+## 3.4 `ohos_adapter`（系统能力适配层）
+
+- 覆盖大量领域：aafwk、audio、camera、datashare、display、net_connect、sensor、keystore、print、screen_capture 等。
+- 每一域通常遵循 `include/` 与 `src/` 对应实现，体现“接口-实现分离 + 多适配并行”形态（如 [ohos_adapter/audio_adapter](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_adapter/audio_adapter)）。
+
+## 3.5 `ohos_nweb` 与 `ohos_wrapper`（核心运行时适配）
+
+- `ohos_nweb/include` 与 `src` 定义/实现 nweb 平台 helper 与初始化/日志/快照/回调等关键适配。
+- `ohos_wrapper/src/nweb_location_wrapper.cpp` 提供独立包装逻辑点（[ohos_wrapper/src/nweb_location_wrapper.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_wrapper/src/nweb_location_wrapper.cpp)）。
+
+## 3.6 `sa/`（服务链路）
+
+- 包含 `web_native_messaging` 客户端与服务端（连接回调、IPC、请求、延迟退出、加载回调等），并带测试与 JSON 配置元数据（如 `web_native_messaging/8610.json`）。
+- 与 ANI extension 的 connect/disconnect/error code 逻辑构成端到端链路闭环。
+
+## 3.7 `test/`（质量保障）
+
+- fuzztest 覆盖主能力与多个 adapter（例如 `test/fuzztest/ohos_nweb/setwebdebug_fuzzer`）。
+- unittest 覆盖 core、adapter、nweb、native messaging 与 interface。
+
+## 4. 核心流程（可确认与推断）
+
+### 4.1 引擎选择与加载流程（高置信）
+1. 启动或构建前期从命令行/参数与系统参数读取 engine 选择信号（文档与宏定义可见；源码中存在对应状态与常量）。
+2. 调用 `setActiveWebEngineVersion`/`getActiveWebEngineVersion` 维护运行态版本（[arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h)）。
+3. 在 Browser/Render 路径调用预加载/加载：
+   - `PreloadArkWebLibForRender()` 与内部 `PreloadArkWebEngineLib()`，依据 `RenderPreLoadMode` 与架构分支加载系统/沙箱库路径（[arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp)）。
+
+### 4.2 native messaging 生命周期流程（高置信）
+1. 能力定义与对象通过 ANI 头文件暴露类/函数（[ets_web_native_messaging_extension.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/include/ets_web_native_messaging_extension.h)）。
+2. Context 包装在 `ETSWebNativeMessagingExtensionContext` 中持有 `std::shared_ptr<WebNativeMessagingExtensionContext>` 并管理生命周期/销毁行为（[ets_web_native_messaging_extension_context.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/ets_web_native_messaging_extension_context.cpp)）。
+3. 模块初始化通过 ANI 构造钩子进入（`ANI_Constructor`）并返回版本（[web_native_messaging_extension_context_ani.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/web_native_messaging_extension_context_ani.cpp)）。
+
+### 4.3 桥接生成与同步流程（高置信）
+1. 接口定义变更后通过脚本生成对应 bridge 文件。
+2. `bridge_gen.sh` 支持按模块生成（`nweb`/`adapter`/全部）并可输出日志与 stamp（[bridge_gen.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_interface/ohos_glue/scripts/bridge_gen.sh)）。
+3. `copy_files.py` 用于拷贝 `ohos_interface` 与 `ohos_nweb`/`ohos_adapter` 的 include 到目标目录，支持目录/文件级同步（[copy_files.py](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/copy_files.py)）。
+
+## 5. 接口与数据结构清单（关键项）
+
+### 5.1 ArkWeb 工具层
+- `enum class ArkWebEngineVersion`
+- `enum class ArkWebEngineType`
+- `enum class RenderPreLoadMode`
+- `struct/类级全局状态`: `g_appEngineVersion`、`g_activeEngineVersion`、`g_bundleName`、`g_apiVersion`、`g_appVersion`、`g_appInfoMutex`
+- API 网关（命名层级）：`getActiveWebEngineVersion`、`setActiveWebEngineVersion`、`IsActiveWebEngineEvergreen`、`GetArkwebLibPath`、`GetArkwebInstallPath`、`DlopenArkWebLib`、`DlcloseArkWebLib`、`ArkWebBridgeHelperSharedInit`
+
+### 5.2 native messaging（ANI）
+- `class ETSWebNativeMessagingExtension`
+- `class ETSWebNativeMessagingExtensionContext`
+- `struct CommonAsyncContext`
+- `struct ConnectNativeAsyncContext`
+- `enum class ConnectCallbackType`
+- `enum class NmErrorCode`
+- `ANI_Constructor`（模块加载钩子）
+
+### 5.3 适配生成/桥接
+- 桥接脚本入口：`bridge_gen.sh`
+- 生成配置：`bridge_generation.conf.json`（同目录）
+- 生成器脚本族：`make_*.py` 与 `file_parser.py`（目录级证据）
+
+## 6. 关键约束与边界条件
+
+| 约束类别 | 约束内容 | 依据 | 影响 |
+|---|---|---|---|
+| 依赖约束（ArkWeb 工具库） | `libarkweb_utils.so` 不应新增额外系统依赖；避免依赖 WebView 核心实现；保持轻量 | arkweb_utils 说明文档与头文件宏化结构 | 影响可维护性与循环依赖风险 |
+| 架构约束 | `webview_x86_64` 下若干库路径为空常量（预加载路径差异明显） | [arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp) | x86_64 上需关注运行时加载降级行为 |
+| 安全/检测约束 | ASAN 分支下禁用某些优化（如 RELRO） | [arkweb_utils.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_web_view/arkweb_utils/arkweb_utils.cpp) 文本中条件编译提示 | 避免地址保护与 sanitizer 冲突 |
+| 内存约束 | `RAM_SIZE_8G` 分支影响预加载策略 | [arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp) | 小内存设备可能跳过加载 |
+| 兼容性约束 | API 逐版本兼容守卫通过宏实现（M114/M132 判断） | [arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h) | 避免调用不支持功能 |
+| 跨层边界 | 多语言接口与平台 adapter 双向绑定；不应在高层直接依赖过细平台实现 | 分层目录与 glue 生成链路 | 改动需同步桥接与接口定义 |
+
+## 7. 调试指南（每个主要模块）
+
+| 模块 | 典型症状 | 可能来源 | 建议检查 |
+|---|---|---|---|
+| `arkweb_utils` | 引擎版本与设备实际不一致 | 版本参数读取、系统参数、配置文件、全局状态未刷新 | [arkweb_utils.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.cpp), [arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h) |
+| `arkweb_utils` 预加载 | 启动时库加载失败/崩溃 | 预加载路径拼接、架构分支、dlopen 失败 | [arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp), `nweb_log` 日志点 |
+| `interfaces/ani/webnativemessaging` | ANI 上下文对象泄漏或回调失效 | `Finalizer` 未触发、`nativeEtsContext` 管理异常 | [ets_web_native_messaging_extension_context.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/ets_web_native_messaging_extension_context.cpp) |
+| `interfaces/ani/webnativemessaging` | 能力注册/模块导入失败 | `ANI_Constructor` 注册失败或运行环境未进入正确版本 | [web_native_messaging_extension_context_ani.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/web_native_messaging_extension_context_ani.cpp) |
+| `ohos_interface/ohos_glue` | 编译找不到 glue 符号 | 生成脚本未运行、目录未同步 | [ohos_interface/ohos_glue/scripts/bridge_gen.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_interface/ohos_glue/scripts/bridge_gen.sh), [copy_files.py](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/copy_files.py) |
+| `ohos_adapter`  | 某适配接口调用崩溃或行为异常 | adapter 实现与接口声明版本不一致 | 对应 `ohos_adapter/<domain>/include` 与 `src` 文件逐对对照 |
+| `ohos_nweb` | Web 内核初始化/调试开关异常 | 参数解析、初始化参数、日志策略 | [ohos_nweb](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_nweb/include), [setwebdebug_fuzzer.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/test/fuzztest/ohos_nweb/setwebdebug_fuzzer/setwebdebug_fuzzer.cpp) |
+| `sa/web_native_messaging` | 客户端/服务端连接失败 | IPC 回调签名、权限/Want 校验 | [sa/web_native_messaging/client](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/sa/web_native_messaging/client), [sa/web_native_messaging/service](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/sa/web_native_messaging/service) |
+
+## 8. 运行手册（Runbook）
+
+### 8.1 构建（Build）
+1. 确认接口/桥接变更后执行桥接生成（按模块或全量）：  
+   `ohos_interface/ohos_glue/scripts/bridge_gen.sh [nweb|adapter]`（脚本参数可见）  
+   -> 触发 `bridge_generation.conf.json` 与脚本群生成目标代码  
+2. 通过仓库标准 GN/HB 流水线执行对应目标构建（推断，按现有工程习惯）。
+3. 生成期如涉到分发树，可使用 `copy_files.py` 同步接口与 glue（脚本逻辑明确支持目录/文件复制）。
+
+### 8.2 验证（Validation）
+1. 构建层：优先执行最小 fuzz/unittest 目标（证据示例：`ohos_fuzztest("SetWebDebugFuzzTest")` 与对应 `BUILD.gn`/`project.xml`/cpp 文件）。
+2. 接口层：针对 API 变更运行关联单测（特别是 `test/unittest/interface_native_test`、`ohos_adapter` 子目录测试）。
+3. 运行时：验证引擎选择日志、预加载行为、Native messaging 注册。
+
+### 8.3 部署（Deployment）
+1. 输出打包时保证 `bundle.json` 与接口头文件集合一致（根目录文件存在且与拷贝脚本一致）。
+2. 事件统计使用 `hisysevent.yaml` 保持与事件模型一致（[hisysevent.yaml](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/hisysevent.yaml)）。
+
+### 8.4 回滚（Rollback）
+1. 回滚优先级：先回滚生成物（bridge/copy 目录）到上次可用版本，再回滚源码层变更。
+2. 如仅为参数/配置回退：恢复 `hisysevent`、`bundle`、`arkweb_utils` 配置参数与版本文件读取输入。
+3. 若桥接破坏更大，禁用新增模块入口，先维持原有 `nweb` 基线路径。
+
+### 8.5 失败模式说明（Failure mode）
+- 版本判定错误：原因常见于命令行参数/系统参数读取优先级，表现为 API 行为偏差。
+- 预加载失败：路径空字符串或 dlopen 失败（特别在 x86_64 架构）。
+- 绑定注册失败：ANI 构造函数未初始化返回码异常，导致运行时方法不可见。
+- 跨层符号缺失：桥接未生成或未同步拷贝，常在链接/启动期爆“未定义符号”。
+
+## 9. 确认边界与推断说明
+
+### 9.1 已确认（源级证据）
+- `web_webview` 的功能定位与架构大方向（README 与 README_ZH）
+- `arkweb_utils` 的版本/预加载/路径管理核心要素（`arkweb_utils.*` 与 `arkweb_preload_common.*`）
+- ANI Native Messaging 的类/函数/错误模型与初始化钩子（相关 ANI 头文件与源文件）
+- 桥接脚本与复制脚本存在并用于构建链路
+- 测试体系存在 fuzz 与 unit 分层（`test` 下目录及 `BUILD.gn` 片段）
+
+### 9.2 推断（未直接展开的证据）
+- `web_preload` 与 `nweb` 主流程的完整时序（基于文件职责与命名）
+- 具体接口返回语义及跨模块交互细节（因部分源文件未逐行提供）
+- 构建系统整体顶层 invocations（因未提供 `build.gn` 顶层片段）
+
+### 9.3 缺失证据（建议补充）
+- `ohos_nweb/src` 与 `ohos_nweb/include` 的关键实现细节（如 init/load 生命周期真实入口）
+- `ohos_interface/ohos_glue` 与 `interfaces/kits/napi` 的生成产物与运行时绑定映射完整表
+- `bundle.json` 的真实构建输出目标与依赖图
+

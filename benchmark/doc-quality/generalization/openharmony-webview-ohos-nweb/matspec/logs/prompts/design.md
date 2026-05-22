@@ -1,0 +1,2896 @@
+You are the MatSpec design.md generation runner.
+Task: synthesize a project-level implementation design document from module documents.
+
+硬性输出规则：
+1. 只输出最终 Markdown 正文，不要添加解释、前言或后记。
+2. 不要用 ```md 或其他代码围栏包裹整篇文档。
+3. 不要提及 sandbox、filesystem、read-only mode、无法写文件或“复制到仓库”等运行环境说明。
+4. 默认使用中文输出。
+5. 不要声称文件已经写入；MatSpec CLI 会保存产物。
+
+Template requirements:
+1. Strictly use the main section structure and headings from the DESIGN template below.
+2. Preserve section meaning, but replace placeholders with real project content.
+3. Do not delete non-applicable sections; write "No explicit design" or "To be confirmed" and explain the basis.
+4. design.md is a white-box implementation design and may include technology stack, modules, APIs, data model, deployment, security, and observability.
+
+DESIGN template:
+# [组件名称] 实现设计
+
+## 1. 设计概述
+
+### 1.1 设计目标
+
+[描述该设计必须满足的技术目标。]
+
+### 1.2 设计约束
+
+1. [约束 1]
+2. [约束 2]
+
+## 2. 系统架构
+
+### 2.1 架构概述
+
+[描述运行时架构和主要依赖。]
+
+### 2.2 模块职责
+
+| 模块 | 职责 | 关键文件 |
+|------|------|----------|
+| [模块] | [职责] | [文件] |
+
+### 2.3 技术栈
+
+| 层次 | 技术 | 用途 |
+|------|------|------|
+| [层次] | [技术] | [用途] |
+
+## 3. 数据模型
+
+### 3.1 实体与结构
+
+| 实体 | 用途 | 重要字段 |
+|------|------|----------|
+| [实体] | [用途] | [字段] |
+
+### 3.2 持久化
+
+[描述存储、索引、迁移和兼容性策略。]
+
+## 4. 接口设计
+
+### 4.1 对外接口
+
+| 接口 | 调用方 | 输入 | 输出 |
+|------|--------|------|------|
+| [接口] | [调用方] | [输入] | [输出] |
+
+### 4.2 内部接口
+
+[描述模块间调用边界。]
+
+## 5. 核心流程设计
+
+### 5.1 [流程名称]
+
+[描述主要执行流程、关键分支和异常路径。]
+
+## 6. 算法设计
+
+[描述关键算法、规则计算或决策逻辑；如无复杂算法，说明不适用。]
+
+## 7. 缓存设计
+
+[描述缓存对象、失效策略、一致性和降级行为；如无缓存，说明不适用。]
+
+## 8. 异常处理设计
+
+[描述错误分类、用户可见错误、重试、补偿和告警策略。]
+
+## 9. 监控与日志
+
+[描述关键指标、日志字段、审计要求和排障入口。]
+
+## 10. 安全设计
+
+[描述认证、授权、数据保护、输入校验和依赖安全。]
+
+Project: web_webview
+Language: C/C++
+Modules:
+- Project Root: .
+
+Module documents:
+# web_webview 根模块中间设计文档（用于 design.md 合成）
+
+## 1. 模块定位与职责
+
+`web_webview` 是 OpenHarmony WebView 的根聚合模块，承担 Native Web 内核（`nweb`）与多语言运行时（ANI/NAPI/CJ）、系统适配层（OHOS Adapter）、IDL/桥接层（ohos_interface）以及服务侧扩展能力（如 Web Native Messaging）的统一组织与构建输入。其 README 明确目标为基于 Chromium/CEF 的 Native Web 引擎能力（nweb）承载与对外导出（[README](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/README.md)）。
+
+该根目录属于“无显式单一 source module 目录”的工程形态：核心能力分散于 `arkweb_utils`、`interfaces`、`ohos_*`、`sa`、`test` 等并行子树（[模块树](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview)）。
+
+## 2. 目录结构（高层）
+
+### 2.1 核心分区
+
+| 分区 | 主要内容 | 核心职责 |
+|---|---|---|
+| `arkweb_utils/` | 工具与启动辅助库实现 | 引擎版本选择、路径解析、预加载与动态库加载、RELRO 策略 |
+| `interfaces/kits/` | 对外能力定义与多运行时接口（ANI/NAPI/CJ/nativecommon） | 提供 JavaScript/ArkTS/NAPI/CJ 的调用入口与胶水对象 |
+| `ohos_nweb/` | nweb 适配与主入口侧头文件/实现 | OpenHarmony 侧 nweb 对接与辅助封装 |
+| `ohos_interface/` | 公共接口声明 + Ohos glue 生成脚本与桥接实现 | 建立 C++ 与 JS/ABI/桥接层类型系统映射 |
+| `ohos_adapter/` | 众多平台能力适配模块（音频、显示、网络、传感器等） | 为 nweb 运行时提供系统 API 适配 |
+| `ohos_wrapper/` | 外部回调/包装小模块 | 将内部功能向上层暴露的最小包装 |
+| `sa/` | Service Ability 与 Web Native Messaging 服务链路 | 扩展能力的服务端/客户端对接 |
+| `test/` | fuzz / unitest | API 与边界输入验证、稳定性测试 |
+| `copy_files.py`、`bundle.json`、`hisysevent.yaml` | 构建与部署辅助 | 头文件/接口同步、事件定义、模块打包元信息 |
+
+### 2.2 目录覆盖特征（基于给定统计）
+
+- `ohos_interface/ohos_glue/...` 系列包含大量桥接代码（bridge wrappers/ctocpp/cpptoc/脚本），是系统型连接层（数量级最高）。
+- `interfaces/kits/napi` 与 `interfaces/kits/ani/webview/src` 为主调用层，NAPI/ANI 分别提供 JS/ARKTS 入口。
+- `ohos_adapter` 下每个子目录聚焦一个系统领域能力，接口目录与实现目录成对出现（adapter 模式明显）。
+
+## 3. 核心组件与关键实现锚点
+
+## 3.1 `arkweb_utils`（引擎与启动工具核心）
+
+### 3.1.1 关键职责（源确认）
+- 引擎版本抽象与选择：`ArkWebEngineVersion` / `ArkWebEngineType`（含 SYSTEM_DEFAULT、M114、M132、PLAYGROUND、SYSTEM_EVERGREEN），见头文件中的设计说明与约束（[arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h)）。
+- 版本兼容宏（`RETURN_IF_UNSUPPORTED_ENGINE`、`IS_CALLING_FROM_M114`、`IS_CALLING_FROM_M132`）用于运行时 API 兼容隔离（[arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h)）。
+- 应用/命令行参数解析与缓存：`APP_ENGINE_VERSION_PREFIX` 与全局应用元数据变量（`g_bundleName/g_apiVersion/g_appVersion`）存在全局状态与互斥保护（[arkweb_utils.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.cpp)）。
+- 预加载路径与库加载常量、架构分支：`webview_arm64/webview_x86_64/webview_arm` 条件编译下的路径路径常量（[arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp)、[arkweb_utils.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.cpp)）。
+
+### 3.1.2 关键函数/数据（可见符号）
+- `GetArkwebBundleInstallLibPath()`（路径生成）
+- `GetOhosAdptGlueSrcLibPath()`（适配 glue 路径）
+- `PreloadArkWebLibForRender()`（渲染进程预加载入口）
+- `getActiveWebEngineVersion()/getActiveWebEngineType()`（版本决策入口）
+- `SelectWebcoreBeforeProcessRun()`（README 中列出的典型流程，需与源码实现交叉确认）
+- 预加载枚举（`RenderPreLoadMode`）及 `PreloadArkWebEngineLib()`（[arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp)）
+
+## 3.2 `interfaces/kits`（跨运行时接口层）
+
+### 3.2.1 ANI 子系统（Native Messaging）
+- `ETSWebNativeMessagingExtension` 类定义与生命周期方法（`Create`/`Init`/`OnConnect`/`OnStop`/`ConnectNative`/`DisconnectNative`）（[ets_web_native_messaging_extension.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/include/ets_web_native_messaging_extension.h)）。
+- 上下文包装与析构 finalizer：`ETSWebNativeMessagingExtensionContext` + `Finalizer` 使用 `nativeEtsContext` 并在销毁时 `delete`（[ets_web_native_messaging_extension_context.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/ets_web_native_messaging_extension_context.cpp)）。
+- ANI 注册入口：`StsExtensionContextInit` 与 `ANI_Constructor`（[web_native_messaging_extension_context_ani.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/web_native_messaging_extension_context_ani.cpp)）。
+- 连接管理器状态与错误模型：`ConnectNativeAsyncContext`、`AniExtensionConnectionCallback`、`ConnectCallbackType`、`NmErrorCode`（[ani_web_native_messaging_extension_manager.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/manager/include/ani_web_native_messaging_extension_manager.h)）。
+
+### 3.2.2 NAPI / CJ / nativecommon 子树（观察）
+- 文件列表显示完整的 WebView 控制器、Cookie、下载、代理、脚本执行、Scheme Handler、扩展等能力向 JS/CJ/C++ 暴露。
+- 由于未给出实现细节，当前只能在设计层确认“能力域齐全”与“分层实现存在多个语言绑定（napi/cj/ani）”两类事实。
+
+## 3.3 `ohos_interface`（公共接口与桥接层）
+
+- `ohos_interface/include/ohos_nweb` 与 `ohos_interface/include/ohos_adapter` 提供接口类型边界（跨层调用约束）。
+- `ohos_interface/ohos_glue` 提供大量桥接实现与生成文件（`bridge/`、`cpptoc`、`ctocpp`、`scripts`）；
+- 桥接脚本 `ohos_interface/ohos_glue/scripts/bridge_gen.sh` 明确用于生成桥接文件，参数包括模块名与日志/stamp（[bridge_gen.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_interface/ohos_glue/scripts/bridge_gen.sh)）。
+
+## 3.4 `ohos_adapter`（系统能力适配层）
+
+- 覆盖大量领域：aafwk、audio、camera、datashare、display、net_connect、sensor、keystore、print、screen_capture 等。
+- 每一域通常遵循 `include/` 与 `src/` 对应实现，体现“接口-实现分离 + 多适配并行”形态（如 [ohos_adapter/audio_adapter](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_adapter/audio_adapter)）。
+
+## 3.5 `ohos_nweb` 与 `ohos_wrapper`（核心运行时适配）
+
+- `ohos_nweb/include` 与 `src` 定义/实现 nweb 平台 helper 与初始化/日志/快照/回调等关键适配。
+- `ohos_wrapper/src/nweb_location_wrapper.cpp` 提供独立包装逻辑点（[ohos_wrapper/src/nweb_location_wrapper.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_wrapper/src/nweb_location_wrapper.cpp)）。
+
+## 3.6 `sa/`（服务链路）
+
+- 包含 `web_native_messaging` 客户端与服务端（连接回调、IPC、请求、延迟退出、加载回调等），并带测试与 JSON 配置元数据（如 `web_native_messaging/8610.json`）。
+- 与 ANI extension 的 connect/disconnect/error code 逻辑构成端到端链路闭环。
+
+## 3.7 `test/`（质量保障）
+
+- fuzztest 覆盖主能力与多个 adapter（例如 `test/fuzztest/ohos_nweb/setwebdebug_fuzzer`）。
+- unittest 覆盖 core、adapter、nweb、native messaging 与 interface。
+
+## 4. 核心流程（可确认与推断）
+
+### 4.1 引擎选择与加载流程（高置信）
+1. 启动或构建前期从命令行/参数与系统参数读取 engine 选择信号（文档与宏定义可见；源码中存在对应状态与常量）。
+2. 调用 `setActiveWebEngineVersion`/`getActiveWebEngineVersion` 维护运行态版本（[arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h)）。
+3. 在 Browser/Render 路径调用预加载/加载：
+   - `PreloadArkWebLibForRender()` 与内部 `PreloadArkWebEngineLib()`，依据 `RenderPreLoadMode` 与架构分支加载系统/沙箱库路径（[arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp)）。
+
+### 4.2 native messaging 生命周期流程（高置信）
+1. 能力定义与对象通过 ANI 头文件暴露类/函数（[ets_web_native_messaging_extension.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/include/ets_web_native_messaging_extension.h)）。
+2. Context 包装在 `ETSWebNativeMessagingExtensionContext` 中持有 `std::shared_ptr<WebNativeMessagingExtensionContext>` 并管理生命周期/销毁行为（[ets_web_native_messaging_extension_context.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/ets_web_native_messaging_extension_context.cpp)）。
+3. 模块初始化通过 ANI 构造钩子进入（`ANI_Constructor`）并返回版本（[web_native_messaging_extension_context_ani.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/web_native_messaging_extension_context_ani.cpp)）。
+
+### 4.3 桥接生成与同步流程（高置信）
+1. 接口定义变更后通过脚本生成对应 bridge 文件。
+2. `bridge_gen.sh` 支持按模块生成（`nweb`/`adapter`/全部）并可输出日志与 stamp（[bridge_gen.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_interface/ohos_glue/scripts/bridge_gen.sh)）。
+3. `copy_files.py` 用于拷贝 `ohos_interface` 与 `ohos_nweb`/`ohos_adapter` 的 include 到目标目录，支持目录/文件级同步（[copy_files.py](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/copy_files.py)）。
+
+## 5. 接口与数据结构清单（关键项）
+
+### 5.1 ArkWeb 工具层
+- `enum class ArkWebEngineVersion`
+- `enum class ArkWebEngineType`
+- `enum class RenderPreLoadMode`
+- `struct/类级全局状态`: `g_appEngineVersion`、`g_activeEngineVersion`、`g_bundleName`、`g_apiVersion`、`g_appVersion`、`g_appInfoMutex`
+- API 网关（命名层级）：`getActiveWebEngineVersion`、`setActiveWebEngineVersion`、`IsActiveWebEngineEvergreen`、`GetArkwebLibPath`、`GetArkwebInstallPath`、`DlopenArkWebLib`、`DlcloseArkWebLib`、`ArkWebBridgeHelperSharedInit`
+
+### 5.2 native messaging（ANI）
+- `class ETSWebNativeMessagingExtension`
+- `class ETSWebNativeMessagingExtensionContext`
+- `struct CommonAsyncContext`
+- `struct ConnectNativeAsyncContext`
+- `enum class ConnectCallbackType`
+- `enum class NmErrorCode`
+- `ANI_Constructor`（模块加载钩子）
+
+### 5.3 适配生成/桥接
+- 桥接脚本入口：`bridge_gen.sh`
+- 生成配置：`bridge_generation.conf.json`（同目录）
+- 生成器脚本族：`make_*.py` 与 `file_parser.py`（目录级证据）
+
+## 6. 关键约束与边界条件
+
+| 约束类别 | 约束内容 | 依据 | 影响 |
+|---|---|---|---|
+| 依赖约束（ArkWeb 工具库） | `libarkweb_utils.so` 不应新增额外系统依赖；避免依赖 WebView 核心实现；保持轻量 | arkweb_utils 说明文档与头文件宏化结构 | 影响可维护性与循环依赖风险 |
+| 架构约束 | `webview_x86_64` 下若干库路径为空常量（预加载路径差异明显） | [arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp) | x86_64 上需关注运行时加载降级行为 |
+| 安全/检测约束 | ASAN 分支下禁用某些优化（如 RELRO） | [arkweb_utils.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_web_view/arkweb_utils/arkweb_utils.cpp) 文本中条件编译提示 | 避免地址保护与 sanitizer 冲突 |
+| 内存约束 | `RAM_SIZE_8G` 分支影响预加载策略 | [arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp) | 小内存设备可能跳过加载 |
+| 兼容性约束 | API 逐版本兼容守卫通过宏实现（M114/M132 判断） | [arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h) | 避免调用不支持功能 |
+| 跨层边界 | 多语言接口与平台 adapter 双向绑定；不应在高层直接依赖过细平台实现 | 分层目录与 glue 生成链路 | 改动需同步桥接与接口定义 |
+
+## 7. 调试指南（每个主要模块）
+
+| 模块 | 典型症状 | 可能来源 | 建议检查 |
+|---|---|---|---|
+| `arkweb_utils` | 引擎版本与设备实际不一致 | 版本参数读取、系统参数、配置文件、全局状态未刷新 | [arkweb_utils.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.cpp), [arkweb_utils.h](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_utils.h) |
+| `arkweb_utils` 预加载 | 启动时库加载失败/崩溃 | 预加载路径拼接、架构分支、dlopen 失败 | [arkweb_preload_common.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/arkweb_utils/arkweb_preload_common.cpp), `nweb_log` 日志点 |
+| `interfaces/ani/webnativemessaging` | ANI 上下文对象泄漏或回调失效 | `Finalizer` 未触发、`nativeEtsContext` 管理异常 | [ets_web_native_messaging_extension_context.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/ets_web_native_messaging_extension_context.cpp) |
+| `interfaces/ani/webnativemessaging` | 能力注册/模块导入失败 | `ANI_Constructor` 注册失败或运行环境未进入正确版本 | [web_native_messaging_extension_context_ani.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/interfaces/kits/ani/webnativemessagingextension/ability/src/web_native_messaging_extension_context_ani.cpp) |
+| `ohos_interface/ohos_glue` | 编译找不到 glue 符号 | 生成脚本未运行、目录未同步 | [ohos_interface/ohos_glue/scripts/bridge_gen.sh](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_interface/ohos_glue/scripts/bridge_gen.sh), [copy_files.py](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/copy_files.py) |
+| `ohos_adapter`  | 某适配接口调用崩溃或行为异常 | adapter 实现与接口声明版本不一致 | 对应 `ohos_adapter/<domain>/include` 与 `src` 文件逐对对照 |
+| `ohos_nweb` | Web 内核初始化/调试开关异常 | 参数解析、初始化参数、日志策略 | [ohos_nweb](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/ohos_nweb/include), [setwebdebug_fuzzer.cpp](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/test/fuzztest/ohos_nweb/setwebdebug_fuzzer/setwebdebug_fuzzer.cpp) |
+| `sa/web_native_messaging` | 客户端/服务端连接失败 | IPC 回调签名、权限/Want 校验 | [sa/web_native_messaging/client](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/sa/web_native_messaging/client), [sa/web_native_messaging/service](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/sa/web_native_messaging/service) |
+
+## 8. 运行手册（Runbook）
+
+### 8.1 构建（Build）
+1. 确认接口/桥接变更后执行桥接生成（按模块或全量）：  
+   `ohos_interface/ohos_glue/scripts/bridge_gen.sh [nweb|adapter]`（脚本参数可见）  
+   -> 触发 `bridge_generation.conf.json` 与脚本群生成目标代码  
+2. 通过仓库标准 GN/HB 流水线执行对应目标构建（推断，按现有工程习惯）。
+3. 生成期如涉到分发树，可使用 `copy_files.py` 同步接口与 glue（脚本逻辑明确支持目录/文件复制）。
+
+### 8.2 验证（Validation）
+1. 构建层：优先执行最小 fuzz/unittest 目标（证据示例：`ohos_fuzztest("SetWebDebugFuzzTest")` 与对应 `BUILD.gn`/`project.xml`/cpp 文件）。
+2. 接口层：针对 API 变更运行关联单测（特别是 `test/unittest/interface_native_test`、`ohos_adapter` 子目录测试）。
+3. 运行时：验证引擎选择日志、预加载行为、Native messaging 注册。
+
+### 8.3 部署（Deployment）
+1. 输出打包时保证 `bundle.json` 与接口头文件集合一致（根目录文件存在且与拷贝脚本一致）。
+2. 事件统计使用 `hisysevent.yaml` 保持与事件模型一致（[hisysevent.yaml](C:/Users/kvenu/playground/codewiki-community/benchmark/gitcode/repos/openharmony/web_webview/hisysevent.yaml)）。
+
+### 8.4 回滚（Rollback）
+1. 回滚优先级：先回滚生成物（bridge/copy 目录）到上次可用版本，再回滚源码层变更。
+2. 如仅为参数/配置回退：恢复 `hisysevent`、`bundle`、`arkweb_utils` 配置参数与版本文件读取输入。
+3. 若桥接破坏更大，禁用新增模块入口，先维持原有 `nweb` 基线路径。
+
+### 8.5 失败模式说明（Failure mode）
+- 版本判定错误：原因常见于命令行参数/系统参数读取优先级，表现为 API 行为偏差。
+- 预加载失败：路径空字符串或 dlopen 失败（特别在 x86_64 架构）。
+- 绑定注册失败：ANI 构造函数未初始化返回码异常，导致运行时方法不可见。
+- 跨层符号缺失：桥接未生成或未同步拷贝，常在链接/启动期爆“未定义符号”。
+
+## 9. 确认边界与推断说明
+
+### 9.1 已确认（源级证据）
+- `web_webview` 的功能定位与架构大方向（README 与 README_ZH）
+- `arkweb_utils` 的版本/预加载/路径管理核心要素（`arkweb_utils.*` 与 `arkweb_preload_common.*`）
+- ANI Native Messaging 的类/函数/错误模型与初始化钩子（相关 ANI 头文件与源文件）
+- 桥接脚本与复制脚本存在并用于构建链路
+- 测试体系存在 fuzz 与 unit 分层（`test` 下目录及 `BUILD.gn` 片段）
+
+### 9.2 推断（未直接展开的证据）
+- `web_preload` 与 `nweb` 主流程的完整时序（基于文件职责与命名）
+- 具体接口返回语义及跨模块交互细节（因部分源文件未逐行提供）
+- 构建系统整体顶层 invocations（因未提供 `build.gn` 顶层片段）
+
+### 9.3 缺失证据（建议补充）
+- `ohos_nweb/src` 与 `ohos_nweb/include` 的关键实现细节（如 init/load 生命周期真实入口）
+- `ohos_interface/ohos_glue` 与 `interfaces/kits/napi` 的生成产物与运行时绑定映射完整表
+- `bundle.json` 的真实构建输出目标与依赖图
+
+Project README/docs evidence:
+Directory Source File Stats:
+ohos_interface/ohos_glue/ohos_adapter/bridge/webcore/ (295 files, 18235 lines)
+ohos_interface/ohos_glue/ohos_adapter/bridge/webview/ (292 files, 17210 lines)
+ohos_interface/ohos_glue/ohos_nweb/bridge/webview/ (246 files, 22925 lines)
+ohos_interface/ohos_glue/ohos_nweb/bridge/webcore/ (244 files, 22166 lines)
+ohos_interface/ohos_glue/ohos_nweb/include/ (137 files, 12005 lines)
+ohos_interface/include/ohos_nweb/        (68 files, 9957 lines)
+ohos_interface/ohos_glue/ohos_adapter/include/ (58 files, 5425 lines)
+ohos_interface/include/ohos_adapter/     (53 files, 5630 lines)
+interfaces/kits/napi/webviewcontroller/  (42 files, 16422 lines)
+interfaces/kits/ani/webview/src/webviewcontroller/ (40 files, 7711 lines)
+interfaces/kits/cj/src/                  (32 files, 9281 lines)
+interfaces/kits/cj/include/              (32 files, 2880 lines)
+interfaces/kits/nativecommon/            (19 files, 1593 lines)
+ohos_interface/ohos_glue/ohos_nweb/cpptoc/webcore/ (18 files, 784 lines)
+ohos_interface/ohos_glue/ohos_nweb/ctocpp/webview/ (18 files, 684 lines)
+ohos_nweb/include/                       (16 files, 1563 lines)
+sa/web_native_messaging/service/         (15 files, 2205 lines)
+interfaces/kits/ani/webview/native/webviewcontroller/ (14 files, 10331 lines)
+interfaces/native/                       (13 files, 6186 lines)
+ohos_adapter/media_adapter/src/          (13 files, 4752 lines)
+ohos_adapter/camera_adapter/src/         (12 files, 1974 lines)
+ohos_adapter/media_adapter/include/      (12 files, 1215 lines)
+ohos_interface/ohos_glue/scripts/        (11 files, 8325 lines)
+ohos_interface/ohos_glue/base/include/   (11 files, 1565 lines)
+interfaces/kits/napi/common/             (10 files, 1154 lines)
+interfaces/kits/napi/proxycontroller/    (10 files, 1086 lines)
+ohos_interface/ohos_glue/ohos_nweb/cpptoc/webview/ (10 files, 468 lines)
+ohos_interface/ohos_glue/ohos_adapter/cpptoc/webview/ (10 files, 398 lines)
+ohos_interface/ohos_glue/ohos_adapter/ctocpp/webcore/ (10 files, 391 lines)
+ohos_interface/ohos_glue/ohos_nweb/ctocpp/webcore/ (10 files, 377 lines)
+interfaces/kits/napi/web_native_messaging_extension/extension/include/ (9 files, 419 lines)
+interfaces/kits/ani/webview/src/common/  (8 files, 2412 lines)
+ohos_adapter/audio_adapter/src/          (8 files, 1553 lines)
+interfaces/kits/napi/web_native_messaging_extension/extension/src/ (8 files, 1089 lines)
+interfaces/kits/ani/webview/src/proxycontroller/ (8 files, 871 lines)
+sa/web_native_messaging/client/          (8 files, 638 lines)
+ohos_nweb/src/                           (7 files, 3106 lines)
+interfaces/kits/ani/webview/native/common/ (6 files, 863 lines)
+ohos_adapter/camera_adapter/include/     (6 files, 497 lines)
+sa/web_native_messaging/common/          (6 files, 312 lines)
+ohos_adapter/graphic_adapter/src/        (5 files, 900 lines)
+ohos_adapter/net_connect_adapter/src/    (5 files, 624 lines)
+ohos_adapter/aafwk_adapter/include/      (5 files, 292 lines)
+ohos_adapter/net_connect_adapter/include/ (5 files, 252 lines)
+arkweb_utils/                            (4 files, 1432 lines)
+interfaces/kits/napi/webdatabase/        (4 files, 986 lines)
+ohos_adapter/aafwk_adapter/src/          (4 files, 650 lines)
+ohos_adapter/location_adapter/src/       (4 files, 594 lines)
+interfaces/kits/ani/webview/src/webdatabase/ (4 files, 534 lines)
+ohos_adapter/audio_adapter/include/      (4 files, 361 lines)
+ohos_adapter/graphic_adapter/include/    (4 files, 303 lines)
+interfaces/kits/napi/webfunction/        (4 files, 269 lines)
+interfaces/kits/ani/webnativemessagingextension/ability/src/ (3 files, 951 lines)
+interfaces/kits/napi/web_native_messaging_extension/extension_manager/ (3 files, 802 lines)
+sa/app_fwk_update/src/                   (3 files, 657 lines)
+ohos_adapter/hiviewdfx_adapter/src/      (3 files, 629 lines)
+interfaces/kits/napi/web_net_error_code/ (3 files, 620 lines)
+ohos_interface/ohos_glue/base/bridge/    (3 files, 296 lines)
+ohos_adapter/location_adapter/include/   (3 files, 194 lines)
+sa/app_fwk_update/include/               (3 files, 174 lines)
+interfaces/kits/ani/webnativemessagingextension/ability/include/ (3 files, 161 lines)
+interfaces/kits/napi/webcookiemanager/   (2 files, 1554 lines)
+interfaces/kits/napi/js/                 (2 files, 1009 lines)
+interfaces/kits/napi/webstorage/         (2 files, 606 lines)
+ohos_adapter/distributeddatamgr_adapter/webdatabase/src/ (2 files, 469 lines)
+interfaces/kits/napi/webadsblockmanager/ (2 files, 380 lines)
+interfaces/kits/napi/webasynccontroller/ (2 files, 336 lines)
+ohos_adapter/multimodalinput_adapter/src/ (2 files, 331 lines)
+interfaces/kits/ani/webview/src/webstorage/ (2 files, 312 lines)
+./                                       (2 files, 304 lines)
+ohos_interface/ohos_glue/base/cpptoc/    (2 files, 267 lines)
+interfaces/kits/ani/webview/src/webadsblockmanager/ (2 files, 263 lines)
+ohos_interface/ohos_glue/base/ctocpp/    (2 files, 246 lines)
+interfaces/kits/ani/webview/native/webfunction/ (2 files, 162 lines)
+ohos_adapter/hiviewdfx_adapter/include/  (2 files, 160 lines)
+interfaces/kits/ani/webview/src/webfunction/ (2 files, 158 lines)
+ohos_adapter/distributeddatamgr_adapter/webdatabase/include/ (2 files, 138 lines)
+interfaces/kits/napi/web_native_messaging_extension/context/ (2 files, 107 lines)
+interfaces/kits/napi/web_native_messaging_extension/ability/ (2 files, 95 lines)
+ohos_adapter/pasteboard_adapter/src/     (1 files, 710 lines)
+interfaces/kits/ani/webnativemessagingextension/manager/src/ (1 files, 618 lines)
+ohos_adapter/display_manager_adapter/src/ (1 files, 596 lines)
+ohos_adapter/cert_mgr_adapter/src/       (1 files, 554 lines)
+ohos_adapter/ohos_resource_adapter/src/  (1 files, 532 lines)
+ohos_adapter/inputmethodframework_adapter/src/ (1 files, 525 lines)
+ohos_adapter/res_sched_adapter/src/      (1 files, 523 lines)
+ohos_adapter/screen_capture_adapter/src/ (1 files, 471 lines)
+ohos_adapter/system_properties_adapter/src/ (1 files, 445 lines)
+ohos_adapter/sensor_adapter/src/         (1 files, 436 lines)
+ohos_adapter/ohos_adapter_helper/src/    (1 files, 405 lines)
+ohos_adapter/net_proxy_adapter/src/      (1 files, 394 lines)
+ohos_adapter/ohos_native_buffer_adapter/src/ (1 files, 269 lines)
+ohos_adapter/ohos_image_adapter/src/     (1 files, 262 lines)
+ohos_adapter/print_manager_adapter/src/  (1 files, 258 lines)
+ohos_adapter/keystore_adapter/src/       (1 files, 242 lines)
+ohos_adapter/migration_manager_adapter/src/ (1 files, 176 lines)
+ohos_adapter/drawing_text_adapter/src/   (1 files, 144 lines)
+ohos_adapter/display_manager_adapter/include/ (1 files, 141 lines)
+ohos_adapter/ohos_adapter_helper/include/ (1 files, 138 lines)
+ohos_adapter/inputmethodframework_adapter/include/ (1 files, 133 lines)
+ohos_adapter/system_properties_adapter/include/ (1 files, 130 lines)
+ohos_adapter/background_task_adapter/src/ (1 files, 128 lines)
+ohos_adapter/battery_mgr_adapter/src/    (1 files, 128 lines)
+ohos_adapter/enterprise_device_management_adapter/src/ (1 files, 125 lines)
+ohos_adapter/drawing_text_adapter/include/ (1 files, 121 lines)
+ohos_adapter/flowbuffer_adapter/src/     (1 files, 117 lines)
+ohos_adapter/pasteboard_adapter/include/ (1 files, 117 lines)
+interfaces/kits/ani/webnativemessagingextension/manager/include/ (1 files, 111 lines)
+ohos_adapter/ohos_resource_adapter/include/ (1 files, 107 lines)
+ohos_adapter/date_time_format_adapter/src/ (1 files, 98 lines)
+ohos_adapter/soc_perf_adapter/src/       (1 files, 94 lines)
+interfaces/kits/ani/webview/src/         (1 files, 87 lines)
+ohos_adapter/multimodalinput_adapter/include/ (1 files, 84 lines)
+ohos_wrapper/src/                        (1 files, 84 lines)
+ohos_adapter/date_time_format_adapter/include/ (1 files, 82 lines)
+ohos_adapter/event_handler_adapter/src/  (1 files, 82 lines)
+ohos_adapter/print_manager_adapter/include/ (1 files, 82 lines)
+ohos_adapter/enterprise_device_management_adapter/include/ (1 files, 81 lines)
+ohos_adapter/power_mgr_adapter/src/      (1 files, 81 lines)
+ohos_adapter/sensor_adapter/include/     (1 files, 78 lines)
+ohos_adapter/battery_mgr_adapter/include/ (1 files, 76 lines)
+ohos_adapter/datashare_adapter/src/      (1 files, 76 lines)
+ohos_adapter/screen_capture_adapter/include/ (1 files, 74 lines)
+ohos_adapter/net_proxy_adapter/include/  (1 files, 72 lines)
+interfaces/kits/napi/web_native_messaging_extension/extension_client/src/ (1 files, 70 lines)
+ohos_adapter/cert_mgr_adapter/include/   (1 files, 70 lines)
+ohos_adapter/ohos_native_buffer_adapter/include/ (1 files, 70 lines)
+ohos_adapter/flowbuffer_adapter/include/ (1 files, 69 lines)
+ohos_adapter/event_handler_adapter/include/ (1 files, 66 lines)
+ohos_adapter/migration_manager_adapter/include/ (1 files, 66 lines)
+ohos_interface/ohos_glue/base/capi/      (1 files, 66 lines)
+ohos_adapter/ohos_image_adapter/include/ (1 files, 64 lines)
+interfaces/kits/napi/protos/             (1 files, 56 lines)
+ohos_adapter/keystore_adapter/include/   (1 files, 50 lines)
+interfaces/kits/napi/web_native_messaging_extension/extension_client/include/ (1 files, 45 lines)
+ohos_adapter/background_task_adapter/include/ (1 files, 45 lines)
+ohos_adapter/power_mgr_adapter/include/  (1 files, 44 lines)
+ohos_adapter/datashare_adapter/include/  (1 files, 43 lines)
+ohos_adapter/soc_perf_adapter/include/   (1 files, 41 lines)
+ohos_adapter/access_token_adapter/include/ (1 files, 39 lines)
+ohos_adapter/ohos_init_web_adapter/include/ (1 files, 36 lines)
+ohos_adapter/access_token_adapter/src/   (1 files, 35 lines)
+ohos_adapter/ohos_init_web_adapter/src/  (1 files, 32 lines)
+ohos_adapter/screenlock_mgr_adapter/include/ (1 files, 31 lines)
+ohos_adapter/screenlock_mgr_adapter/src/ (1 files, 30 lines)
+
+Core Directory Coverage:
+- none
+
+README context:
+--- README.md ---
+# web_webview
+## Introduction
+nweb is the native engine of the OpenHarmony webview component and is built based on Chromium and the Chromium Embedded Framework (CEF).
+## Software Architecture
+Below is the software architecture.
+![](figures/Web-architecture.png "web-architecture")
+* Webview component: UI component in OpenHarmony.
+* nweb: native engine of the OpenHarmony web component, which is built based on the Chromium Embedded Framework (CEF).
+* CEF: stands for Chromium Embedded Framework. It is an open-source project based on Google Chromium.
+* Chromium: an open-source web browser principally developed by Google and released under the BSD license and other permissive open-source licenses.
+ ## Directory Structure
+```
+.
+├── ohos_nweb            # OpenHarmony adaptation code
+│   ├── include
+│   ├── prebuilts        # ArkWebCore.hap, built based on the third_party_chromium source code repository
+│   └── src
+└── test                 # nwebview test code
+```
+
+## Repositories Involved
+
+[ace_ace_engine](https://gitee.com/openharmony/arkui_ace_engine)
+
+[third_party_cef](https://gitee.com/openharmony/third_party_cef)
+
+**[web_webview](https://gitee.com/openharmony/web_webview)**
+
+[third_party_chromium](https://gitee.com/openharmony/third_party_chromium)
+
+
+--- README_ZH.md ---
+# web_webview
+- [简介](#简介)
+- [目录](#目录)
+- [相关仓](#相关仓)
+## 简介
+### 内容介绍
+arkweb是OpenHarmony webview组件的Native引擎，基于Chromium和CEF构建。
+### 软件架构
+软件架构说明
+![](figures/Web-architecture_ZH.png "web软件架构图")
+* webview组件：OpenHarmony的UI组件。
+* nweb：基于CEF构建的OpenHarmony web组件的Native引擎。
+* CEF：CEF全称Chromium Embedded Framework，是一个基于Google Chromium 的开源项目。
+* Chromium： Chromium是一个由Google主导开发的网页浏览器。以BSD许可证等多重自由版权发行并开放源代码。
+ ## 目录
+```
+.
+├── ohos_nweb            # openharmony适配代码
+│   ├── include
+│   ├── prebuilts        # ArkWebCore.hap，基于third_party_chromium源码仓构建
+│   └── src
+└── test                 # nwebview测试代码
+```
+
+## 相关仓
+
+[ace_ace_engine](https://gitee.com/openharmony/arkui_ace_engine)
+
+[third_party_cef](https://gitee.com/openharmony/third_party_cef)
+
+**[web_webview](https://gitee.com/openharmony/web_webview)**
+
+[third_party_chromium](https://gitee.com/openharmony/third_party_chromium)
+
+--- arkweb_utils/README.md ---
+# arkweb_utils
+
+## 概述
+
+`arkweb_utils` 是 ArkWeb WebView 组件的**工具库**，提供引擎版本管理、库加载、路径解析、配置管理等核心工具功能。该库被编译为 `libarkweb_utils.so`，作为平台 SDK (`innerapi_tags: [ "platformsdk" ]`) 供其他模块使用。
+
+**⚠️ 重要约束：本库不得引入额外的依赖关系！**
+
+### 核心职责
+
+1. **Web 引擎版本管理** - 管理多个 WebView 引擎版本（Legacy M114、Evergreen M132）的切换
+2. **动态库加载与预加载** - 负责 `libarkweb_engine.so` 和适配器库的加载、预加载优化
+3. **路径解析与管理** - 提供各种运行时路径的获取和解析
+4. **应用信息管理** - 从命令行和配置中提取和管理应用信息（BundleName、ApiVersion、AppVersion）
+5. **Shared RELRO 支持** - 提供只读重定位地址空间的优化支持（仅 arm64）
+
+## 目录结构
+
+```
+arkweb_utils/
+├── arkweb_utils.h                 # 主头文件，定义所有公共接口
+├── arkweb_utils.cpp               # 主实现文件
+├── arkweb_preload_common.h        # 预加载相关接口
+├── arkweb_preload_common.cpp      # 预加载实现
+├── BUILD.gn                       # 构建配置
+└── README.md                      # 本文档
+```
+
+## 核心功能
+
+### 1. Web 引擎版本管理
+
+#### 引擎版本枚举
+```cpp
+enum class ArkWebEngineVersion {
+    SYSTEM_DEFAULT = 0,   // 系统默认
+    M114 = 1,             // Legacy 引擎 (基于 Chromium 114)
+    M132 = 2,             // Evergreen 引擎 (基于 Chromium 132)
+    PLAYGROUND = 99998,   // 测试环境
+    SYSTEM_EVERGREEN = 99999  // 系统级 Evergreen
+};
+
+enum class ArkWebEngineType {
+    LEGACY = M114,        // 传统引擎
+    EVERGREEN = M132,     // 常青引擎
+    PLAYGROUND = PLAYGROUND
+};
+```
+
+#### 主要接口
+```cpp
+// 获取当前活跃的引擎版本
+ArkWebEngineVersion getActiveWebEngineVersion();
+
+// 设置活跃的引擎版本
+void setActiveWebEngineVersion(ArkWebEngineVersion version);
+
+// 检查是否为 Evergreen 引擎
+bool IsActiveWebEngineEvergreen();
+
+// 获取引擎类型
+ArkWebEngineType getActiveWebEngineType();
+```
+
+#### 版本选择逻辑
+引擎版本由以下因素决定（优先级从高到低）：
+1. **应用强制指定** - 从命令行参数 `#--appEngineVersion=` 读取
+2. **系统参数** - `web.engine.enforce` (强制)、`web.engine.default` (默认)
+3. **Legacy 应用名单** - 配置文件中的 `web.engine.legacyApp` 数组
+4. **云端配置** - 系统版本文件 `/system/etc/ArkWebSafeBrowsing/generic/version.txt`
+5. **更新版本文件** - `/data/service/el1/public/update/param_service/install/system/etc/ArkWebSafeBrowsing/generic/version.txt`
+
+### 2. 应用信息管理
+
+#### 应用信息提取
+从渲染进程命令行参数中提取应用信息：
+
+```cpp
+// 命令行参数格式：
+// #--appEngineVersion=1
+// #--appBundleName=com.example.app
+// #--appApiVersion=9
+// #--appVersion=1.0.0
+
+// 更新应用信息
+void UpdateAppInfoFromCmdline(std::string& renderCmd);
+
+// 提取并移除参数
+std::string ExtractAndRemoveParam(std::string& renderCmd, const std::string& prefix);
+
+// 获取应用信息
+std::string GetBundleName();
+std::string GetApiVersion();
+std::string GetAppVersion();
+```
+
+#### 内部设置接口（供内部模块使用）
+```cpp
+void SetActiveWebEngineVersionInner(ArkWebEngineVersion version);
+void SetBundleNameInner(const std::string& bundleName);
+void SetApiVersionInner(const std::string& apiVersion);
+void SetAppVersionInner(const std::string& appVersion);
+```
+
+### 3. 路径管理
+
+#### 核心路径常量
+
+**ArkWebCore HAP 路径**（按架构区分）：
+```cpp
+// arm64
+ARK_WEB_CORE_HAP_LIB_PATH = "/data/storage/el1/bundle/arkwebcore/libs/arm64"
+ARK_WEB_CORE_LEGACY_HAP_LIB_PATH = "/data/storage/el1/bundle/arkwebcorelegacy/libs/arm64"
+
+// arm
+ARK_WEB_CORE_HAP_LIB_PATH = "/data/storage/el1/bundle/arkwebcore/libs/arm"
+ARK_WEB_CORE_LEGACY_HAP_LIB_PATH = "/data/storage/el1/bundle/arkwebcorelegacy/libs/arm"
+
+// x86_64
+ARK_WEB_CORE_HAP_LIB_PATH = "/data/storage/el1/bundle/arkwebcore/libs/x86_64"
+```
+
+**系统预装 HAP 路径**：
+```cpp
+PRECONFIG_LEGACY_HAP_PATH = "/system/app/ArkWebCoreLegacy/ArkWebCoreLegacy.hap"
+PRECONFIG_EVERGREEN_HAP_PATH = "/system/app/com.ohos.arkwebcore/ArkWebCore.hap"
+PRECONFIG_EVERGREEN_WATCH_HAP_PATH = "/system/app/NWeb/NWeb.hap"
+```
+
+#### 路径获取接口
+```cpp
+// 获取 arkweb 库路径（沙箱内）
+std::string GetArkwebLibPath();
+
+// 获取 arkweb 命名空间
+std::string GetArkwebNameSpace();
+
+// 获取 arkweb 相对路径（用于 Bundle）
+std::string GetArkwebRelativePathForBundle();
+
+// 获取 arkweb 相对路径（用于 Mock）
+std::string GetArkwebRelativePathForMock();
+
+// 获取 arkweb 安装路径
+std::string GetArkwebInstallPath();
+
+// 获取 Bundle 安装路径（预加载使用）
+std::string GetArkwebBundleInstallLibPath();
+
+// 获取 OHOS 适配器 Glue 库路径
+std::string GetOhosAdptGlueSrcLibPath();
+```
+
+### 4. 动态库加载与预加载
+
+#### 预加载模式
+```cpp
+enum class RenderPreLoadMode {
+    PRELOAD_NO = 0,         // 不预加载
+    PRELOAD_PARTIAL = 1,    // 只预加载 libohos_adapter_glue_source.z.so
+    PRELOAD_FULL = 2        // 预加载 libohos_adapter_glue_source.z.so 和 libarkweb_engine.so
+};
+```
+
+#### 预加载策略
+- **编译时强制** - 如果定义了 `PRELOAD_RENDER_LIB`，强制使用 `PRELOAD_FULL` 模式
+- **系统参数** - `const.startup.nwebspawn.preloadMode`（0=不预加载，1=部分，2=完全）
+- **内存限制** - RAM <= 8GB 时，不预加载（避免内存压力）
+
+#### 预加载接口
+```cpp
+// 为 Browser 进程预加载
+void PreloadArkWebLibForBrowser();
+
+// 为 Render 进程预加载
+void PreloadArkWebLibForRender();
+```
+
+**预加载流程**（Render 进程）：
+1. 检查系统总内存
+2. 读取预加载模式参数
+3. 部分预加载：只加载 `libohos_adapter_glue_source.z.so`
+4. 完全预加载：先加载适配器库，再加载 `libarkweb_engine.so`
+
+#### 动态加载接口
+```cpp
+// 打开 arkweb 库
+void DlopenArkWebLib();
+
+// 关闭 arkweb 库
+int DlcloseArkWebLib();
+
+// 初始化 ArkWeb Bridge Helper
+void* ArkWebBridgeHelperSharedInit(bool runMode, const std::string& mockBundlePath = "");
+```
+
+### 5. Shared RELRO 支持（仅 arm64）
+
+Shared RELRO (Relocation Read-Only) 是一种内存优化技术，允许多个进程共享相同的只读重定位页面，减少内存占用。
+
+#### RELRO 接口
+```cpp
+// 预留地址空间（512MB）
+bool ReserveAddressSpace();
+
+// 在子进程中创建 RELRO 文件
+void CreateRelroFileInSubProc();
+
+// 使用 RELRO 文件加载库
+void* LoadWithRelroFile(const std::string& lib, Dl_namespace* dlns);
+```
+
+#### RELRO 路径
+```cpp
+SHARED_RELRO_DIR = "/data/service/el1/public/for-all-app/shared_relro"
+NWEB_RELRO_PATH = SHARED_RELRO_DIR + "/libwebviewchromium64.relro"
+RESERVED_VMA_SIZE = 512 * 1024 * 1024  // 512MB
+```
+
+**⚠️ 约束**：Shared RELRO 功能仅支持 arm64 架构，且在 ASAN 模式下禁用。
+
+### 6. 宏定义辅助工具
+
+#### 版本检查宏
+```cpp
+// 如果引擎版本低于 minVersion，则返回
+RETURN_IF_UNSUPPORTED_ENGINE(minVersion, funName)
+
+// 检查是否从 M114 调用
+IS_CALLING_FROM_M114()
+
+// 如果从 M114 调用，则返回
+RETURN_IF_CALLING_FROM_M114()
+```
+
+这些宏用于在新引擎中屏蔽旧版本不支持的功能。
+
+### 7. 配置文件管理
+
+#### ArkWebCoreCfg.json
+配置文件路径：
+```
+/data/service/el1/public/update/param_service/install/system/etc/ArkWebSafeBrowsing/generic/ArkWebCoreCfg.json
+```
+
+#### 支持的配置项
+```json
+{
+  "web.engine.default": 1,        // 默认引擎类型 (1=Legacy, 2=Evergreen)
+  "web.engine.enforce": 2,        // 强制使用引擎类型
+  "web.engine.legacyApp": [       // 需要使用 Legacy 引擎的应用名单
+    "com.example.app1",
+    "com.example.app2"
+  ]
+}
+```
+
+#### 版本文件
+- 系统版本：`/system/etc/ArkWebSafeBrowsing/generic/version.txt`
+- 更新版本：`/data/service/el1/public/update/param_service/install/system/etc/ArkWebSafeBrowsing/generic/version.txt`
+
+## 依赖关系
+
+### 外部依赖（BUILD.gn）
+```gn
+external_deps = [
+    "init:libbegetutil",              # 参数获取
+    "hilog:libhilog",                 # 日志系统
+    "jsoncpp:jsoncpp",                # JSON 解析
+    "bundle_framework:appexecfwk_base",   # Bundle 框架基础
+    "selinux_adapter:librestorecon",      # SELinux 上下文恢复
+    "ability_runtime:app_context",        # 应用上下文
+    "bundle_framework:appexecfwk_core"    # Bundle 框架核心
+]
+```
+
+### 内部依赖
+```gn
+include_dirs = [
+    "../ohos_nweb/include/",              # Nweb 公共头文件
+    "../ohos_adapter/hiviewdfx_adapter/include/",  # HiLog 日志适配
+]
+```
+
+### ⚠️ 依赖约束
+
+**重要**：`libarkweb_utils.so` 作为一个**基础工具库**，有以下约束：
+
+1. **不得引入额外的系统依赖**
+   - 只能依赖已经在 `BUILD.gn` 中声明的组件
+   - 新增依赖需要谨慎评估，避免循环依赖
+
+2. **不得依赖 WebView 核心模块**
+   - 不能依赖 `ohos_nweb` 的实现部分
+   - 只能使用其头文件定义的接口
+
+3. **保持轻量级**
+   - 避免引入大型框架
+   - 避免重量级模板和复杂的第三方库
+
+4. **线程安全**
+   - 全局变量使用 `std::mutex` 保护（如 `g_appInfoMutex`）
+   - 避免在多线程环境下出现竞态条件
+
+## 编译配置
+
+### 构建目标
+```gn
+ohos_shared_library("libarkweb_utils") {
+  output_name = "arkweb_utils"
+  sources = [
+    "arkweb_utils.cpp",
+    "arkweb_preload_common.cpp"
+  ]
+  ...
+}
+```
+
+### 支持的架构
+- `arm64` - 64位 ARM（完整支持，包括 Shared RELRO）
+- `arm` - 32位 ARM
+- `x86_64` - 64位 x86（部分支持）
+
+### 编译宏
+```cpp
+webview_arm64          // ARM64 架构
+webview_arm            // ARM32 架构
+webview_x86_64         // x86_64 架构
+IS_ASAN                // ASAN 模式
+ASAN_DETECTOR          // ASAN 检测器
+PRELOAD_RENDER_LIB     // 强制预加载渲染库
+```
+
+## 使用示例
+
+### 示例 1: 获取当前引擎版本并加载库
+```cpp
+#include "arkweb_utils.h"
+
+using namespace OHOS::ArkWeb;
+
+void InitWebEngine() {
+    // 获取当前引擎版本
+    ArkWebEngineVersion version = getActiveWebEngineVersion();
+
+    // 检查是否为 Evergreen
+    if (IsActiveWebEngineEvergreen()) {
+        // 使用 Evergreen 特性
+    }
+
+    // 加载 arkweb 库
+    DlopenArkWebLib();
+}
+```
+
+### 示例 2: 从命令行提取应用信息
+```cpp
+#include "arkweb_utils.h"
+
+using namespace OHOS::ArkWeb;
+
+void ProcessRenderCmd(std::string& renderCmd) {
+    // 更新应用信息（会从命令行提取并移除相关参数）
+    UpdateAppInfoFromCmdline(renderCmd);
+
+    // 获取应用信息
+    std::string bundleName = GetBundleName();
+    std::string apiVersion = GetApiVersion();
+
+    // 使用应用信息选择引擎
+    SelectWebcoreBeforeProcessRun(bundleName);
+}
+```
+
+### 示例 3: 预加载优化
+```cpp
+#include "arkweb_preload_common.h"
+
+using namespace OHOS::ArkWeb;
+
+void RenderProcessInit() {
+    // 预加载 ArkWeb 库（会根据内存和配置决定是否加载）
+    PreloadArkWebLibForRender();
+}
+```
+
+### 示例 4: 版本兼容性检查
+```cpp
+#include "arkweb_utils.h"
+
+void NewFeatureOnlySupportedInM132() {
+    // 如果引擎版本低于 M132，直接返回
+    RETURN_IF_UNSUPPORTED_ENGINE(ArkWebEngineVersion::M132, __func__);
+
+    // M132+ 的新特性实现
+    // ...
+}
+```
+
+## 日志与调试
+
+### 日志标签
+使用 `nweb_log.h` 中定义的宏：
+- `WVLOG_I` - 信息日志
+- `WVLOG_E` - 错误日志
+- `WVLOG_D` - 调试日志
+
+### 关键日志点
+1. 引擎版本选择
+2. 动态库加载成功/失败
+3. 预加载模式决策
+4. 配置文件解析
+5. 应用信息提取
+
+### 调试建议
+1. 使用 `hilog -T ArkWeb` 查看 WebView 相关日志
+2. 检查系统参数：`param get web.engine.default`
+3. 检查配置文件：`cat /data/service/el1/public/.../ArkWebCoreCfg.json`
+4. 检查版本文件：`cat /system/etc/ArkWebSafeBrowsing/generic/version.txt`
+
+## 性能优化
+
+### 预加载策略
+- **大内存设备** (>8GB RAM): 使用 `PRELOAD_PARTIAL` 或 `PRELOAD_FULL`
+- **小内存设备** (<=8GB RAM): 使用 `PRELOAD_NO`，避免内存压力
+
+### Shared RELRO
+- 多进程共享 512MB 地址空间
+- 减少实际物理内存占用
+- 仅支持 arm64 架构
+
+### 路径缓存
+- 应用信息提取后会缓存
+- 引擎版本决策后会缓存
+- 避免重复的参数读取
+
+## 常见问题
+
+### Q1: 为什么有些接口名带 `Inner` 后缀？
+**A**: `SetBundleNameInner` 等接口是供内部模块使用的，不应该直接调用。应使用 `UpdateAppInfoFromCmdline` 统一提取和设置。
+
+### Q2: 预加载的库什么时候被加载？
+**A**:
+- Browser 进程：在 `PreloadArkWebLibForBrowser()` 中加载
+- Render 进程：在 `PreloadArkWebLibForRender()` 中加载
+- 加载时机：进程初始化早期，在 WebView 实例创建之前
+
+### Q3: Shared RELRO 失败会影响功能吗？
+**A**: 不会。Shared RELRO 是纯优化功能，失败后会回退到常规加载方式。
+
+### Q4: 如何切换到 Legacy 引擎？
+**A**: 有三种方式：
+1. 在应用命令行添加：`#--appEngineVersion=1`
+2. 修改配置文件：设置 `web.engine.default = 1`
+3. 将应用加入 `web.engine.legacyApp` 数组
+
+### Q5: x86_64 为什么不支持某些功能？
+**A**: x86_64 主要用于模拟器和开发调试，部分功能（如 Shared RELRO）仅在真实设备架构（arm/arm64）上启用。
+
+## 维护建议
+
+### 代码规范
+1. 保持接口的 `ARKWEB_EXPORT` 宏
+2. 使用 `std::mutex` 保护全局状态
+3. 避免在头文件中暴露实现细节
+4. 新增功能要考虑多版本兼容性
+
+### 测试要点
+1. 单元测试：`test/unittest/arkweb_utils_test`
+2. 模糊测试：`test/fuzztest/arkwebutils_fuzzer`
+3. 版本切换测试：Legacy ↔ Evergreen
+4. 预加载功能测试
+5. 路径解析测试（多架构）
+
+### 版本演进
+- 新增功能要使用 `RETURN_IF_UNSUPPORTED_ENGINE` 宏保护
+- 保持向后兼容性
+- 避免破坏现有的版本选择逻辑
+
+## 相关文档
+
+- [主 README.md](../README.md) - WebView 组件总览
+- [CLAUDE.md](../CLAUDE.md) - 代码仓指南
+- [ohos_nweb/README.md](../ohos_nweb/README.md) - 核心引擎文档
+
+## 许可证
+
+Apache License 2.0
+
+
+Docs context:
+(none)
+
+Operational evidence:
+Build evidence:
+--- ohos_interface/ohos_glue/scripts/bridge_gen.sh ---
+1: #!/bin/bash
+2: #
+3: # Copyright (c) 2024 Huawei Device Co., Ltd.
+4: # Licensed under the Apache License, Version 2.0 (the "License");
+5: # you may not use this file except in compliance with the License.
+6: # You may obtain a copy of the License at
+7: #
+8: #     http://www.apache.org/licenses/LICENSE-2.0
+9: #
+10: # Unless required by applicable law or agreed to in writing, software
+11: # distributed under the License is distributed on an "AS IS" BASIS,
+12: # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+13: # See the License for the specific language governing permissions and
+14: # limitations under the License.
+15: #
+16: # Bridge文件生成脚本
+17: # 用法: ./bridge_gen.sh [module_name] [--log-dir log_dir] [--stamp stamp_file]
+18: # 参数: module_name - nweb, adapter（不指定则生成所有）
+19: #       --log-dir   - 日志目录路径（用于输出执行日志到 prepare.log）
+20: #       --stamp     - stamp 文件路径（用于 GN 构建系统）
+21: #
+22: # 使用示例:
+23: #   1. 开发调试（输出日志）: ./bridge_gen.sh --log-dir /tmp/log
+24: #   2. GN 构建（生成 stamp）: ./bridge_gen.sh --stamp out/rk3568/.bridge_stamp
+25: #   3. 生成所有模块: ./bridge_gen.sh
+26: #   4. 生成特定模块: ./bridge_gen.sh nweb --log-dir /tmp/log
+27: 
+28: set -e
+29: 
+30: # 脚本所在目录
+31: SCRIPT_DIR=$(cd "$(dirname "$0")"; pwd)
+32: # INTERFACE_DIR 是 ohos_interface 目录
+33: INTERFACE_DIR=$(cd "${SCRIPT_DIR}/../.."; pwd)
+34: 
+35: INTERFACE_OHOS_GLUE_DIR="${INTERFACE_DIR}/ohos_glue"
+36: CONFIG_FILE="${INTERFACE_OHOS_GLUE_DIR}/scripts/bridge_generation.conf.json"
+37: 
+38: # 解析参数
+39: MODULE=""
+40: LOG_DIR=""
+
+Config/deploy evidence:
+--- hisysevent.yaml ---
+1: # Copyright (c) 2024 Huawei Device Co., Ltd.
+2: # Licensed under the Apache License, Version 2.0 (the "License");
+3: # you may not use this file except in compliance with the License.
+4: # You may obtain a copy of the License at
+5: #
+6: #     http://www.apache.org/licenses/LICENSE-2.0
+7: #
+8: # Unless required by applicable law or agreed to in writing, software
+9: # distributed under the License is distributed on an "AS IS" BASIS,
+10: # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+11: # See the License for the specific language governing permissions and
+12: # limitations under the License.
+13: 
+14: domain: WEBVIEW
+15: 
+16: AUDIO_FRAME_DROP_STATISTICS:
+17:   __BASE: {type: STATISTIC, level: MINOR, tag: performance, desc: audio frame drop statistics, preserve: true}
+18:   BUNDLE_NAME: {type: STRING, desc: bundle name}
+19:   AUDIO_BLANK_FRAME_COUNT: {type: UINT32, desc: audo blank frame count}
+20: 
+21: AUDIO_PLAY_ERROR:
+22:   __BASE: {type: FAULT, level: MINOR, tag: fault, desc: audio play error, preserve: true}
+23:   BUNDLE_NAME: {type: STRING, desc: bundle name}
+24:   ERROR_TYPE: {type: STRING, desc: audio play error type}
+25:   ERROR_CODE: {type: STRING, desc: audio play error code}
+26:   ERROR_DESC: {type: STRING, desc: audio play error description}
+27: 
+28: CAMERA_CAPTURE_ERROR:
+29:   __BASE: {type: FAULT, level: MINOR, tag: fault, desc: camera capture error, preserve: true}
+30:   BUNDLE_NAME: {type: STRING, desc: bundle name}
+31:   DEVICE_ID: {type: INT32, desc: device ID of camera capture}
+32:   ERROR_DESC: {type: STRING, desc: camera capture error description}
+33: 
+34: DRAG_DROP:
+35:   __BASE: {type: BEHAVIOR, level: MINOR, tag: UserBehavior, desc: drag drop, preserve: true}
+36:   BUNDLE_NAME: {type: STRING, desc: bundle name}
+37:   NWEB_ID: {type: INT32, desc: Drag Drop Nweb Id}
+38:   PLAIN_TEXT: {type: UINT32, desc: Drag Drop Text size}
+39:   LINK_URL: {type: UINT32, desc: Drag Drop Url size}
+40:   HTML: {type: UINT32, desc: Drag Drop Html Size}
+
+Troubleshooting evidence:
+--- test/fuzztest/ohos_nweb/setwebdebug_fuzzer/BUILD.gn ---
+1: # Copyright (c) 2025 Huawei Device Co., Ltd.
+2: # Licensed under the Apache License, Version 2.0 (the "License");
+3: # you may not use this file except in compliance with the License.
+4: # You may obtain a copy of the License at
+5: #
+6: #     http://www.apache.org/licenses/LICENSE-2.0
+7: #
+8: # Unless required by applicable law or agreed to in writing, software
+9: # distributed under the License is distributed on an "AS IS" BASIS,
+10: # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+11: # See the License for the specific language governing permissions and
+12: # limitations under the License.
+13: 
+14: #####################hydra-fuzz###################
+15: import("//base/web/webview/web_aafwk.gni")
+16: import("//build/config/features.gni")
+17: import("//build/test.gni")
+18: 
+19: ##############################fuzztest##########################################
+20: ohos_fuzztest("SetWebDebugFuzzTest") {
+21:   module_out_path = webview_fuzz_test_path
+22:   fuzz_config_file = "$webview_path/test/fuzztest/ohos_nweb/setwebdebug_fuzzer"
+23: 
+24:   include_dirs = [
+25:     "$webview_path/test/ohos_nweb",
+26:     "$webview_path/test/fuzztest",
+27:     "$webview_path/ohos_nweb/include",
+28:   ]
+29:   cflags = [
+30:     "-g",
+31:     "-O0",
+32:     "-Wno-unused-variable",
+33:     "-fno-omit-frame-pointer",
+34:   ]
+35:   sources = [ "setwebdebug_fuzzer.cpp" ]
+36:   deps = [
+37:     "$webview_path/ohos_nweb:libnweb",
+38:   ]
+39:   external_deps = [
+40:     "c_utils:utils",
+
+--- test/fuzztest/ohos_nweb/setwebdebug_fuzzer/corpus/init ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 19999
+16: 
+
+--- test/fuzztest/ohos_nweb/setwebdebug_fuzzer/project.xml ---
+1: <?xml version="1.0" encoding="utf-8"?>
+2: <!-- Copyright (c) 2025 Huawei Device Co., Ltd.
+3: 
+4:      Licensed under the Apache License, Version 2.0 (the "License");
+5:      you may not use this file except in compliance with the License.
+6:      You may obtain a copy of the License at
+7: 
+8:           http://www.apache.org/licenses/LICENSE-2.0
+9: 
+10:      Unless required by applicable law or agreed to in writing, software
+11:      distributed under the License is distributed on an "AS IS" BASIS,
+12:      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+13:      See the License for the specific language governing permissions and
+14:      limitations under the License.
+15: -->
+16: <fuzz_config>
+17:   <fuzztest>
+18:     <!-- maximum length of a test input -->
+19:     <max_len>1000</max_len>
+20:     <!-- maximum total time in seconds to run the fuzzer -->
+21:     <max_total_time>300</max_total_time>
+22:     <!-- memory usage limit in Mb -->
+23:     <rss_limit_mb>4096</rss_limit_mb>
+24:   </fuzztest>
+25: </fuzz_config>
+26: 
+
+--- test/fuzztest/ohos_nweb/setwebdebug_fuzzer/setwebdebug_fuzzer.cpp ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "setwebdebug_fuzzer.h"
+17: 
+18: #include <cstring>
+19: #include <fuzzer/FuzzedDataProvider.h>
+20: #include <securec.h>
+21: 
+22: #include "nweb.h"
+23: #include "nweb_adapter_helper.h"
+24: #include "nweb_helper.h"
+25: #include "nweb_init_params.h"
+26: 
+27: using namespace OHOS::NWeb;
+28: 
+29: namespace OHOS {
+30: bool SetWebDebugFuzzTest(const uint8_t* data, size_t size)
+31: {
+32:     if ((data == nullptr) || (size < sizeof(int))) {
+33:         return false;
+34:     }
+35:     FuzzedDataProvider dataProvider(data, size);
+36:     bool enableDebug = dataProvider.ConsumeBool();
+37:     int32_t port = dataProvider.ConsumeIntegral<int32_t>();
+38:     std::string name = dataProvider.ConsumeRandomLengthString();
+39:     int32_t option = dataProvider.ConsumeIntegral<int32_t>();
+40:     if (NWebHelper::Instance().LoadNWebSDK()) {
+
+--- test/fuzztest/ohos_nweb/setwebdebug_fuzzer/setwebdebug_fuzzer.h ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #ifndef TEST_FUZZTEST_SETWEBDEBUG_FUZZER_H
+17: #define TEST_FUZZTEST_SETWEBDEBUG_FUZZER_H
+18: 
+19: #define FUZZ_PROJECT_NAME "setwebdebug_fuzzer"
+20: #endif /* TEST_FUZZTEST_SETWEBDEBUG_FUZZER_H */
+21: 
+
+Source excerpts with line numbers:
+--- arkweb_utils/arkweb_preload_common.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  * http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "arkweb_preload_common.h"
+17: #include "arkweb_utils.h"
+18: #include "nweb_log.h"
+19: #include "parameters.h"
+20: #include <dlfcn.h>
+21: #ifndef webview_x86_64
+22: #include <sys/sysinfo.h>
+23: #endif
+24: #include "ace_forward_compatibility.h"
+25: 
+26: namespace OHOS::ArkWeb {
+27: 
+28: #if defined(webview_arm64)
+29: const std::string OHOS_ADAPTER_GLUE_SRC_LIB_PATH = "/system/lib64/libohos_adapter_glue_source.z.so";
+30: #elif defined(webview_x86_64)
+31: const std::string OHOS_ADAPTER_GLUE_SRC_LIB_PATH = "";
+32: #else
+33: const std::string OHOS_ADAPTER_GLUE_SRC_LIB_PATH = "/system/lib/libohos_adapter_glue_source.z.so";
+34: #endif
+35: 
+36: const std::string ARK_WEB_ENGINE_LIB_NAME = "libarkweb_engine.so";
+37: const int32_t RAM_SIZE_8G = 8;
+38: const int32_t SIZE_KB = 1024;
+39: 
+40: enum class RenderPreLoadMode {
+41:     PRELOAD_NO = 0,         // 不预加载
+42:     PRELOAD_PARTIAL = 1,    // 只预加载libohos_adapter_glue_source.z.so
+43:     PRELOAD_FULL = 2        // 预加载libohos_adapter_glue_source.z.so和libarkweb_engine.so
+44: };
+45: 
+46: std::string GetArkwebBundleInstallLibPath() {
+47:     std::string bundleName = OHOS::system::GetParameter("persist.arkwebcore.package_name", "");
+48:     if (bundleName.empty()) {
+49:         WVLOG_E("Fail to get persist.arkwebcore.package_name");
+50:         return "";
+51:     }
+52:     if (getActiveWebEngineType() == ArkWebEngineType::LEGACY) {
+53:         bundleName += "legacy";
+54:     }
+55: #ifdef webview_arm64
+56:     const std::string arkwebEngineLibPath = "/data/app/el1/bundle/public/" + std::string(bundleName) + "/libs/arm64";
+57: #elif webview_x86_64
+58:     const std::string arkwebEngineLibPath = "";
+59: #else
+60:     const std::string arkwebEngineLibPath = "/data/app/el1/bundle/public/" + std::string(bundleName) + "/libs/arm";
+61: #endif
+62:     return arkwebEngineLibPath;
+63: }
+64:  
+65: std::string GetOhosAdptGlueSrcLibPath() {
+66:     return OHOS_ADAPTER_GLUE_SRC_LIB_PATH;
+67: }
+68: 
+69: static void PreloadArkWebEngineLib()
+70: {
+71:     Dl_namespace dlns;
+72:     Dl_namespace ndkns;
+73:     dlns_init(&dlns, "nweb_ns");
+74:     const std::string arkWebEngineLibPath = GetArkwebBundleInstallLibPath();
+75:     const std::string arkwebEngineSandboxLibPath = GetArkwebLibPath();
+76:     if (arkWebEngineLibPath.empty()) {
+77:         WVLOG_E("Fail to get libarkweb_engine.so path");
+78:         return;
+79:     }
+80:     std::string libNsPath = arkWebEngineLibPath + ":" + arkwebEngineSandboxLibPath;
+
+--- arkweb_utils/arkweb_preload_common.h ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  * http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: #ifndef WEB_WEBVIEW_ARKWEB_UTILS_ARKWEB_PRELOAD_COMMON_H
+16: #define WEB_WEBVIEW_ARKWEB_UTILS_ARKWEB_PRELOAD_COMMON_H
+17: 
+18: #include <string>
+19: 
+20: #ifndef ARKWEB_EXPORT
+21: #define ARKWEB_EXPORT __attribute__((visibility("default")))
+22: #endif
+23: 
+24: namespace OHOS::ArkWeb {
+25: ARKWEB_EXPORT std::string GetArkwebBundleInstallLibPath();
+26: ARKWEB_EXPORT std::string GetOhosAdptGlueSrcLibPath();
+27: ARKWEB_EXPORT void PreloadArkWebLibForRender();
+28: } // namespace OHOS::ArkWeb
+29: 
+30: #endif  // WEB_WEBVIEW_ARKWEB_UTILS_ARKWEB_PRELOAD_COMMON_H
+
+--- arkweb_utils/arkweb_utils.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  * http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: #include "arkweb_utils.h"
+16: 
+17: #include "parameters.h"
+18: #include "nweb_log.h"
+19: #include "json/json.h"
+20: #include <cerrno>
+21: #include <cstring>
+22: #include <dlfcn_ext.h>
+23: #include <fcntl.h>
+24: #include <fstream>
+25: #include <filesystem>
+26: #include <mutex>
+27: #include <policycoreutils.h>
+28: #include <system_error>
+29: #include <sys/mman.h>
+30: #include <sys/prctl.h>
+31: #include <sys/stat.h>
+32: #include <unordered_set>
+33: #include <regex>
+34: #include <iomanip>
+35: 
+36: #if (defined(webview_arm64) && !defined(ASAN_DETECTOR))
+37: #include <sys/mount.h>
+38: #endif
+39: 
+40: namespace OHOS::ArkWeb {
+41: 
+42: static int g_appEngineVersion = static_cast<int>(ArkWebEngineVersion::SYSTEM_DEFAULT);
+43: static bool g_webEngineInitFlag = false;
+44: static ArkWebEngineVersion g_activeEngineVersion = ArkWebEngineVersion::SYSTEM_DEFAULT;
+45: static int g_cloudEnableAppVersion = static_cast<int>(ArkWebEngineVersion::SYSTEM_DEFAULT);
+46: static std::unique_ptr<std::unordered_set<std::string>> g_legacyApp = nullptr;
+47: static std::unique_ptr<std::unordered_set<std::string>> g_dataMigrateApp = nullptr;
+48: static std::string g_bundleName = "";
+49: static std::string g_apiVersion = "";
+50: static std::string g_appVersion = "";
+51: static std::mutex g_appInfoMutex;
+52: 
+53: static void* g_reservedAddress = nullptr;
+54: static size_t g_reservedSize = 0;
+55: static bool g_shareRelroEnabled = false;
+56: static bool g_arkwebEngineAccessible = false;
+57: const int SHARED_RELRO_UID = 1037;
+58: const std::string ARK_WEB_ENGINE_LIB_NAME = "libarkweb_engine.so";
+59: const std::string SHARED_RELRO_DIR = "/data/service/el1/public/for-all-app/shared_relro";
+60: const std::string NWEB_RELRO_PATH = SHARED_RELRO_DIR + "/libwebviewchromium64.relro";
+61: const size_t RESERVED_VMA_SIZE = 512 * 1024 * 1024;
+62: const std::string DATA_MIGRATE_APP_ALL = "All";
+63: const std::string DATA_MIGRATE_APP_NONE = "None";
+64: 
+65: #if defined(webview_arm64)
+66: const std::string ARK_WEB_CORE_MOCK_HAP_LIB_PATH =
+67:     "/data/storage/el1/bundle/libs/arm64";
+68: const std::string ARK_WEB_CORE_HAP_LIB_PATH =
+69:     "/data/storage/el1/bundle/arkwebcore/libs/arm64";
+70: const std::string ARK_WEB_CORE_LEGACY_HAP_LIB_PATH =
+71:     "/data/storage/el1/bundle/arkwebcorelegacy/libs/arm64";
+72: const std::string ARK_WEB_CORE_PATH_FOR_MOCK = "libs/arm64";
+73: const std::string ARK_WEB_CORE_PATH_FOR_BUNDLE = "arkwebcore/libs/arm64";
+74: const std::string ARK_WEB_CORE_LEGACY_PATH_FOR_BUNDLE = "arkwebcorelegacy/libs/arm64";
+75: #elif defined(webview_x86_64)
+76: const std::string ARK_WEB_CORE_MOCK_HAP_LIB_PATH =
+77:     "/data/storage/el1/bundle/libs/x86_64";
+78: const std::string ARK_WEB_CORE_HAP_LIB_PATH =
+79:     "/data/storage/el1/bundle/arkwebcore/libs/x86_64";
+80: const std::string ARK_WEB_CORE_LEGACY_HAP_LIB_PATH =
+
+--- arkweb_utils/arkweb_utils.h (truncated) ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #ifndef WEB_WEBVIEW_ARKWEB_UTILS_ARKWEB_UTILS_H
+17: #define WEB_WEBVIEW_ARKWEB_UTILS_ARKWEB_UTILS_H
+18: 
+19: #pragma once
+20: 
+21: #include <climits>
+22: #include <dlfcn.h>
+23: #include <string>
+24: 
+25: #ifndef ARKWEB_EXPORT
+26: #define ARKWEB_EXPORT __attribute__((visibility("default")))
+27: #endif
+28: 
+29: #if !defined(CROSS_PLATFORM)
+30: #define RETURN_IF_UNSUPPORTED_ENGINE(minVersion, funName)                   \
+31: do {                                                                        \
+32:     auto engineVersion = OHOS::ArkWeb::getActiveWebEngineVersion();         \
+33:     if (engineVersion < (minVersion)) {    \
+34:         OHOS::ArkWeb::LogForUnsupportedFunc(engineVersion, funName);        \
+35:         return;                                                             \
+36:     }                                                                       \
+37: } while (0)
+38: #else
+39: #define RETURN_IF_UNSUPPORTED_ENGINE(minVersion, funName)
+40: #endif
+41: 
+42: #if !defined(CROSS_PLATFORM)
+43: #define IS_CALLING_FROM_M114() \
+44:     (OHOS::ArkWeb::getActiveWebEngineVersion() == OHOS::ArkWeb::ArkWebEngineVersion::M114)
+45: #else
+46: #define IS_CALLING_FROM_M114() false
+47: #endif
+48: 
+49: #if !defined(CROSS_PLATFORM)
+50: #define RETURN_IF_CALLING_FROM_M114() \
+51: do { \
+52:     if (IS_CALLING_FROM_M114()) { \
+53:         OHOS::ArkWeb::LogForUnsupportedFunc(OHOS::ArkWeb::ArkWebEngineVersion::M114, __func__); \
+54:         return; \
+55:     } \
+56: } while (0)
+57: #else
+58: #define RETURN_IF_CALLING_FROM_M114()
+59: #endif
+60: 
+61: #if !defined(CROSS_PLATFORM)
+62: #define IS_CALLING_FROM_M132() \
+63:     (OHOS::ArkWeb::getActiveWebEngineVersion() == OHOS::ArkWeb::ArkWebEngineVersion::M132)
+64: #else
+65: #define IS_CALLING_FROM_M132() false
+66: #endif
+67: 
+68: #if !defined(CROSS_PLATFORM)
+69: #define RETURN_IF_CALLING_FROM_M132() \
+70: do { \
+71:     if (IS_CALLING_FROM_M132()) { \
+72:         OHOS::ArkWeb::LogForUnsupportedFunc(OHOS::ArkWeb::ArkWebEngineVersion::M132, __func__); \
+73:         return; \
+74:     } \
+75: } while (0)
+76: #else
+77: #define RETURN_IF_CALLING_FROM_M132()
+78: #endif
+79: 
+80: #define APP_ENGINE_VERSION_PREFIX "#--appEngineVersion="
+
+--- copy_files.py (truncated) ---
+1: #!/usr/bin/env python
+2: # -*- coding: utf-8 -*-
+3: # Copyright (c) 2021 Huawei Device Co., Ltd.
+4: # Licensed under the Apache License, Version 2.0 (the "License");
+5: # you may not use this file except in compliance with the License.
+6: # You may obtain a copy of the License at
+7: #
+8: #     http://www.apache.org/licenses/LICENSE-2.0
+9: #
+10: # Unless required by applicable law or agreed to in writing, software
+11: # distributed under the License is distributed on an "AS IS" BASIS,
+12: # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+13: # See the License for the specific language governing permissions and
+14: # limitations under the License.
+15: 
+16: import sys
+17: import os
+18: import argparse
+19: import shutil
+20: 
+21: WORK_SPACE = os.path.dirname(os.path.abspath(__file__))
+22: PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(WORK_SPACE)))
+23: 
+24: sys.path.append(os.path.join(PROJECT_DIR, 'build'))
+25: sys.path.append(os.path.join(PROJECT_DIR, 'build/hb'))
+26: from hb.util import log_util  # noqa: E402
+27: from scripts.util import file_utils  # noqa: E402
+28: from scripts.util import build_utils  # noqa: E402
+29: 
+30: INTERFACE_DIR = os.path.join(WORK_SPACE, 'ohos_interface')
+31: INTERFACE_INCLUDE_DIR = os.path.join(INTERFACE_DIR, 'include')
+32: INTERFACE_OHOS_GLUE_DIR = os.path.join(INTERFACE_DIR, 'ohos_glue')
+33: 
+34: def copy_dir(src_dir: str, dst_dir: str):
+35:     log_util.LogUtil.hb_info("begin to copy dir from '{}' to '{}'".format(src_dir, dst_dir))
+36:     if os.path.isdir(dst_dir):
+37:         shutil.rmtree(dst_dir)
+38: 
+39:     if os.path.isdir(src_dir) and os.listdir(src_dir):
+40:         shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
+41: 
+42:     source_files = []
+43:     for root, dirs, files in os.walk(src_dir):
+44:         for name in files:
+45:             source_files.append(os.path.join(root, name))
+46:     return source_files
+47: 
+48: def copy_files(src_dir: str, dst_dir: str):
+49:     log_util.LogUtil.hb_info("begin to copy files from '{}' to '{}'".format(src_dir, dst_dir))
+50:     source_files = []
+51:     if not os.path.exists(dst_dir):
+52:         os.makedirs(dst_dir)
+53: 
+54:     for item in os.listdir(src_dir):
+55:         src_file = os.path.join(src_dir, item)
+56:         dst_file = os.path.join(dst_dir, item)
+57:         if os.path.isfile(src_file):
+58:             source_files.append(src_file)
+59:             shutil.copy2(src_file, dst_file)
+60:     return source_files
+61: 
+62: 
+63: def copy_include(src_dir: str):
+64:     log_util.LogUtil.hb_info("begin to copy include dir")
+65:     nweb_include = os.path.join('ohos_nweb', 'include')
+66:     include_source_files = copy_files(os.path.join(INTERFACE_INCLUDE_DIR, 'ohos_nweb'),
+67:             os.path.join(src_dir, '..', nweb_include))
+68: 
+69:     adapter_include = os.path.join('ohos_adapter', 'interfaces')
+70:     include_source_files += copy_dir(os.path.join(WORK_SPACE, 'ohos_adapter'),
+71:             os.path.join(src_dir, '..', 'ohos_adapter'))
+72:     include_source_files += copy_dir(os.path.join(INTERFACE_INCLUDE_DIR, 'ohos_adapter'),
+73:             os.path.join(src_dir, '..', adapter_include))
+74:     include_source_files = copy_files(os.path.join(WORK_SPACE, nweb_include),
+75:             os.path.join(src_dir, '..', nweb_include))
+76: 
+77:     return include_source_files
+78: 
+79: def copy_glue_base(glue_dir: str):
+80:     log_util.LogUtil.hb_info("begin to copy glue base dir")
+
+--- interfaces/kits/ani/webnativemessagingextension/ability/include/ets_web_native_messaging_extension_context.h ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #ifndef ETS_WEB_NATIVE_EXTENSION_CONTEXT_H
+17: #define ETS_WEB_NATIVE_EXTENSION_CONTEXT_H
+18: 
+19: #include "ani.h"
+20: #include "web_native_messaging_extension.h"
+21: 
+22: namespace OHOS {
+23: namespace NWeb {
+24: ani_ref CreateEtsWebNativeMessagingExtensionContext(
+25:     ani_env* env, std::shared_ptr<WebNativeMessagingExtensionContext> context);
+26: } // namespace NWeb
+27: } // namespace OHOS
+28: #endif // ETS_WEB_NATIVE_EXTENSION_CONTEXT_H
+
+--- interfaces/kits/ani/webnativemessagingextension/ability/include/ets_web_native_messaging_extension.h (truncated) ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #ifndef ETS_WEB_NATIVE_MESSAGING_EXTENSION_H
+17: #define ETS_WEB_NATIVE_MESSAGING_EXTENSION_H
+18: 
+19: #include "web_native_messaging_extension.h"
+20: #include "ets_runtime.h"
+21: #include "ets_native_reference.h"
+22: #include "web_native_messaging_log.h"
+23: 
+24: namespace OHOS {
+25: namespace NWeb {
+26: using namespace OHOS::AbilityRuntime;
+27: 
+28: class ETSWebNativeMessagingExtension : public WebNativeMessagingExtension {
+29: public:
+30:     ETSWebNativeMessagingExtension(ETSRuntime &etsRuntime);
+31:     ~ETSWebNativeMessagingExtension() override;
+32: 
+33:     static ETSWebNativeMessagingExtension *Create(const std::unique_ptr<Runtime>& runtime);
+34: 
+35:     void Init(const std::shared_ptr<AppExecFwk::AbilityLocalRecord>& record,
+36:         const std::shared_ptr<AppExecFwk::OHOSApplication>& application,
+37:         std::shared_ptr<AppExecFwk::AbilityHandler>& handler, const sptr<IRemoteObject>& token) override;
+38: 
+39:     sptr<IRemoteObject> OnConnect(const AAFwk::Want& want) override;
+40: 
+41:     void OnStop() override;
+42: 
+43:     void OnAbilityResult(int requestCode, int resultCode, const AAFwk::Want& want) override;
+44: 
+45:     virtual int32_t ConnectNative(WNMEConnectionInfo& connection) override;
+46: 
+47:     virtual int32_t DisconnectNative(WNMEConnectionInfo& connection) override;
+48:     
+49: private:
+50:     class ConnectionManager {
+51:         public:
+52:             ConnectionManager() = default;
+53:             ~ConnectionManager()
+54:             {
+55:                 for (const auto& [id, conn] : connections_) {
+56:                     close(conn.fdRead);
+57:                     close(conn.fdWrite);
+58:                 }
+59:             }
+60:             void AddConnection(const WNMEConnectionInfo& conn)
+61:             {
+62:                 auto tmp = GetConnection(conn.connectionId);
+63:                 if (tmp) {
+64:                     WNMLOG_E("connectionId exists!");
+65:                 }
+66:                 connections_[conn.connectionId] = conn;
+67:             }
+68:             void RemoveConnection(const WNMEConnectionInfo& conn)
+69:             {
+70:                 auto tmp = GetConnection(conn.connectionId);
+71:                 if (tmp) {
+72:                     close(tmp->fdRead);
+73:                     close(tmp->fdWrite);
+74:                     connections_.erase(conn.connectionId);
+75:                     return;
+76:                 }
+77:                 WNMLOG_E("connectionId not exists!");
+78:             }
+79: 
+80:             WNMEConnectionInfo* GetConnection(int32_t connectionId)
+
+--- interfaces/kits/ani/webnativemessagingextension/ability/include/web_native_messaging_extension_context_ani.h ---
+1: /*
+2:  * Copyright (c) 2026 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: #ifndef OHOS_NWEB_ANI_WEB_NATIVE_MESSAGING_EXTENSION_CONTEXT_ANI_H
+16: #define OHOS_NWEB_ANI_WEB_NATIVE_MESSAGING_EXTENSION_CONTEXT_ANI_H
+17: 
+18: #include <uv.h>
+19: #include "ani.h"
+20: #include "ets_native_reference.h"
+21: #include "event_handler.h"
+22: #include "web_native_messaging_log.h"
+23: 
+24: namespace OHOS {
+25: namespace NWeb {
+26: 
+27: ani_status StsExtensionInit(ani_env* env);
+28: 
+29: } // namespace NWeb
+30: } // namespace OHOS
+31: #endif // OHOS_NWEB_ANI_WEB_NATIVE_MESSAGING_EXTENSION_CONTEXT_ANI_H
+
+--- interfaces/kits/ani/webnativemessagingextension/ability/src/ets_web_native_messaging_extension_context.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "ets_web_native_messaging_extension_context.h"
+17: 
+18: #include "ability.h"
+19: #include "ani_base_context.h"
+20: #include "ets_error_utils.h"
+21: #include "ani_common_start_options.h"
+22: #include "ani_common_want.h"
+23: #include "ani_business_error.h"
+24: #include "ets_context_utils.h"
+25: #include "ets_extension_context.h"
+26: #include "web_native_messaging_common.h"
+27: #include "web_native_messaging_log.h"
+28: #include "nweb_log.h"
+29: #include "web_errors.h"
+30: 
+31: namespace OHOS {
+32: namespace NWeb {
+33: using namespace NWebError;
+34: using namespace AbilityRuntime;
+35: namespace {
+36: 
+37: static const char* CLEANER_CLASS_NAME =
+38:     "@ohos.web.WebNativeMessagingExtensionContext.Cleaner";
+39: static const char* WEB_NATIVE_MESSAGING_EXTENSION_CONTEXT_CLASS_NAME =
+40:     "@ohos.web.WebNativeMessagingExtensionContext.WebNativeMessagingExtensionContext";
+41: static constexpr const char *ABILITY_RESULT_CLASS_NAME = "ability.abilityResult.AbilityResultInner";
+42: 
+43: class ETSWebNativeMessagingExtensionContext final {
+44: public:
+45:     explicit ETSWebNativeMessagingExtensionContext(
+46:         const std::shared_ptr<WebNativeMessagingExtensionContext>& context)
+47:         : context_(context)
+48:     {}
+49: 
+50:     ~ETSWebNativeMessagingExtensionContext() = default;
+51: 
+52:     static void Finalizer(ani_env *env, ani_object obj)
+53:     {
+54:         if (env == nullptr) {
+55:             WNMLOG_E("null env");
+56:             return;
+57:         }
+58:         ani_long nativeEtsContextPtr;
+59:         if (env->Object_GetFieldByName_Long(
+60:             obj, "nativeEtsContext", &nativeEtsContextPtr) != ANI_OK) {
+61:             WNMLOG_E("Failed to get nativeEtsContext");
+62:             return;
+63:         }
+64:         if (nativeEtsContextPtr != 0) {
+65:             delete reinterpret_cast<ETSWebNativeMessagingExtensionContext *>(nativeEtsContextPtr);
+66:         }
+67:     }
+68: 
+69:     std::weak_ptr<WebNativeMessagingExtensionContext> GetAbilityContext()
+70:     {
+71:         return context_;
+72:     }
+73: 
+74:     static void StartAbility(ani_env* env, ani_object obj, ani_object want, ani_object options)
+75:     {
+76:         auto etsExtensionContext = GetEtsAbilityContext(env, obj);
+77:         if (etsExtensionContext == nullptr) {
+78:             WNMLOG_E("etsExtensionContext is null");
+79:             return;
+80:         }
+
+--- interfaces/kits/ani/webnativemessagingextension/ability/src/ets_web_native_messaging_extension.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "ets_web_native_messaging_extension.h"
+17: 
+18: #include "ability_handler.h"
+19: #include "ani_common_configuration.h"
+20: #include "ani_common_want.h"
+21: #include "ets_web_native_messaging_extension_context.h"
+22: #include "nweb_log.h"
+23: #include "web_native_messaging_extension_stub_impl.h"
+24: 
+25: namespace OHOS {
+26: namespace NWeb {
+27: namespace {
+28: constexpr const char* ON_DESTROY_METHOD_NAME = "onDestroy";
+29: constexpr const char* WEB_NATIVE_MESSAGING_EXTENSION_CLASS_NAME =
+30:     "@ohos.web.WebNativeMessagingExtensionAbility.WebNativeMessagingExtensionAbility";
+31: constexpr const char* ANI_CLASS_CONNECTION_INFO =
+32:     "@ohos.web.WebNativeMessagingExtensionAbility.ConnectionInfoInner";
+33: constexpr const char* CONNECTION_INFO_SIGNATUR =
+34:     "C{@ohos.web.WebNativeMessagingExtensionAbility.ConnectionInfo}:";
+35: } // namespace
+36: 
+37: using namespace OHOS::AppExecFwk;
+38: using namespace OHOS::AbilityRuntime;
+39: 
+40: ETSWebNativeMessagingExtension* ETSWebNativeMessagingExtension::Create(
+41:     const std::unique_ptr<Runtime>& runtime)
+42: {
+43:     return new ETSWebNativeMessagingExtension(static_cast<ETSRuntime&>(*runtime));
+44: }
+45: 
+46: ETSWebNativeMessagingExtension::ETSWebNativeMessagingExtension(ETSRuntime& etsRuntime)
+47:     :etsRuntime_(etsRuntime) {}
+48: ETSWebNativeMessagingExtension::~ETSWebNativeMessagingExtension()
+49: {
+50:     auto env = etsRuntime_.GetAniEnv();
+51:     if (env == nullptr) {
+52:         WNMLOG_E("env null");
+53:         return;
+54:     }
+55:     if (etsObj_ == nullptr) {
+56:         WNMLOG_E("etsObj_ null");
+57:         return;
+58:     }
+59:     if (etsObj_->aniRef) {
+60:         env->GlobalReference_Delete(etsObj_->aniRef);
+61:     }
+62: }
+63: 
+64: void ETSWebNativeMessagingExtension::Init(const std::shared_ptr<AbilityLocalRecord>& record,
+65:     const std::shared_ptr<OHOSApplication>& application, std::shared_ptr<AbilityHandler>& handler,
+66:     const sptr<IRemoteObject>& token)
+67: {
+68:     WebNativeMessagingExtension::Init(record, application, handler, token);
+69:     if (record == nullptr) {
+70:         WNMLOG_E("AbilityLocalRecord null");
+71:         return;
+72:     }
+73:     auto abilityInfo = record->GetAbilityInfo();
+74:     if (abilityInfo == nullptr) {
+75:         WNMLOG_E("abilityInfo null");
+76:         return;
+77:     }
+78:     std::string srcPath = "";
+79:     GetSrcPath(srcPath);
+80:     if (srcPath.empty()) {
+
+--- interfaces/kits/ani/webnativemessagingextension/ability/src/web_native_messaging_extension_context_ani.cpp ---
+1: /*
+2:  * Copyright (c) 2026 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: #include "web_native_messaging_extension_context_ani.h"
+16: 
+17: #include "nweb_log.h"
+18: 
+19: namespace OHOS {
+20: namespace NWeb {
+21: ani_status StsExtensionContextInit(ani_env* env)
+22: {
+23:     if (env == nullptr) {
+24:         WNMLOG_I("env is nullptr");
+25:         return ANI_ERROR;
+26:     }
+27:     return ANI_OK;
+28: }
+29: 
+30: extern "C" {
+31: ANI_EXPORT ani_status ANI_Constructor(ani_vm* vm, uint32_t* result)
+32: {
+33:     if (vm == nullptr || result == nullptr) {
+34:         WVLOG_E("null vm or result");
+35:         return ANI_INVALID_ARGS;
+36:     }
+37: 
+38:     ani_env* env = nullptr;
+39:     ani_status status = ANI_ERROR;
+40:     status = vm->GetEnv(ANI_VERSION_1, &env);
+41:     if (status != ANI_OK) {
+42:         WVLOG_E("GetEnv failed, status=%{public}d", status);
+43:         return ANI_NOT_FOUND;
+44:     }
+45:     StsExtensionContextInit(env);
+46:     *result = ANI_VERSION_1;
+47:     return ANI_OK;
+48: }
+49: }
+50: } // namespace NWeb
+51: } // namespace OHOS
+
+--- interfaces/kits/ani/webnativemessagingextension/manager/include/ani_web_native_messaging_extension_manager.h (truncated) ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: #ifndef OHOS_NWEB_ANI_WEB_NATIVE_MESSAGING_EXTENSION_MANAGER_H
+16: #define OHOS_NWEB_ANI_WEB_NATIVE_MESSAGING_EXTENSION_MANAGER_H
+17: 
+18: #include <uv.h>
+19: #include "want.h"
+20: 
+21: #include "ani.h"
+22: #include "ets_native_reference.h"
+23: #include "event_handler.h"
+24: #include "web_extension_connection_callback.h"
+25: #include "web_native_messaging_log.h"
+26: 
+27: 
+28: namespace OHOS {
+29: namespace NWeb {
+30: 
+31: ani_status StsExtensionManagerInit(ani_env* env);
+32: 
+33: enum ConnectCallbackType : int32_t {
+34:     ON_CONNECT_TYPE = 0,
+35:     ON_DISCONNECT_TYPE = 1,
+36:     ON_FAILED_TYPE = 2
+37: };
+38: 
+39: namespace NmErrorMsg {
+40: const std::string INNER_ERR_MSG = "Inner error for native messaging. Error code:";
+41: const std::string WANT_CONTENT_ERR_MSG = "The want content is invalid.";
+42: const std::string PERMISSION_DENY_ERR_MSG =
+43:     "Permission denied due to missing ohos.permission.WEB_NATIVE_MESSAGING.";
+44: }
+45: 
+46: enum class NmErrorCode : int {
+47:     INNER_ERROR = 17100201,
+48:     WANT_CONTENT_ERROR = 17100202,
+49:     PERMISSION_DENY = 17100203,
+50: };
+51: 
+52: struct CommonAsyncContext {
+53:     explicit CommonAsyncContext(ani_env* env);
+54:     virtual ~CommonAsyncContext();
+55:     ani_vm* vm_ = nullptr;
+56:     int32_t errCode = 0;
+57:     ani_ref callbackRef = nullptr; // callback handle
+58: };
+59: 
+60: struct ConnectNativeAsyncContext : public CommonAsyncContext {
+61:     explicit ConnectNativeAsyncContext(ani_env* env) : CommonAsyncContext(env) {};
+62:     sptr<IRemoteObject> token;
+63:     AAFwk::Want want;
+64:     sptr<WebExtensionConnectionCallback> connectCallback;
+65:     int32_t connectId = 0;
+66: };
+67: 
+68: class AniExtensionConnectionCallback : public IExtensionConnectionCallback,
+69:                                        public std::enable_shared_from_this<AniExtensionConnectionCallback> {
+70: public:
+71:     AniExtensionConnectionCallback(ani_env* env);
+72:     virtual ~AniExtensionConnectionCallback()
+73:     {
+74:         WNMLOG_D("~AniExtensionConnectionCallback");
+75:         DeleteCallInThread();
+76:     }
+77:     ani_env* GetEnv()
+78:     {
+79:         ani_env* env = nullptr;
+80:         if (vm_) {
+
+--- interfaces/kits/ani/webnativemessagingextension/manager/src/ani_web_native_messaging_extension_manager.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "ani_web_native_messaging_extension_manager.h"
+17: 
+18: #include <cstdint>
+19: #include <map>
+20: #include <mutex>
+21: #include <uv.h>
+22: 
+23: #include "ability.h"
+24: #include "ani.h"
+25: #include "ani_base_context.h"
+26: #include "ani_business_error.h"
+27: #include "ani_common_want.h"
+28: #include "ani_parse_utils.h"
+29: #include "context.h"
+30: #include "napi_parse_utils.h"
+31: #include "nweb_config_helper.h"
+32: #include "nweb_log.h"
+33: #include "system_properties_adapter_impl.h"
+34: #include "web_native_messaging_client.h"
+35: #include "web_native_messaging_common.h"
+36: #include "../../../../nativecommon/web_errors.h"
+37: 
+38: namespace OHOS {
+39: namespace NWeb {
+40: using namespace NWebError;
+41: namespace {
+42: constexpr const char* WEB_NATIVE_MESSAGING_EXTENSION_MANAGER_CLASS_NAME =
+43:     "@ohos.web.webNativeMessagingExtensionManager.webNativeMessagingExtensionManager";
+44: constexpr const char*  ANI_CLASS_CONNECTION_NATIVE_INFO =
+45:     "@ohos.web.webNativeMessagingExtensionManager.webNativeMessagingExtensionManager.ConnectionNativeInfoInner";
+46: constexpr const char*  NM_ERROR_CODE =
+47:     "@ohos.web.webNativeMessagingExtensionManager.webNativeMessagingExtensionManager.NmErrorCode";
+48: constexpr const char*  WEB_NATIVE_MESSAGING_EXTENSION_CALLBACK =
+49:     "@ohos.web.webNativeMessagingExtensionManager."
+50:     "webNativeMessagingExtensionManager.WebExtensionConnectionCallbackInner";
+51: constexpr const char* CONNECTION_NATIVE_INFO_SIGNATUR =
+52:     "C{@ohos.web.webNativeMessagingExtensionManager.webNativeMessagingExtensionManager.ConnectionNativeInfo}:";
+53: constexpr const char* ON_FAILED_SIGNATUR =
+54:     "E{@ohos.web.webNativeMessagingExtensionManager.webNativeMessagingExtensionManager.NmErrorCode}C{std.core.String}:";
+55: constexpr const char* METHOD_ON_CONNECT = "onConnect";
+56: constexpr const char* METHOD_ON_DISCONNECT = "onDisconnect";
+57: constexpr const char* METHOD_ON_FAILED = "onFailed";
+58: constexpr int32_t INDEX_ZERO = 0;
+59: constexpr int32_t INDEX_ONE = 1;
+60: constexpr int32_t INDEX_TWO = 2;
+61: std::recursive_mutex g_connectsLock;
+62: int32_t g_serialNumber = 1;
+63: static std::map<int32_t, sptr<WebExtensionConnectionCallback>> g_connects;
+64: bool g_initDiedRecipient = false;
+65: }
+66: 
+67: const std::string TASK_ID_DELETE = "delete";
+68: const std::string TASK_ID_CONNECT = "connect";
+69: 
+70: static void RemoveConnection(int32_t connectId)
+71: {
+72:     std::lock_guard<std::recursive_mutex> lock(g_connectsLock);
+73:     auto item = g_connects.find(connectId);
+74:     if (item != g_connects.end()) {
+75:         WNMLOG_D("remove connection %{public}d ok", connectId);
+76:         g_connects.erase(item);
+77:     } else {
+78:         WNMLOG_I("remove connection %{public}d not exist", connectId);
+79:     }
+80: }
+
+--- interfaces/kits/ani/webview/native/common/business_error.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2022 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "business_error.h"
+17: 
+18: #include "web_errors.h"
+19: 
+20: namespace OHOS {
+21: namespace NWebError {
+22: namespace {
+23: ani_object WrapBusinessError(ani_env *env, const std::string& msg)
+24: {
+25:     ani_class cls {};
+26:     ani_method method {};
+27:     ani_object obj = nullptr;
+28:     ani_status status = ANI_ERROR;
+29:     if (env == nullptr) {
+30:         WVLOG_E("null env");
+31:         return nullptr;
+32:     }
+33: 
+34:     ani_string aniMsg = nullptr;
+35:     if ((status = env->String_NewUTF8(msg.c_str(), msg.size(), &aniMsg)) != ANI_OK) {
+36:         WVLOG_E("String_NewUTF8 failed %{public}d", status);
+37:         return nullptr;
+38:     }
+39: 
+40:     ani_ref undefRef;
+41:     if ((status = env->GetUndefined(&undefRef)) != ANI_OK) {
+42:         WVLOG_E("GetUndefined failed %{public}d", status);
+43:         return nullptr;
+44:     }
+45: 
+46:     if ((status = env->FindClass("std.core.Error", &cls)) != ANI_OK) {
+47:         WVLOG_E("FindClass failed %{public}d", status);
+48:         return nullptr;
+49:     }
+50:     if ((status = env->Class_FindMethod(cls, "<ctor>", "C{std.core.String}C{std.core.ErrorOptions}:", &method)) !=
+51:         ANI_OK) {
+52:         WVLOG_E("Class_FindMethod failed %{public}d", status);
+53:         return nullptr;
+54:     }
+55: 
+56:     if ((status = env->Object_New(cls, method, &obj, aniMsg, undefRef)) != ANI_OK) {
+57:         WVLOG_E("Object_New failed %{public}d", status);
+58:         return nullptr;
+59:     }
+60:     return obj;
+61: }
+62: 
+63: ani_object CreateBusinessError(ani_env *env, ani_int code, const std::string& msg)
+64: {
+65:     ani_class cls {};
+66:     ani_method method {};
+67:     ani_object obj = nullptr;
+68:     ani_status status = ANI_ERROR;
+69:     if (env == nullptr) {
+70:         WVLOG_E("null env");
+71:         return nullptr;
+72:     }
+73:     if ((status = env->FindClass("@ohos.base.BusinessError", &cls)) != ANI_OK) {
+74:         WVLOG_E("FindClass failed %{public}d", status);
+75:         return nullptr;
+76:     }
+77:     if ((status = env->Class_FindMethod(cls, "<ctor>", "iC{std.core.Error}:", &method)) != ANI_OK) {
+78:         WVLOG_E("Class_FindMethod failed %{public}d", status);
+79:         return nullptr;
+80:     }
+
+--- interfaces/kits/ani/webview/native/common/business_error.h ---
+1: /*
+2:  * Copyright (c) 2022 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: #ifndef BUSINESS_ERROR_H
+16: #define BUSINESS_ERROR_H
+17: 
+18: #include "napi/native_api.h"
+19: #include "napi/native_common.h"
+20: #include "napi/native_node_api.h"
+21: #include "ani.h"
+22: #include "nweb_log.h"
+23: 
+24: namespace OHOS {
+25: namespace NWebError {
+26: class BusinessError {
+27: public:
+28: static inline void ThrowError(napi_env env, int32_t err, const std::string& msg)
+29: {
+30:     napi_throw_error(env, std::to_string(err).c_str(), msg.c_str());
+31: }
+32: 
+33: static napi_value CreateError(napi_env env, int32_t err);
+34: 
+35: static void ThrowErrorByErrcode(napi_env env, int32_t errCode);
+36: 
+37: static void ThrowErrorByErrcode(napi_env env, int32_t errCode, const std::string& errorMsg);
+38: };
+39: 
+40: class AniBusinessErrorError {
+41: public:
+42:     static ani_status ThrowError(ani_env *env, int32_t errorCode, const std::string& error_message);
+43: 
+44:     static ani_status ThrowErrorByErrCode(ani_env *env, int32_t errorCode);
+45:     static ani_ref CreateError(ani_env *env, int32_t err);
+46: };
+47: }
+48: }
+49: #endif
+
+--- interfaces/kits/ani/webview/native/common/napi_common_macros.h ---
+1: /*
+2:  * Copyright (c) 2024 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #ifndef NAPI_COMMON_NACROS_H
+17: #define NAPI_COMMON_NACROS_H
+18: 
+19: #define NAPI_GET_CALLBACK_RETURN_VOID(env, value, name, callback) \
+20:     do {                                                          \
+21:         napi_get_named_property(env, value, name, &(callback));   \
+22:         napi_valuetype valueType = napi_undefined;                \
+23:         napi_typeof(env, callback, &valueType);                   \
+24:         if (valueType != napi_function) {                         \
+25:             WVLOG_I("failed to get callback %{public}s", name);   \
+26:             return;                                               \
+27:         }                                                         \
+28:     } while (0)
+29: 
+30: #endif // NAPI_COMMON_NACROS_H
+31: 
+
+--- interfaces/kits/ani/webview/native/common/napi_parse_utils.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2022 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "napi_parse_utils.h"
+17: 
+18: #include <sys/mman.h>
+19: #include <unistd.h>
+20: #include <regex>
+21: 
+22: #include "nweb.h"
+23: #include "nweb_log.h"
+24: #include "ohos_adapter_helper.h"
+25: #include "securec.h"
+26: 
+27: #define MAX_FLOWBUF_DATA_SIZE 52428800 /* 50 MB */
+28: 
+29: namespace OHOS {
+30: namespace NWeb {
+31: namespace {
+32: bool ConvertToNapiHandlerOfString(napi_env env, std::shared_ptr<NWebMessage> src, napi_value& dst)
+33: {
+34:     std::string msgStr = src->GetString();
+35:     napi_create_string_utf8(env, msgStr.c_str(), msgStr.length(), &dst);
+36:     return true;
+37: }
+38: 
+39: bool ConvertToNapiHandlerOfBinary(napi_env env, std::shared_ptr<NWebMessage> src, napi_value& dst)
+40: {
+41:     std::vector<uint8_t> msgArr = src->GetBinary();
+42:     void *arrayData = nullptr;
+43:     napi_status status = napi_create_arraybuffer(env, msgArr.size(), &arrayData, &dst);
+44:     if (status != napi_ok) {
+45:         WVLOG_E("Create arraybuffer failed");
+46:         return false;
+47:     }
+48:     for (size_t i = 0; i < msgArr.size(); ++i) {
+49:         *(uint8_t*)((uint8_t*)arrayData + i) = msgArr[i];
+50:     }
+51:     return true;
+52: }
+53: 
+54: bool ConvertToNapiHandlerOfBoolean(napi_env env, std::shared_ptr<NWebMessage> src, napi_value& dst)
+55: {
+56:     bool value = src->GetBoolean();
+57:     napi_get_boolean(env, value, &dst);
+58:     return true;
+59: }
+60: 
+61: bool ConvertToNapiHandlerOfInteger(napi_env env, std::shared_ptr<NWebMessage> src, napi_value& dst)
+62: {
+63:     int64_t value = src->GetInt64();
+64:     napi_create_int64(env, value, &dst);
+65:     return true;
+66: }
+67: 
+68: bool ConvertToNapiHandlerOfDouble(napi_env env, std::shared_ptr<NWebMessage> src, napi_value& dst)
+69: {
+70:     double value = src->GetDouble();
+71:     napi_create_double(env, value, &dst);
+72:     return true;
+73: }
+74: 
+75: bool ConvertToNapiHandlerOfError(napi_env env, std::shared_ptr<NWebMessage> src, napi_value& dst)
+76: {
+77:     std::string errorName = src->GetErrName();
+78:     std::string errorMsg = src->GetErrName() + ": " + src->GetErrMsg();
+79:     napi_value name = nullptr;
+80:     napi_value message = nullptr;
+
+--- interfaces/kits/ani/webview/native/common/napi_parse_utils.h ---
+1: /*
+2:  * Copyright (c) 2022 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #ifndef NAPI_PARSE_UTILS_H
+17: #define NAPI_PARSE_UTILS_H
+18: 
+19: #include <vector>
+20: 
+21: #include "napi/native_api.h"
+22: #include "napi/native_common.h"
+23: #include "napi/native_node_api.h"
+24: #include "nweb.h"
+25: #include "nweb_web_message.h"
+26: #include "web_errors.h"
+27: 
+28: namespace OHOS {
+29: namespace NWeb {
+30: constexpr int INTEGER_ZERO = 0;
+31: constexpr int INTEGER_ONE = 1;
+32: constexpr int INTEGER_TWO = 2;
+33: constexpr int INTEGER_THREE = 3;
+34: constexpr int INTEGER_FOUR = 4;
+35: constexpr int INTEGER_FIVE = 5;
+36: constexpr int MAX_CUSTOM_SCHEME_NAME_LENGTH = 32;
+37: constexpr int MAX_CUSTOM_SCHEME_SIZE = 10;
+38: 
+39: class NapiParseUtils {
+40: public:
+41:     static napi_value CreateEnumConstructor(napi_env env, napi_callback_info info);
+42:     static napi_value ToInt32Value(napi_env env, int32_t number);
+43:     static bool ParseUint32(napi_env env, napi_value argv, uint32_t& outValue);
+44:     static bool ParseInt32(napi_env env, napi_value argv, int32_t& outValue);
+45:     static bool ParseUint64(napi_env env, napi_value argv, uint64_t& outValue, bool *lossless);
+46:     static bool ParseInt64(napi_env env, napi_value argv, int64_t& outValue);
+47:     static bool ParseDouble(napi_env env, napi_value argv, double& outValue);
+48:     static bool ParseString(napi_env env, napi_value argv, std::string& outValue);
+49:     static bool ParseArrayBuffer(napi_env env, napi_value argv, std::string& outValue);
+50:     static bool ParseBoolean(napi_env env, napi_value argv, bool& outValue);
+51:     static bool ParseStringArray(napi_env env, napi_value argv, std::vector<std::string>& outValue);
+52:     static bool ParseBooleanArray(napi_env env, napi_value argv, std::vector<bool>& outValue);
+53:     static bool ParseDoubleArray(napi_env env, napi_value argv, std::vector<double>& outValue);
+54:     static bool ParseInt64Array(napi_env env, napi_value argv, std::vector<int64_t>& outValue);
+55:     static bool ParseFloat(napi_env env, napi_value argv, float& outValue);
+56:     static bool ConvertNWebToNapiValue(napi_env env, std::shared_ptr<NWebMessage> src, napi_value& dst);
+57:     static ErrCode ConstructStringFlowbuf(napi_env env, napi_value argv, int& fd, size_t& scriptLength);
+58:     static ErrCode ConstructArrayBufFlowbuf(napi_env env, napi_value argv, int& fd, size_t& scriptLength);
+59:     static bool ParseJsLengthStringToInt(const std::string& input, PixelUnit& type, int32_t& value);
+60: };
+61: } // namespace NWeb
+62: } // namespace OHOS
+63: #endif
+
+--- interfaces/kits/ani/webview/native/common/nweb_napi_scope.h ---
+1: /*
+2:  * Copyright (c) 2024 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  * http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #ifndef NWEB_NAPI_SCOPE_H
+17: #define NWEB_NAPI_SCOPE_H
+18: 
+19: #include <js_native_api.h>
+20: #include "napi/native_api.h"
+21: 
+22: namespace OHOS {
+23: struct NApiScope {
+24:     NApiScope(napi_env env) : env_(env)
+25:     {
+26:         // Enable the napi_handle_scope to manage the life cycle of the napi_value.
+27:         // Otherwise, memory leakage occurs.
+28:         napi_open_handle_scope(env_, &scope_);
+29:     }
+30: 
+31:     ~NApiScope()
+32:     {
+33:         if (scope_) {
+34:             napi_close_handle_scope(env_, scope_);
+35:         }
+36:     }
+37: 
+38:     napi_env env_;
+39:     napi_handle_scope scope_ = nullptr;
+40: };
+41: }
+42: 
+43: #endif // NWEB_NAPI_SCOPE_H
+44: 
+
+--- interfaces/kits/ani/webview/native/webfunction/webview_web_inited_callback.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2022 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "webview_web_inited_callback.h"
+17: 
+18: #include "uv.h"
+19: 
+20: namespace OHOS::NWeb {
+21: constexpr ani_size REFERENCES_MAX_NUMBER = 16;
+22: namespace {
+23: void UvWebInitedCallbackThreadWoker(WebRunInitedCallbackImpl* obj)
+24: {
+25:     WVLOG_D("enter UvWebInitedCallbackThreadWoker");
+26:     if (!obj || !(obj->param_)) {
+27:         WVLOG_E("callback obj or param is nullptr");
+28:         return;
+29:     }
+30: 
+31:     ani_size nr_refs = REFERENCES_MAX_NUMBER;
+32:     ani_env* env = obj->param_->GetEnv();
+33:     if (!env) {
+34:         WVLOG_E("env is nullptr");
+35:         return;
+36:     }
+37:     if (env->CreateLocalScope(nr_refs) != ANI_OK) {
+38:         WVLOG_E("env createLocalScope failed");
+39:         return;
+40:     }
+41:     ani_status status;
+42:     if (obj->param_->webInitedCallback_) {
+43:         ani_ref fnReturnVal;
+44:         if ((status = env->FunctionalObject_Call(
+45:                  static_cast<ani_fn_object>(obj->param_->webInitedCallback_), 0, {}, &fnReturnVal)) != ANI_OK) {
+46:             WVLOG_E("UvWebInitedCallbackThreadWoker callback execute failed status : %{public}d", status);
+47:             env->DestroyLocalScope();
+48:             return;
+49:         }
+50:     } else {
+51:         WVLOG_E("webInitedCallback_ is nullptr");
+52:         env->DestroyLocalScope();
+53:         return;
+54:     }
+55:     env->DestroyLocalScope();
+56:     if (obj->param_) {
+57:         delete obj->param_;
+58:     }
+59:     return;
+60: }
+61: } // namespace
+62: 
+63: WebInitedCallbackParam::WebInitedCallbackParam(ani_env* env, ani_ref callback)
+64:     : vm_(nullptr), webInitedCallback_(nullptr)
+65: {
+66:     WVLOG_D("enter WebInitedCallbackParam");
+67:     if (!env || !callback) {
+68:         WVLOG_E("env or callback is nullptr");
+69:         return;
+70:     }
+71:     if (env->GetVM(&vm_) != ANI_OK) {
+72:         WVLOG_E("get vm from env error");
+73:         return;
+74:     }
+75:     if (env->GlobalReference_Create(callback, &webInitedCallback_)!= ANI_OK) {
+76:         WVLOG_E("create reference obj fail");
+77:         return;
+78:     }
+79: }
+80: 
+
+--- interfaces/kits/ani/webview/native/webfunction/webview_web_inited_callback.h ---
+1: /*
+2:  * Copyright (c) 2022 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: #ifndef NWEB_WEBVIEW_WEB_INITED_CALLBACK_H
+16: #define NWEB_WEBVIEW_WEB_INITED_CALLBACK_H
+17: 
+18: #include <condition_variable>
+19: #include <uv.h>
+20: 
+21: #include "ani.h"
+22: #include "napi/native_api.h"
+23: #include "napi/native_node_api.h"
+24: #include "napi_parse_utils.h"
+25: #include "nweb_log.h"
+26: #include "nweb_value_callback.h"
+27: #include "ohos_init_web_adapter.h"
+28: namespace OHOS::NWeb {
+29: class WebInitedCallbackParam {
+30: public:
+31:     WebInitedCallbackParam(ani_env* env, ani_ref callback);
+32:     ~WebInitedCallbackParam();
+33:     ani_env* GetEnv()
+34:     {
+35:         ani_env* env = nullptr;
+36:         if (vm_) {
+37:             vm_->GetEnv(ANI_VERSION_1, &env);
+38:         }
+39:         return env;
+40:     }
+41:     ani_vm* vm_;
+42:     ani_ref webInitedCallback_;
+43: };
+44: 
+45: class WebRunInitedCallbackImpl : public WebRunInitedCallback {
+46: public:
+47:     explicit WebRunInitedCallbackImpl(WebInitedCallbackParam* param) : param_(param) {}
+48:     ~WebRunInitedCallbackImpl() override
+49:     {
+50:         WVLOG_I("~WebRunInitedCallbackImpl start");
+51:     }
+52:     void RunInitedCallback() override;
+53: 
+54:     WebInitedCallbackParam* param_ = nullptr;
+55: };
+56: } // namespace OHOS::NWeb
+57: #endif
+58: 
+
+--- interfaces/kits/ani/webview/native/webviewcontroller/native_media_player_impl.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2024 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "native_media_player_impl.h"
+17: #include "napi_native_mediaplayer_handler_impl.h"
+18: 
+19: #include <ani.h>
+20: 
+21: #include "napi/native_api.h"
+22: #include "napi_common_macros.h"
+23: #include "nweb_log.h"
+24: #include "nweb_native_media_player.h"
+25: 
+26: namespace OHOS::NWeb {
+27: 
+28: constexpr int INTEGER_ZERO = 0;
+29: constexpr int INTEGER_ONE = 1;
+30: constexpr int INTEGER_TWO = 2;
+31: constexpr int INTEGER_THREE = 3;
+32: constexpr int INTEGER_FOUR = 4;
+33: 
+34: namespace {
+35: const char* NATIVE_MEDIA_PLAYER_HANDLER_INNER = "@ohos.web.webview.webview.NativeMediaPlayerHandlerinner";
+36: const char* MEDIA_INFO_INNER = "@ohos.web.webview.webview.MediaInfoinner";
+37: const char* RECT_EVENT_INNER = "@ohos.web.webview.webview.RectEventinner";
+38: const char* CLASS_MEDIA_SOURCE_INFO = "@ohos.web.webview.webview.MediaSourceInfo";
+39: const char* NATIVE_MEDIA_PLAYER_CLASS_NAME = "@ohos.web.webview.webview.NativeMediaPlayerSurfaceInfo";
+40: const char* ANI_ENUM_MEDIA_TYPE = "@ohos.web.webview.webview.MediaType";
+41: const char* ANI_ENUM_PRELOAD = "@ohos.web.webview.webview.Preload";
+42: const char* ANI_ENUM_SOURCE_TYPE = "@ohos.web.webview.webview.SourceType";
+43: const char* ANI_ENUM_SUSPEND_TYPE = "@ohos.web.webview.webview.SuspendType";
+44: } // namespace
+45: 
+46: bool Wrap(ani_env* env, const ani_object& object, const char* className, const ani_long& thisVar)
+47: {
+48:     ani_status status;
+49:     ani_class cls;
+50:     if ((status = env->FindClass(className, &cls)) != ANI_OK) {
+51:         WVLOG_E("AniUtils_Wrap FindClass status: %{public}d", status);
+52:         return false;
+53:     }
+54:     ani_method innerWrapMethod;
+55:     if ((status = env->Class_FindMethod(cls, "bindNativePtr", "l:", &innerWrapMethod)) != ANI_OK) {
+56:         WVLOG_E("AniUtils_Wrap Class_FindMethod status: %{public}d", status);
+57:         return false;
+58:     }
+59:     if ((status = env->Object_CallMethod_Void(object, innerWrapMethod, thisVar)) != ANI_OK) {
+60:         WVLOG_E("AniUtils_Wrap Object_CallMethod_Void status: %{public}d", status);
+61:         return false;
+62:     }
+63:     return true;
+64: }
+65: 
+66: bool CreateObjectVoid(ani_env* env, const char* className, ani_object& object)
+67: {
+68:     ani_class cls;
+69:     ani_status status = env->FindClass(className, &cls);
+70:     if (status != ANI_OK) {
+71:         WVLOG_E("find %{public}s class failed, status: %{public}d", className, status);
+72:         return false;
+73:     }
+74:     ani_method ctor;
+75:     if ((status = env->Class_FindMethod(cls, "<ctor>", nullptr, &ctor)) != ANI_OK) {
+76:         WVLOG_E("get %{public}s ctor method failed, status: %{public}d", className, status);
+77:         return false;
+78:     }
+79:     if ((status = env->Object_New(cls, ctor, &object)) != ANI_OK) {
+80:         WVLOG_E("new %{public}s failed, status: %{public}d", className, status);
+
+--- interfaces/kits/ani/webview/native/webviewcontroller/native_media_player_impl.h (truncated) ---
+1: /*
+2:  * Copyright (c) 2024 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  *     http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #ifndef ANI_NATIVE_MEDIA_PLAYER_IMPL_H
+17: #define ANI_NATIVE_MEDIA_PLAYER_IMPL_H
+18: 
+19: #include <ani.h>
+20: 
+21: #include "napi/native_api.h"
+22: #include "nweb_native_media_player.h"
+23: 
+24: namespace OHOS::NWeb {
+25: 
+26: class NWebNativeMediaPlayerBridgeImpl : public NWebNativeMediaPlayerBridge {
+27: public:
+28:     NWebNativeMediaPlayerBridgeImpl(int32_t nwebId, ani_vm* vm, ani_ref value);
+29:     ~NWebNativeMediaPlayerBridgeImpl();
+30: 
+31:     void UpdateRect(double x, double y, double width, double height) override;
+32: 
+33:     void Play() override;
+34: 
+35:     void Pause() override;
+36: 
+37:     void Seek(double time) override;
+38: 
+39:     void SetVolume(double volume) override;
+40: 
+41:     void SetMuted(bool isMuted) override;
+42: 
+43:     void SetPlaybackRate(double playbackRate) override;
+44: 
+45:     void Release() override;
+46: 
+47:     void EnterFullScreen() override;
+48: 
+49:     void ExitFullScreen() override;
+50: 
+51:     void ResumeMediaPlayer() override;
+52: 
+53:     void SuspendMediaPlayer(SuspendType type) override;
+54: 
+55: private:
+56:     int32_t nwebId_ = -1;
+57:     ani_vm* vm_ = nullptr;
+58:     ani_ref value_ = nullptr;
+59: };
+60: 
+61: class NWebCreateNativeMediaPlayerCallbackImpl : public NWebCreateNativeMediaPlayerCallback {
+62: public:
+63:     explicit NWebCreateNativeMediaPlayerCallbackImpl(int32_t nwebId, ani_vm* vm, ani_fn_object callback);
+64:     ~NWebCreateNativeMediaPlayerCallbackImpl();
+65: 
+66:     std::shared_ptr<NWebNativeMediaPlayerBridge> OnCreate(
+67:         std::shared_ptr<NWebNativeMediaPlayerHandler> handler, std::shared_ptr<NWebMediaInfo> mediaInfo) override;
+68: 
+69: private:
+70:     ani_object ConstructRect(std::shared_ptr<NWebNativeMediaPlayerSurfaceInfo> surfaceInfo);
+71: 
+72:     ani_object ConstructHandler(std::shared_ptr<NWebNativeMediaPlayerHandler> handler);
+73: 
+74:     ani_object ConstructControls(const std::vector<std::string>& controls);
+75: 
+76:     ani_object ConstructHeaders(const std::map<std::string, std::string>& headers);
+77: 
+78:     ani_object ConstructAttributes(const std::map<std::string, std::string>& attributes);
+79: 
+80:     ani_object ConstructMediaInfo(std::shared_ptr<NWebMediaInfo> mediaInfo);
+
+--- interfaces/kits/ani/webview/native/webviewcontroller/web_scheme_handler.cpp (truncated) ---
+1: /*
+2:  * Copyright (c) 2025 Huawei Device Co., Ltd.
+3:  * Licensed under the Apache License, Version 2.0 (the "License");
+4:  * you may not use this file except in compliance with the License.
+5:  * You may obtain a copy of the License at
+6:  *
+7:  * http://www.apache.org/licenses/LICENSE-2.0
+8:  *
+9:  * Unless required by applicable law or agreed to in writing, software
+10:  * distributed under the License is distributed on an "AS IS" BASIS,
+11:  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+12:  * See the License for the specific language governing permissions and
+13:  * limitations under the License.
+14:  */
+15: 
+16: #include "web_scheme_handler.h"
+17: 
+18: #include <securec.h>
+19: #include <sstream>
+20: #include <string>
+21: 
+22: #include "ani_business_error.h"
+23: #include "nweb_log.h"
+24: #include "web_errors.h"
+25: #include "ani_class_name.h"
+26: #include "ani_parse_utils.h"
+27: 
+28: namespace OHOS::NWeb {
+29: namespace {
+30: const std::string TASK_ID = "PostMessageTask";
+31: 
+32: void OnRequestStart(const ArkWeb_SchemeHandler* schemeHandler, ArkWeb_ResourceRequest* resourceRequest,
+33:     const ArkWeb_ResourceHandler* resourceHandler, bool* intercept)
+34: {
+35:     WVLOG_D("SchemeHandler OnRequestStart");
+36:     if (!schemeHandler) {
+37:         WVLOG_E("OnRequestStart schemeHandler is nullptr");
+38:         return;
+39:     }
+40:     WebSchemeHandler* handler = WebSchemeHandler::GetWebSchemeHandler(schemeHandler);
+41:     if (!handler) {
+42:         WVLOG_E("GetWebSchemeHandler failed");
+43:         return;
+44:     }
+45:     handler->RequestStart(resourceRequest, resourceHandler, intercept);
+46: }
+47: 
+48: void OnRequestStop(const ArkWeb_SchemeHandler* schemeHandler, const ArkWeb_ResourceRequest* resourceRequest)
+49: {
+50:     WVLOG_D("SchemeHandler OnRequestStop");
+51:     if (!schemeHandler) {
+52:         WVLOG_E("OnRequestStop schemeHandler is nullptr");
+53:         return;
+54:     }
+55:     WebSchemeHandler* handler = WebSchemeHandler::GetWebSchemeHandler(schemeHandler);
+56:     if (!handler) {
+57:         WVLOG_E("GetWebSchemeHandler failed");
+58:         return;
+59:     }
+60:     handler->RequestStop(resourceRequest);
+61: }
+62: } // namespace
+63: 
+64: std::unordered_map<WebSchemeHandler*, const ArkWeb_SchemeHandler*> WebSchemeHandler::webSchemeHandlerMap_;
+65: std::unordered_map<const ArkWeb_SchemeHandler*, WebSchemeHandler*> WebSchemeHandler::arkWebSchemeHandlerMap_;
+66: 
+67: const ArkWeb_SchemeHandler* WebSchemeHandler::GetArkWebSchemeHandler(WebSchemeHandler* handler)
+68: {
+69:     return WebSchemeHandler::webSchemeHandlerMap_.find(handler) != WebSchemeHandler::webSchemeHandlerMap_.end()
+70:                ? WebSchemeHandler::webSchemeHandlerMap_[handler]
+71:                : nullptr;
+72: }
+73: 
+74: WebSchemeHandler* WebSchemeHandler::GetWebSchemeHandler(const ArkWeb_SchemeHandler* handler)
+75: {
+76:     return WebSchemeHandler::arkWebSchemeHandlerMap_.find(handler) != WebSchemeHandler::arkWebSchemeHandlerMap_.end()
+77:                ? WebSchemeHandler::arkWebSchemeHandlerMap_[handler]
+78:                : nullptr;
+79: }
+80: 
+
+Developer documentation requirements:
+- Include source anchors for important claims: file path, visible symbol/function/class name when available, and why the anchor matters.
+- Include a runbook when operational evidence exists: build, validation, deployment, rollback, and failure-mode notes.
+- Include debugging guidance for each major module: symptom, likely source area, and command or file to inspect.
+- State certainty boundaries: mark source-confirmed facts separately from inferred behavior or missing evidence.

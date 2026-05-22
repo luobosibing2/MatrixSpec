@@ -1,0 +1,65 @@
+{
+  "runId": "20260522193510256",
+  "type": "generate",
+  "status": "generated",
+  "createdAt": "2026-05-22T11:35:10.261Z",
+  "root": "C:\\Users\\kvenu\\playground\\codewiki-community\\benchmark\\gitcode\\repos\\openharmony\\distributeddatamgr_pasteboard",
+  "commitId": "9a5388a",
+  "runner": "codex",
+  "generationMode": "react",
+  "provider": "codex",
+  "model": "gpt-5.3-codex-spark",
+  "probeModels": {
+    "requested": false,
+    "status": "not_requested"
+  },
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "plan": "plan.json",
+    "modules": [
+      "modules/services-dfx.md",
+      "modules/services-zidl.md",
+      "modules/services-core.md",
+      "modules/tools-ohos-pasteboard.md",
+      "modules/services-dialog.md",
+      "modules/services-load.md",
+      "modules/services-switch.md",
+      "modules/services-account.md"
+    ]
+  },
+  "logs": {
+    "scan": "logs/scan.json",
+    "llm": null,
+    "prompts": {
+      "design": "logs/prompts/design.md",
+      "spec": "logs/prompts/spec.md"
+    },
+    "react": "logs/react.json"
+  },
+  "warnings": [
+    "P3 CLI runner react output; module artifacts were staged under the run directory."
+  ],
+  "tokens": {
+    "input": 205141,
+    "output": 27972
+  },
+  "applied": false,
+  "generationReason": "forced_module_first",
+  "scanSummary": {
+    "totalFiles": 719,
+    "includedFiles": 452,
+    "ignoredFiles": 270,
+    "readmeFiles": [
+      "README.md",
+      "README_ZH.md",
+      "tools/ohos-pasteboard/docs/README.md"
+    ],
+    "docsFiles": []
+  },
+  "planSummary": {
+    "modules": 8,
+    "language": "C/C++",
+    "primaryExtension": ".cpp"
+  }
+}

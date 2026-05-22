@@ -1,0 +1,173 @@
+# Load 模块中间设计文档（草案）
+
+## 1. 模块目的与职责边界
+
+Load 模块是剪贴板服务内部的启动期组件加载器，负责读取运行时配置并按配置动态加载服务扩展组件。  
+它不直接实现粘贴板业务 API，而是提供“可插拔扩展初始化”的基础能力，典型职责如下：
+
+- 解析服务配置文件，产出结构化配置对象。
+- 按配置加载共享库（`dlopen`）并可选调用构造入口。
+- 记录已加载组件，避免重复加载。
+- 对外提供配置化 UID 的读取能力。
+
+**锚点说明（为何关键）**  
+- [`services/load/src/loader.cpp: Loader::LoadComponents`](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)  
+  决定动态库加载、错误处理与初始化行为，直接影响服务启动可用性与扩展能力。  
+- [`services/load/src/config.cpp: Config::Unmarshal / Component::Unmarshal`](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\config.cpp)  
+  决定配置解析成功与否及后续组件字段可用性。  
+- [`services/load/include/loader.h: Loader::CONF_FILE`](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h)  
+  绑定了运行时配置来源路径，属于部署约束入口。  
+
+## 2. 目录结构
+
+```text
+services/load/
+  include/
+    config.h
+    loader.h
+  src/
+    config.cpp
+    loader.cpp
+```
+
+与仓库整体关系上，该模块位于 `services/`，作为服务启动链的一部分；其配置能力可复用于服务组件化加载场景。
+
+## 3. 核心组件
+
+### 3.1 `Config` 与 `Config::Component`
+
+文件: [services/load/include/config.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\config.h)
+
+- `Config` 继承 `DistributedData::Serializable`，用于统一 JSON 编解码。
+- `Config::Component` 作为组件描述单元，包含动态库与生命周期相关元数据。
+- 所有 `Marshal/Unmarshal` 方法返回 `bool`，但内部并未在字段级别严格强制完整性（见下文约束）。
+
+### 3.2 `Loader`
+
+文件: [services/load/include/loader.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h)  
+文件: [services/load/src/loader.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)
+
+- `LoadComponents()`：主流程入口，按组件列表逐个尝试加载。  
+- `LoadUid()`：返回配置中的 `uid`。  
+- `LoadConfig()`：读取配置文件内容并反序列化。  
+- `ComponentIsExist()`：通过静态 `handleMap` 避免重复加载同一个 `lib`。  
+- `handleMap` 为 `static inline std::unordered_map<std::string, void*>`，仅写入不回收（与当前析构行为一致）。
+
+## 4. 核心流程
+
+### 4.1 配置驱动的组件加载流程
+
+1. `LoadComponents()` 调用 `LoadConfig()` 获得 `Config`。  
+2. 遍历 `config.components`。  
+3. 跳过 `lib` 为空的组件。  
+4. 检查 `ComponentIsExist(lib)`，若已存在则跳过。  
+5. 执行 `dlopen(lib, RTLD_LAZY)`；失败时记录错误并继续下一个组件。  
+6. 成功后将 handle 写入 `handleMap`。  
+7. 如果 `constructor` 非空，则 `dlsym` 获取函数并调用 `constructor(params.c_str())`。
+
+锚点：  
+- [`services/load/src/loader.cpp: Loader::LoadComponents`](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)
+
+### 4.2 配置读取与 UID 获取流程
+
+1. `LoadUid()` 内部调用 `LoadConfig()`，返回 `config.uid`。  
+2. `LoadConfig()` 通过 `std::ifstream` 读取固定路径配置。  
+3. 使用 `Config::Unmarshall(context)` 反序列化 JSON。  
+
+锚点：  
+- [`services/load/src/loader.cpp: Loader::LoadUid`](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)  
+- [`services/load/src/loader.cpp: Loader::LoadConfig`](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)
+
+## 5. 接口与数据结构
+
+| 文件 | 符号 | 类型 | 说明 |
+|---|---|---|---|
+| [config.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\config.h) | `Config::Component` | 类 | 组件配置信息载体；字段含 `description/lib/constructor/destructor/params` |
+| [config.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\config.h) | `Config` | 类 | 顶层配置；字段含 `processLabel/version/features/plugins/components/uid` |
+| [config.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\config.h) | `Component::Marshal/Unmarshal` | 方法 | 与 JSON 映射的序列化/反序列化 |
+| [config.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\config.h) | `Config::Marshal/Unmarshal` | 方法 | 顶层配置序列化/反序列化 |
+| [loader.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h) | `Loader::LoadComponents` | 方法 | 启动期组件加载主流程 |
+| [loader.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h) | `Loader::LoadUid` | 方法 | 提供 UID 配置读取 |
+| [loader.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h) | `Loader::ComponentIsExist` | 方法 | 通过 `lib` 去重 |
+| [loader.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp) | `Loader::handleMap` | 字段 | 已加载库句柄缓存（无清理路径） |
+
+## 6. 关键约束与边界条件
+
+- 配置文件路径硬编码为 `/system/etc/pasteboard/conf/pasteboard.json`，部署时必须存在且可读。锚点: [loader.h: CONF_FILE](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h)  
+- 构造函数调用约定固定为 `void (*)(const char *)`，参数来源于 `params` 字符串。锚点: [loader.h: using Constructor](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h)  
+- 未找到 `lib` 或 `constructor` 为空的组件不会报错终止，仅跳过。  
+- 注释明确“no need to close the component”，当前实现也未在析构时 `dlclose`；该行为是长期驻留型组件加载。锚点: [loader.cpp: LoadComponents](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)  
+- `Config::Unmarshal` 只对前两个字段聚合校验返回值，其他字段即使失败也不会影响最终 bool。锚点: [config.cpp: Config::Unmarshal](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\config.cpp)  
+- `LoadConfig()` 使用逐行拼接读取文件内容，未处理换行保留；对 JSON 来说通常可行，但对非标准文本结构无额外保护。锚点: [loader.cpp: LoadConfig](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)
+
+## 7. 运行手册（可用于后续 design.md）
+
+### 7.1 Build（构建）
+- 证据缺口：未检索到本模块独立构建脚本或目标定义。  
+- 建议（推断）: 以仓库服务主线构建目标触发编译该模块，确保链接依赖包含 `dl` 与 `Serializable` 框架。  
+- 产出验收点：`Loader` 可链接且 `config.cpp/loader.cpp` 无未解析符号。
+
+### 7.2 Validation（验证）
+- 目标用例：
+  1. 准备合法与非法 JSON 配置，验证 `LoadComponents`、`LoadUid` 行为。
+  2. 模拟组件库重复项，验证 `ComponentIsExist` 的去重效果。
+  3. 模拟 `dlopen` 失败场景（不存在路径），检查日志与继续加载行为。
+- 证据缺口：仓库内未给出本模块专项测试文件。
+
+### 7.3 Deployment（部署）
+- 关键部署项：
+  - 配置文件部署到 `CONF_FILE` 定义路径。  
+  - 组件库文件路径与 `dlsym` 构造函数名需与配置一致。  
+  - 运行用户与权限需允许访问配置与加载库文件。
+
+### 7.4 Rollback（回退）
+- 回退策略：
+  - 快速回退至上一个可用 `pasteboard.json`，避免新增组件导致启动异常。
+  - 若新库加载失败，服务仍可继续（按现状会继续其余组件），因此回退颗粒度可先“逐项禁用新组件”再重启服务。
+- 证据缺口：无内置回滚逻辑；回滚依赖运维侧替换配置与库文件。
+
+### 7.5 Failure-mode notes（故障模式）
+- 配置不可读/不可解析：`LoadComponents` 将用默认空 `Config` 行为运行（未显式上报强失败）。  
+- 重复组件：以 `lib` 名称去重防重复 `dlopen`。  
+- 构造函数缺失：`dlsym` 失败后，库仍保留加载状态。  
+- 句柄泄漏：当前无卸载路径，长期运行后可接受，但热更新/热卸载场景需额外考虑。
+
+## 8. 调试指引（按主要模块）
+
+### 8.1 配置与反序列化（`Config`）
+- 症状：组件列表为空、UID 读取异常、字段缺失。  
+- 源码区域：`Config::Unmarshal` / `LoadConfig`。  
+- 检查文件与命令：  
+  - [services/load/src/config.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\config.cpp)  
+  - [services/load/src/loader.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)  
+  - 运行时检查 `/system/etc/pasteboard/conf/pasteboard.json`。
+
+### 8.2 动态库加载（`Loader::LoadComponents`）
+- 症状：组件初始化未触发、服务行为异常。  
+- 源码区域：`Loader::LoadComponents`。  
+- 检查文件与命令：  
+  - [services/load/src/loader.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)  
+  - [services/load/include/loader.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h)  
+  - 日志中关注 `PASTEBOARD_MODULE_SERVICE` 标签中的 `dlopen` 错误。  
+
+### 8.3 生命周期与资源（`handleMap`）
+- 症状：多次启动后组件重复加载/句柄增长。  
+- 源码区域：`Loader::handleMap`、`ComponentIsExist`。  
+- 检查文件：  
+  - [services/load/include/loader.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h)  
+  - [services/load/src/loader.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)
+
+## 9. 可信度边界
+
+### 9.1 源码确认事实
+- 文件与符号定义、流程、调用关系均基于以下文件直接读取确认：  
+  - [config.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\config.h)  
+  - [loader.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\include\loader.h)  
+  - [config.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\config.cpp)  
+  - [loader.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\load\src\loader.cpp)
+
+### 9.2 推断与缺失证据
+- 模块在系统启动链中的调用时机、与上层服务的编排顺序。  
+- 与本模块联动的具体 `.so` 构建产物名与 `constructor` ABI 约束。  
+- 编译目标与标准化部署步骤（本轮证据中未提供模块级 build/test 文档）。  
+- 配置文件具体 JSON 字段完整示例及其在真实运行中的校验规范。

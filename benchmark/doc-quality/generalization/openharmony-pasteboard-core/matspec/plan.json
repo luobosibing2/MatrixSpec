@@ -1,0 +1,71 @@
+{
+  "projectName": "distributeddatamgr_pasteboard",
+  "language": "C/C++",
+  "primaryExtension": ".cpp",
+  "modules": [
+    {
+      "name": "Dfx",
+      "path": "services/dfx",
+      "description": "Component source module discovered under services/.",
+      "sourceFiles": 30,
+      "sourceLines": 2123,
+      "largeFile": false
+    },
+    {
+      "name": "Zidl",
+      "path": "services/zidl",
+      "description": "Component source module discovered under services/.",
+      "sourceFiles": 24,
+      "sourceLines": 1263,
+      "largeFile": false
+    },
+    {
+      "name": "Core",
+      "path": "services/core",
+      "description": "Component source module discovered under services/.",
+      "sourceFiles": 22,
+      "sourceLines": 7001,
+      "largeFile": false
+    },
+    {
+      "name": "Ohos Pasteboard",
+      "path": "tools/ohos-pasteboard",
+      "description": "Component source module discovered under tools/.",
+      "sourceFiles": 22,
+      "sourceLines": 1511,
+      "largeFile": false
+    },
+    {
+      "name": "Dialog",
+      "path": "services/dialog",
+      "description": "Component source module discovered under services/.",
+      "sourceFiles": 7,
+      "sourceLines": 165,
+      "largeFile": false
+    },
+    {
+      "name": "Load",
+      "path": "services/load",
+      "description": "Component source module discovered under services/.",
+      "sourceFiles": 4,
+      "sourceLines": 218,
+      "largeFile": false
+    },
+    {
+      "name": "Switch",
+      "path": "services/switch",
+      "description": "Component source module discovered under services/.",
+      "sourceFiles": 2,
+      "sourceLines": 157,
+      "largeFile": false
+    },
+    {
+      "name": "Account",
+      "path": "services/account",
+      "description": "Component source module discovered under services/.",
+      "sourceFiles": 2,
+      "sourceLines": 57,
+      "largeFile": false
+    }
+  ]
+}

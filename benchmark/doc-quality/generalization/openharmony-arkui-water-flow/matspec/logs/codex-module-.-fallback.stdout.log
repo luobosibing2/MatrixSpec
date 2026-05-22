@@ -1,0 +1,643 @@
+# Project Root 模块设计文档
+
+## 1. 模块定位
+
+Project Root 是 `arkui_ace_engine` 仓库的顶层聚合模块。该路径不是单一业务源码模块，而是承载 ACE Engine 的完整工程骨架，包括平台适配、前端桥接、核心 UI 框架、Native/ArkTS/CJ 接口、组件扩展、示例、测试、知识库文档与开发自动化技能。
+
+从目录规模看，仓库主体集中在以下区域：
+
+| 顶层目录 | 主要职责 |
+| --- | --- |
+| `frameworks/` | ACE Engine 核心实现，包含基础库、前端桥接、组件框架、渲染、事件、无障碍、Pipeline 等 |
+| `adapter/` | OHOS 与 Preview 平台适配，包括入口、OSAL、能力适配、服务、工具 |
+| `interfaces/` | 对外 API、NDK/NAPI/ANI/inner_api 接口实现 |
+| `docs/` | 组件、架构、API、语法、最佳实践知识库 |
+| `.claude/` | 本仓库的开发辅助 Agent 与技能系统 |
+| `test/` | 单元测试、C API 测试、组件测试、benchmark、mock |
+| `examples/` | ArkUI 示例工程与 C API 示例 |
+| `advanced_ui_component/` | 高阶 UI 组件 JS/C++ 接口实现 |
+| `component_ext/` | 扩展组件 NAPI/ANI 与 NG 实现 |
+| `generative_ui/` | 生成式 UI 示例/库工程 |
+
+本模块作为设计合成入口时，应把它理解为“仓库级系统上下文”，而不是某个具体组件的实现包。
+
+## 2. 目录结构与职责
+
+### 2.1 `.claude/` 开发自动化层
+
+`.claude/` 提供面向仓库开发的 Agent 与 Skill。其内容不是运行时产物，而是用于构建、编译错误分析、C API 测试修复、代码分析、TDD 等工程协作流程。
+
+| 路径 | 职责 |
+| --- | --- |
+| `.claude/agents/openharmony-build-fix.md` | OpenHarmony 构建修复 Agent 说明 |
+| `.claude/skills/build-error-analyzer/` | 构建错误提取、分类、历史案例匹配 |
+| `.claude/skills/capi-test-fixer/` | C API 单测失败诊断与常见修复脚本 |
+| `.claude/skills/capi-test-naming-verifier/` | C API 单测命名规范校验 |
+| `.claude/skills/compile-analysis/` | 单文件编译耗时与头文件依赖分析 |
+| `.claude/skills/openharmony-build/` | OpenHarmony 构建命令、日志定位、快速重构建辅助 |
+| `.claude/skills/code-analysis/` | 代码分析输出模板与检查清单 |
+| `.claude/skills/arkui-api-design/` | ArkUI API 设计规范与示例 |
+
+关键锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `.claude/skills/build-error-analyzer/script/extract_last_error.sh`, `extract_last_error` | 从构建日志中提取最后一个完整错误块，输出到构建日志同目录的 `last_error.log` |
+| `.claude/skills/capi-test-fixer/scripts/diagnose.py`, `CAPITestDiagnoser` | 读取构建日志并按静态 modifier、Converter API、BUILD.gn 缺失等模式归类 |
+| `.claude/skills/capi-test-fixer/patterns/error_patterns.py`, `PATTERNS` | C API 测试错误模式的默认定义 |
+| `.claude/skills/capi-test-naming-verifier/scripts/verify_naming.py`, `HWTEST_F_REGEX` | 扫描 C API 测试中的 `HWTEST_F` 名称并校验命名规范 |
+| `.claude/skills/compile-analysis/scripts/analyze_compile.sh`, `find_oh_root` | 从当前路径向上寻找 OpenHarmony 根目录，并要求单文件编译分析基于实际运行结果 |
+
+### 2.2 `frameworks/` 核心框架层
+
+`frameworks/` 是 ACE Engine 的主体实现目录。
+
+| 子目录 | 职责 |
+| --- | --- |
+| `frameworks/base/` | 基础工具、内存、几何、日志、线程、资源、图像、性能等基础能力 |
+| `frameworks/bridge/` | ArkTS/JS/CJ/Card/Plugin 前端桥接层 |
+| `frameworks/core/` | 核心组件框架、NG 组件、旧组件、渲染、事件、手势、Pipeline、无障碍 |
+| `frameworks/compatible/` | 兼容组件实现，面向旧架构/兼容库 |
+| `frameworks/component_test/` | 组件测试框架实现 |
+
+核心规模证据显示，仓库最大目录包括：
+
+| 目录 | 文件数 / 行数 | 含义 |
+| --- | ---: | --- |
+| `frameworks/core/interfaces/native/implementation/` | 632 files / 89765 lines | Native C API 生成/手写实现集中区 |
+| `frameworks/bridge/declarative_frontend/jsview/` | 338 files / 87316 lines | Declarative JS/ArkTS 组件绑定层 |
+| `frameworks/core/interfaces/native/node/` | 259 files / 67427 lines | Native Node API modifier 与节点操作实现 |
+| `frameworks/bridge/cj_frontend/interfaces/cj_ffi/` | 252 files / 49046 lines | Cangjie FFI 接口 |
+| `frameworks/bridge/declarative_frontend/engine/jsi/nativeModule/` | 156 files / 57623 lines | ArkTS Native bridge 模块 |
+
+### 2.3 `adapter/` 平台适配层
+
+`adapter/` 将 ACE Core 与具体平台能力连接。
+
+| 子目录 | 职责 |
+| --- | --- |
+| `adapter/ohos/entrance/` | OHOS 平台容器、Ability、UIContent、窗口、subwindow、动态组件入口 |
+| `adapter/ohos/osal/` | 系统能力适配：输入、显示、资源、图像、字体、无障碍、性能、窗口、IME 等 |
+| `adapter/ohos/capability/` | 剪贴板、环境、feature_config、html、interaction、UDMF、window connection 等能力实现 |
+| `adapter/ohos/services/uiservice/` | UI Service 服务端、IDL、Proxy/Stub、统计事件 |
+| `adapter/preview/` | Preview 环境入口、OSAL、Inspector、SDK dump、外部 mock 能力 |
+
+关键锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `adapter/ohos/build/hisysevent.yaml`, `domain: ACE` | OHOS 构建侧 HiSysEvent 事件域配置 |
+| `adapter/ohos/services/hisysevent.yaml`, `UI_SERVICE_STATISTIC_EVENT` | UI Service 统计事件定义 |
+| `adapter/ohos/entrance/ace_container.cpp` / `.h` | OHOS 容器入口，连接前端、Pipeline、平台窗口 |
+| `adapter/preview/entrance/ace_view_preview.cpp` / `.h` | Preview 视图入口 |
+
+### 2.4 `interfaces/` 对外接口层
+
+`interfaces/` 承载不同语言和 ABI 的外部接口。
+
+| 子目录 | 职责 |
+| --- | --- |
+| `interfaces/native/` | NDK/C API，包括 `native_node_napi.h`、`native_interface.h`、事件、Node、StyledString 等 |
+| `interfaces/napi/kits/` | NAPI 模块，如 animator、router、promptAction、observer、componentSnapshot 等 |
+| `interfaces/ets/ani/` | ArkTS Static/ANI 模块 native 实现 |
+| `interfaces/inner_api/ace/` | ACE 内部接口，如 `ui_content`、`navigation_controller`、module preloader |
+| `interfaces/inner_api/ace_kit/` | ace_kit 对外抽象 API 与实现 |
+| `interfaces/inner_api/form_render/` | Form render IPC 接口 |
+| `interfaces/inner_api/ui_session/` | UI Session IPC 接口 |
+
+关键锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `interfaces/native/native_interface.h` | Native API 入口声明 |
+| `interfaces/native/node/node_model.cpp` / `.h` | Native Node 模型操作实现 |
+| `interfaces/inner_api/ace/ui_content.cpp` / `.h` | UIContent 内部接口 |
+| `interfaces/inner_api/ace_kit/include/ui/view/frame_node.h` | ace_kit FrameNode 抽象入口 |
+
+### 2.5 `docs/` 知识库层
+
+`docs/` 是仓库内置知识库，覆盖组件、架构、API、语法、布局、无障碍等。顶层说明要求回答和设计分析优先查阅 `docs/knowledge_base_README.md` 与 `docs/knowledge_base_INDEX.json`。
+
+| 子目录 | 内容 |
+| --- | --- |
+| `docs/pattern/` | 组件知识库，如 Text、Menu、Grid、List、Refresh、WaterFlow |
+| `docs/architecture/` | 体系结构文档 |
+| `docs/sdk/` | SDK/API 知识库 |
+| `docs/common/` | Drag/Drop、Gesture、Resource、IDL 等通用机制 |
+| `docs/layout/` | Layout、Safe Area、Ignore Layout Safe Area |
+| `docs/accessibility/` | 无障碍基础知识库 |
+| `docs/syntax/` | ForEach、LazyForEach、Repeat 等语法组件 |
+
+关键锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `docs/knowledge_base_INDEX.json` | 知识库元数据索引 |
+| `docs/knowledge_base_README.md` | 知识库目录入口 |
+| `docs/Navigation组件知识库.md`, `NavigationPattern` | Navigation 组件白盒说明 |
+| `docs/NavRouter组件知识库.md`, `NavRouterPattern` | NavRouter 与 NavDestination 关系说明 |
+| `docs/accessibility/accessibility_base_README.md`, `AccessibilityProvider` | 无障碍模块架构与关键接口说明 |
+| `docs/api/api_KnowLedge_Base.md` | ArkUI API 范式说明 |
+
+### 2.6 `test/` 测试与验证层
+
+`test/` 包含 mock、单元测试、benchmark、组件测试与脚本工具。
+
+| 子目录 | 职责 |
+| --- | --- |
+| `test/unittest/` | 核心 C++ 单元测试，覆盖 base/core/pattern/capi/interfaces 等 |
+| `test/unittest/capi/` | C API modifier/accessor/utils 测试 |
+| `test/mock/` | OHOS、Rosen、Core、Adapter 等 mock 实现 |
+| `test/benchmark/` | benchmark 与回归检测脚本 |
+| `test/component_test/` | ArkUI 组件测试用例与工具 |
+
+C API 测试相关证据：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `test/unittest/capi/modifiers/` | C API modifier 单测集中区 |
+| `test/unittest/capi/accessors/` | C API accessor 单测集中区 |
+| `test/unittest/capi/stubs/` | C API 测试桩 |
+| `.claude/skills/capi-test-naming-verifier/scripts/verify_naming.py`, `DEFAULT_DIRS` | 默认扫描 `test/unittest/capi/modifiers`、`accessors`、`utils` |
+
+### 2.7 示例与扩展目录
+
+| 目录 | 职责 |
+| --- | --- |
+| `examples/` | ArkUI 示例工程，包含 Accessibility、Image、Navigation、Picker、ScrollableComponentTest 等 |
+| `advanced_ui_component/` | 高级 UI 组件 JS/C++ 接口，如 dialog、chip、toolbar、treeview |
+| `advanced_ui_component_static/` | 静态高级组件示例 |
+| `component_ext/` | 扩展组件，如 arc_list、arc_swiper、movingphoto |
+| `generative_ui/` | 生成式 UI 相关示例、文档与工程 |
+
+## 3. 核心组件与框架关系
+
+### 3.1 分层架构
+
+仓库整体遵循 OpenHarmony ArkUI/ACE 的分层模型：
+
+```text
+应用与 ArkTS DSL
+        ↓
+Frontend Bridge
+frameworks/bridge/
+        ↓
+Core Component Framework
+frameworks/core/components_ng/
+        ↓
+Pipeline / Layout / Render / Event
+frameworks/core/pipeline_ng/
+frameworks/core/components_ng/layout/
+frameworks/core/components_ng/render/
+frameworks/core/components_ng/event/
+        ↓
+Platform Adapter
+adapter/ohos/ 或 adapter/preview/
+        ↓
+系统窗口、输入、图形、无障碍、资源、服务
+```
+
+源确认事实：
+
+| 事实 | 锚点 |
+| --- | --- |
+| Declarative 前端有独立 JSView、Engine、StateMgmt、ArkComponent、ArkModifier 等目录 | `frameworks/bridge/declarative_frontend/` |
+| NG 组件按 `pattern/model/layout/paint/event/accessibility` 分层组织 | `frameworks/core/components_ng/pattern/*/` |
+| 渲染适配集中在 NG render 与 render adapter | `frameworks/core/components_ng/render/`, `frameworks/core/components_ng/render/adapter/` |
+| 平台能力通过 `adapter/ohos/osal` 和 `adapter/ohos/capability` 接入 | `adapter/ohos/osal/`, `adapter/ohos/capability/` |
+| Native C API 与生成接口位于 `frameworks/core/interfaces/native` 和 `interfaces/native` | `frameworks/core/interfaces/native/`, `interfaces/native/` |
+
+推断行为：
+
+| 推断 | 依据 |
+| --- | --- |
+| 顶层模块的设计文档应作为全仓架构合成材料，而不是替代具体组件设计 | Module 为 `Project Root`，路径为 `.`，且目录覆盖完整仓库 |
+| 后续 `design.md` 应按子系统聚合，不应把全部组件逐个展开 | 当前仓库组件数量和目录规模极大，逐组件展开会淹没主架构 |
+
+### 3.2 前端桥接组件链路
+
+前端桥接层把 ArkTS/JS/CJ 组件调用转换为 Core 层模型和节点操作。
+
+典型链路：
+
+```text
+ArkTS/JS 组件 DSL
+  → frameworks/bridge/declarative_frontend/ark_component/src/Ark*.ts
+  → frameworks/bridge/declarative_frontend/ark_modifier/src/*_modifier.ts
+  → frameworks/bridge/declarative_frontend/engine/jsi/nativeModule/arkts_native_*_bridge.cpp
+  → frameworks/core/components_ng/pattern/<component>/*_model_ng.cpp
+  → FrameNode / Pattern / LayoutProperty / PaintProperty
+```
+
+关键锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `frameworks/bridge/declarative_frontend/ark_component/src/ArkNavigation.ts` | ArkTS Navigation 组件入口 |
+| `frameworks/bridge/declarative_frontend/ark_modifier/src/navigation_modifier.ts` | Navigation modifier 绑定 |
+| `frameworks/bridge/declarative_frontend/engine/jsi/nativeModule/arkts_native_navigation_bridge.cpp` | Navigation native bridge |
+| `frameworks/core/components_ng/pattern/navigation/navigation_model_ng.cpp` | NG 模型落点 |
+| `frameworks/core/components_ng/pattern/navigation/navigation_pattern.h` | Navigation 运行时行为核心 |
+
+### 3.3 Native C API 链路
+
+Native C API 主要分为接口声明、Node API、modifier/accessor 实现、测试几个层面。
+
+```text
+interfaces/native/*.h
+  → interfaces/native/node/*.cpp
+  → frameworks/core/interfaces/native/node/*.cpp
+  → frameworks/core/interfaces/native/implementation/*.cpp
+  → frameworks/core/components_ng/pattern/*/bridge/*_static_modifier.cpp
+  → test/unittest/capi/*
+```
+
+关键锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `interfaces/native/native_node_napi.h` | Native Node API 声明 |
+| `frameworks/core/interfaces/native/implementation/all_modifiers.cpp` | modifier 汇总实现 |
+| `frameworks/core/interfaces/native/node/node_api.cpp` | Node API 实现 |
+| `frameworks/core/interfaces/native/utility/converter.cpp` / `.h` | Native 参数转换工具 |
+| `.claude/skills/capi-test-fixer/scripts/fix_converter_api.py`, `ConverterAPIFixer` | 针对 Converter API 误用的测试修复脚本 |
+
+### 3.4 无障碍链路
+
+无障碍模块横跨 Core、OSAL、Native 接口和组件属性。
+
+```text
+系统无障碍服务
+  ↔ Native Accessibility Interface
+  ↔ adapter/ohos/osal/js_accessibility_manager.*
+  ↔ frameworks/core/accessibility/*
+  ↔ frameworks/core/components_ng/property/accessibility_property.*
+  ↔ components_ng/pattern/*/*_accessibility_property.*
+```
+
+关键锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `docs/accessibility/accessibility_base_README.md`, `AccessibilityProvider` | 无障碍抽象接口职责说明 |
+| `frameworks/core/accessibility/accessibility_provider.h` | 查找节点、执行动作、发送事件的接口定义 |
+| `adapter/ohos/osal/js_accessibility_manager.h` | OHOS 侧无障碍核心管理器 |
+| `frameworks/core/components_ng/property/accessibility_property.h` | NG 组件无障碍属性基类 |
+| `adapter/ohos/osal/accessibility/focus_move/` | 无障碍焦点移动策略实现 |
+
+## 4. 核心流程
+
+### 4.1 组件创建与更新流程
+
+源确认链路：
+
+1. ArkTS/JS 层调用组件函数或 modifier。
+2. Bridge 层解析参数并调用 native bridge。
+3. Model 层创建或更新 FrameNode。
+4. Pattern 层处理组件生命周期、事件与状态。
+5. LayoutAlgorithm 计算布局。
+6. PaintMethod / RenderContext 参与绘制。
+7. Pipeline 调度布局、绘制和帧刷新。
+
+相关锚点：
+
+| 锚点 | 为什么重要 |
+| --- | --- |
+| `frameworks/core/components_ng/base/frame_node.h` | NG 组件树基础节点 |
+| `frameworks/core/components_ng/pattern/pattern.h` | 组件行为基类 |
+| `frameworks/core/components_ng/layout/layout_algorithm.h` | 布局算法抽象 |
+| `frameworks/core/components_ng/render/node_paint_method.h` | 绘制方法抽象 |
+| `frameworks/core/pipeline_ng/pipeline_context.h` | NG Pipeline 上下文 |
+
+### 4.2 构建错误分析流程
+
+构建辅助技能定义了较清晰的排障流程：
+
+```text
+build.log
+  → extract_last_error.sh
+  → out/<product>/last_error.log
+  → build-error-analyzer / capi-test-fixer
+  → 匹配错误模式
+  → 定位 BUILD.gn、符号导出、源文件缺失、Converter API、静态 modifier 等问题
+```
+
+源确认锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `.claude/skills/build-error-analyzer/script/extract_last_error.sh:19-59`, `BUILD_LOG`, `OUTPUT_FILE` | 支持传入构建日志路径，并把 `last_error.log` 放到日志同目录 |
+| `.claude/skills/capi-test-fixer/scripts/diagnose.py:19-62`, `load_patterns` | 从 JSON 或默认配置加载错误模式 |
+| `.claude/skills/capi-test-fixer/patterns/error_patterns.py:15-38`, `PATTERNS` | 默认覆盖 static modifier、Converter API、modifier nullptr、build config 缺失 |
+
+### 4.3 单文件编译分析流程
+
+`compile-analysis` 技能用于编译效率分析，要求基于实际运行结果。
+
+```text
+指定源文件
+  → analyze_compile.sh
+  → find_oh_root 定位 OpenHarmony 根目录
+  → find_ace_engine_root 定位 ace_engine
+  → 从 out/{product} 解析 ninja 编译命令
+  → 生成/分析 .ii
+  → parse_ii.py 输出头文件依赖树
+```
+
+源确认锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `.claude/skills/compile-analysis/scripts/analyze_compile.sh:6-9` | 明确要求编译命令在 `out/{product}` 下执行，结果基于实际运行，头文件依赖通过 `.ii` 解析 |
+| `.claude/skills/compile-analysis/scripts/get_compile_command.py:19-60` | 解析 `toolchain.ninja` 与子 ninja 文件 |
+| `.claude/skills/compile-analysis/scripts/parse_ii.py:7-28` | 解析 `.ii` 中 `foundation/arkui/` 依赖链 |
+
+### 4.4 ArkTS Koala/Arkoala 生成与部署流程
+
+ArkTS 前端包含 Arkoala/Koala 工程、生成器、CI 与 GNI 生成脚本。
+
+```text
+arkoala / arkoala-arkts / incremental / interop
+  → annotate / preprocess
+  → gen_gni.py 生成 components.gni / runtime.gni
+  → deploy.py 拷贝生成 Modifier.ets
+  → GN 构建接入
+```
+
+源确认锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `frameworks/bridge/arkts_frontend/koala_projects/tools/regenerate_gni.sh:33-40` | 执行 annotate、process_arkoala、gen_gni |
+| `frameworks/bridge/arkts_frontend/arkoala_generator/gn/command/deploy.py:15-31` | 将生成的 `*Modifier.ets` 从 source 部署到 destination，并支持 ignore 配置 |
+| `frameworks/bridge/arkts_frontend/koala_projects/.gitlab-ci.yml:3-12` | CI 阶段包含 install-deps、prebuild、build、test、idlize、deploy 等 |
+
+## 5. 主要接口与数据结构
+
+### 5.1 ACE Core 基础类型
+
+| 类型/接口 | 路径 | 作用 |
+| --- | --- | --- |
+| `AceType` | `frameworks/base/memory/ace_type.h` | ACE 引用类型与类型系统基础 |
+| `RefPtr` / `WeakPtr` | `frameworks/base/memory/referenced.h` 等 | 引用计数对象管理 |
+| `Dimension` / `Offset` / `Size` / `Rect` | `frameworks/base/geometry/` | 布局与绘制几何基础 |
+| `TaskExecutor` | `frameworks/base/thread/task_executor.h` | 任务调度抽象 |
+| `PipelineContext` | `frameworks/core/pipeline_ng/pipeline_context.h` | UI Pipeline 上下文 |
+| `FrameNode` | `frameworks/core/components_ng/base/frame_node.h` | NG 节点核心类型 |
+| `Pattern` | `frameworks/core/components_ng/pattern/pattern.h` | NG 组件行为基类 |
+
+### 5.2 组件常见分层接口
+
+| 分层 | 命名形态 | 典型路径 |
+| --- | --- | --- |
+| Model | `<component>_model_ng.cpp/h` | `frameworks/core/components_ng/pattern/<component>/` |
+| Pattern | `<component>_pattern.cpp/h` | `frameworks/core/components_ng/pattern/<component>/` |
+| LayoutProperty | `<component>_layout_property.h` | `frameworks/core/components_ng/pattern/<component>/` |
+| LayoutAlgorithm | `<component>_layout_algorithm.cpp/h` | `frameworks/core/components_ng/pattern/<component>/` |
+| PaintMethod | `<component>_paint_method.cpp/h` | `frameworks/core/components_ng/pattern/<component>/` |
+| EventHub | `<component>_event_hub.h/cpp` | `frameworks/core/components_ng/pattern/<component>/` |
+| AccessibilityProperty | `<component>_accessibility_property.cpp/h` | `frameworks/core/components_ng/pattern/<component>/` |
+
+### 5.3 Native C API 支撑结构
+
+| 类型/区域 | 路径 | 作用 |
+| --- | --- | --- |
+| generated interface | `frameworks/core/interfaces/native/generated/interface/ui_node_api.h` | 生成的 UI Node API 接口 |
+| implementation | `frameworks/core/interfaces/native/implementation/` | accessor/modifier/controller 等实现 |
+| node modifiers | `frameworks/core/interfaces/native/node/` | Node modifier 与工具实现 |
+| converter | `frameworks/core/interfaces/native/utility/converter.h` | C API 与内部类型转换 |
+| validators | `frameworks/core/interfaces/native/utility/validators.h` | 参数校验 |
+| peer utils | `frameworks/core/interfaces/native/utility/peer_utils.h` | peer 对象辅助 |
+
+### 5.4 调试边界与手势调试数据结构
+
+仓库中存在 Debug Boundary 与 Gesture Debug Boundary 机制，用于绘制调试边界。
+
+源确认锚点：
+
+| 锚点 | 说明 |
+| --- | --- |
+| `frameworks/core/components/common/painter/debug_boundary_painter.h`, `DebugBoundaryPainter` | 旧/通用绘制调试边界工具，带 `ACE_FORCE_EXPORT` |
+| `frameworks/core/components_ng/render/debug_boundary_painter.h`, `DebugBoundaryPainter` | NG 渲染调试边界绘制器 |
+| `frameworks/core/components_ng/manager/gesture_debug/gesture_debug_boundary_manager.h`, `GestureDebugBoundaryInfo` | 手势调试边界渲染快照，包含 `gestureMask`、`strokeWidthPx`、`colors` |
+| `frameworks/core/components_ng/render/gesture_debug_boundary_painter.h`, `GestureDebugBoundaryPainter` | 根据手势 mask 与颜色绘制手势边界 |
+| `test/unittest/core/manager/gesture_debug_boundary_manager_test_ng.cpp` | 手势调试边界管理器测试，受 `GESTURE_DEBUG_BOUNDARY_SUPPORTED` 宏控制 |
+
+## 6. 关键约束
+
+### 6.1 代码事实优先
+
+仓库要求基于实际源码回答与设计，不应凭空补全实现。关键约束包括：
+
+| 约束 | 说明 |
+| --- | --- |
+| 源码路径必须可验证 | 文档与设计引用源码时应使用实际存在路径 |
+| 行为判断以代码为准 | 对用户建议或历史文档应回到当前源码验证 |
+| 不确定内容标记为推测 | 对未验证行为必须明确标注 |
+| 知识库需同步索引 | 新增/更新知识库需维护 `knowledge_base_INDEX.json` 与 README |
+
+### 6.2 构建系统约束
+
+| 约束 | 说明 |
+| --- | --- |
+| 主构建系统为 GN/Ninja | 通过 OpenHarmony 根目录的 `build.sh` 驱动 |
+| ACE Engine 构建目标依赖产品名 | 常见产品为 `rk3568`、`ohos-sdk` |
+| 新增 `.cpp` 需进入正确 BUILD.gn/source set | 尤其是 Core NG、C API、测试构建 |
+| 跨模块符号需导出 | 可能需要 `ACE_FORCE_EXPORT` 与 map 白名单 |
+| SDK 构建日志路径特殊 | build-error-analyzer README 指出 SDK 日志为 `out/sdk/build.log` |
+
+### 6.3 C API 测试约束
+
+| 约束 | 说明 |
+| --- | --- |
+| modifier 测试依赖静态 modifier | 测试环境中动态模块可能不可用，需要 `ARKUI_CAPI_UNITTEST` 条件路径 |
+| Converter API 使用需区分值/指针 | 本地变量应优先使用 `Converter::GetOpt(var)`，而非 `GetOptPtr(&var)` |
+| 测试命名需遵循 `methodNameTestScenario` | 下划线方法名保留下划线，方法名包含 Test 时允许出现多重 Test |
+| generated 测试目录通常排除人工命名检查 | `verify_naming.py` 默认排除 `generated` |
+
+### 6.4 文档约束
+
+| 约束 | 说明 |
+| --- | --- |
+| 知识库文件命名 | `XXX_Knowledge_Base[_CN].md` |
+| 知识库路径引用 | 源码路径使用 `OpenHarmony/` 前缀，知识库链接使用相对路径 |
+| 必需章节 | 概述、目录结构、核心类、Pattern 层、Model 层、API 清单、实现细节、示例、调试、FAQ |
+| 元数据字段 | `name`、`name_cn`、`category`、`type`、`keywords`、`aliases`、`file_path`、`last_updated` |
+
+## 7. 运维 Runbook
+
+### 7.1 构建
+
+常用构建命令：
+
+| 场景 | 命令 |
+| --- | --- |
+| 构建 ACE Engine | `./build.sh --product-name rk3568 --build-target ace_engine` |
+| 构建 SDK | `./build.sh --product-name ohos-sdk --build-target ace_engine` |
+| 构建单个 GN 目标 | `./build.sh --product-name rk3568 --build-target //arkui/ace_engine/frameworks/core/components_ng/pattern/text:text_pattern` |
+| 构建单元测试 | `./build.sh --product-name rk3568 --build-target unittest` |
+| 构建 C API 单元测试 | `./build.sh --product-name rk3568 --build-target linux_unittest_capi --ccache` |
+| 构建 benchmark | `./build.sh --product-name rk3568 --build-target benchmark_linux` |
+
+构建输出位置：
+
+| 类型 | 路径 |
+| --- | --- |
+| Engine libraries | `out/rk3568/arkui/ace_engine/` |
+| ACE tests | `out/rk3568/tests/ace_engine/` |
+| C API target tests | `out/rk3568/tests/unittest/ace_engine/C-API-Main/components/` |
+| 构建日志 | `out/rk3568/build.log` |
+| SDK 构建日志 | `out/sdk/build.log` |
+
+### 7.2 验证
+
+| 场景 | 命令/动作 |
+| --- | --- |
+| 运行组件单测 | `./out/rk3568/tests/ace_engine/unittest/components_ng/text/text_pattern_test` |
+| 运行指定 gtest | `./out/rk3568/tests/ace_engine/unittest/components_ng/text/text_pattern_test --gtest_filter=TextPatternTest.OnModifyDone` |
+| 列出 C API 测试 | `./capi_all_modifiers_test --gtest_list_tests` |
+| 运行 C API modifier 测试 | `./capi_all_modifiers_test` |
+| 校验 C API 测试可执行架构 | `file ./capi_all_modifiers_test` |
+| 校验知识库 JSON | `python3 -m json.tool docs/knowledge_base_INDEX.json > /dev/null` |
+| 统计知识库数量 | `find docs -name "*_Knowledge_Base*.md" -type f | wc -l` |
+
+### 7.3 构建错误定位
+
+| 场景 | 步骤 |
+| --- | --- |
+| 提取普通产品错误 | `foundation/arkui/ace_engine/.claude/skills/build-error-analyzer/script/extract_last_error.sh out/rk3568/build.log` |
+| 提取 SDK 错误 | `foundation/arkui/ace_engine/.claude/skills/build-error-analyzer/script/extract_last_error.sh out/sdk/build.log` |
+| 查看最近错误 | `.claude/skills/openharmony-build/scripts/find_recent_errors.sh rk3568` |
+| 分析构建错误 | `.claude/skills/openharmony-build/scripts/analyze_build_error.sh rk3568` |
+| 判断是否可快速重构建 | `.claude/skills/openharmony-build/scripts/check_fast_rebuild.sh 30` |
+
+失败模式提示：
+
+| 症状 | 可能原因 | 检查区域 |
+| --- | --- | --- |
+| `ld.lld: error: undefined symbol` | `.cpp` 未加入 BUILD.gn、符号未导出、map 未配置 | `frameworks/*/BUILD.gn`、`build/libace.map`、相关 header |
+| `undefined symbol: ...Get*StaticModifier` | C API 测试缺少静态 modifier 或 `ARKUI_CAPI_UNITTEST` 分支 | `frameworks/core/interfaces/native/implementation/*_modifier.cpp`、`frameworks/core/components_ng/pattern/*/bridge/*_static_modifier.cpp` |
+| `modifier_ != nullptr` 失败 | 测试中动态模块返回空 | C API modifier 获取逻辑 |
+| `GetOptPtr(&var)` 相关失败 | Converter API 用法不匹配 | `test/unittest/capi/*`、`frameworks/core/interfaces/native/utility/converter.h` |
+| GN 配置失败 | BUILD.gn 语法或 source set 缺失 | 最近修改的 `BUILD.gn` / `*.gni` |
+
+### 7.4 部署与生成
+
+| 场景 | 命令/文件 |
+| --- | --- |
+| Arkoala GNI 重新生成 | `frameworks/bridge/arkts_frontend/koala_projects/tools/regenerate_gni.sh` |
+| Modifier.ets 部署脚本 | `frameworks/bridge/arkts_frontend/arkoala_generator/gn/command/deploy.py` |
+| StateMgmt 单测安装运行 | `frameworks/bridge/declarative_frontend/state_mgmt/test/unittest/scripts/run_ut.ps1` |
+
+部署注意：
+
+| 项 | 说明 |
+| --- | --- |
+| Arkoala deploy | `deploy.py` 支持 `--source`、`--destination`、`--config`、`--stamp`，并通过 JSON ignore 列表跳过指定文件 |
+| CI 阶段 | Koala CI 包含依赖安装、prebuild、build、test、idlize、deploy 等阶段 |
+| StateMgmt HAP 测试 | `run_ut.ps1` 会安装当前目录 `StateMgmtTest.hap` 并启动指定 Ability |
+
+### 7.5 回滚与恢复
+
+| 场景 | 建议 |
+| --- | --- |
+| 构建配置变更失败 | 回退最近修改的 `BUILD.gn` / `*.gni`，重新运行构建目标 |
+| 生成文件异常 | 重新运行对应生成脚本，确认 source/destination/ignore 配置 |
+| C API 修复脚本误改 | 检查脚本生成的 `.bak` 或版本控制 diff，仅保留必要修改 |
+| 知识库更新错误 | 校验 JSON，恢复错误条目并重新核对源码路径 |
+
+## 8. 调试指南
+
+### 8.1 Core/NG 组件问题
+
+| 症状 | 可能区域 | 检查方式 |
+| --- | --- | --- |
+| 组件属性不生效 | Model、Modifier、Bridge | 搜索 `<component>_model_ng`、`arkts_native_*_bridge.cpp`、`*_modifier.ts` |
+| 布局异常 | LayoutProperty、LayoutAlgorithm | 查看 `frameworks/core/components_ng/pattern/<component>/*layout*` |
+| 绘制异常 | PaintMethod、PaintProperty、RenderContext | 查看 `*paint_method*`、`*paint_property*`、`frameworks/core/components_ng/render/` |
+| 点击/手势异常 | EventHub、GestureEventHub、recognizer | 查看 `frameworks/core/components_ng/event/`、`frameworks/core/components_ng/gestures/` |
+| 无障碍信息错误 | AccessibilityProperty、OSAL manager | 查看 `*_accessibility_property.*`、`adapter/ohos/osal/js_accessibility_manager.*` |
+
+### 8.2 前端 Bridge 问题
+
+| 症状 | 可能区域 | 检查方式 |
+| --- | --- | --- |
+| ArkTS API 调用无效 | `ark_component`、`ark_modifier`、native bridge | 搜索 `Ark<Component>.ts`、`<component>_modifier.ts`、`arkts_native_<component>_bridge.cpp` |
+| JS 回调不触发 | `engine/functions`、`jsview` | 查看 `frameworks/bridge/declarative_frontend/engine/functions/` |
+| StateMgmt 行为异常 | `state_mgmt/src/lib` | 运行 StateMgmt 相关单测，查看 `state_mgmt/test/unittest` |
+| Arkoala 生成异常 | `arkoala_generator`、`koala_projects/tools` | 检查 `regenerate_gni.sh`、`deploy.py`、CI 配置 |
+
+### 8.3 Native/C API 问题
+
+| 症状 | 可能区域 | 检查方式 |
+| --- | --- | --- |
+| C API 符号未定义 | implementation、node、BUILD.gn | 搜索符号定义并检查 source set |
+| modifier 返回空 | static modifier 或动态模块加载 | 查看 `Get*Modifier` 实现是否有测试分支 |
+| accessor 参数转换失败 | Converter / ReverseConverter | 查看 `frameworks/core/interfaces/native/utility/converter.*` |
+| 测试命名不合规 | C API test 文件 | 运行 `verify_naming.py` 或检查 `HWTEST_F` 名称 |
+
+### 8.4 平台适配问题
+
+| 症状 | 可能区域 | 检查方式 |
+| --- | --- | --- |
+| OHOS 真机行为和 Preview 不一致 | `adapter/ohos` vs `adapter/preview` | 对比同名 OSAL/entrance 实现 |
+| 输入事件异常 | `adapter/ohos/osal/input_manager.cpp`、event convertor | 查看 `mmi_event_convertor.*`、`touch_event_convertor.*` |
+| 窗口/子窗异常 | entrance/window/subwindow | 查看 `adapter/ohos/entrance/subwindow/`、`window/` |
+| 系统事件上报异常 | hisysevent 配置 | 查看 `adapter/ohos/build/hisysevent.yaml`、`adapter/ohos/services/hisysevent.yaml` |
+
+### 8.5 文档与知识库问题
+
+| 症状 | 可能区域 | 检查方式 |
+| --- | --- | --- |
+| 知识库路径失效 | `docs/knowledge_base_INDEX.json` 或具体 KB | 用 `ls` 验证路径，修正 `OpenHarmony/` 前缀路径 |
+| 组件说明与代码不一致 | 旧文档未更新 | 回到 `frameworks/core/components_ng/pattern/<component>` 核对 |
+| JSON 索引损坏 | 手动编辑错误 | `python3 -m json.tool docs/knowledge_base_INDEX.json` |
+| README 统计不准 | 新增/删除 KB 后未维护 | `find docs -name "*_Knowledge_Base*.md" -type f | wc -l` |
+
+## 9. 确定性边界
+
+### 9.1 源确认事实
+
+以下内容由仓库文件、目录结构或给定摘录确认：
+
+| 事实 | 证据 |
+| --- | --- |
+| 仓库包含 `.claude` 技能系统，覆盖构建、C API、编译分析、TDD 等 | `.claude/skills/*` |
+| 构建错误提取脚本会将输出写到构建日志同目录的 `last_error.log` | `.claude/skills/build-error-analyzer/script/extract_last_error.sh:55-62` |
+| C API fixer 内置四类默认错误模式 | `.claude/skills/capi-test-fixer/patterns/error_patterns.py:15-38` |
+| C API 命名校验扫描 modifiers/accessors/utils，并排除 generated | `.claude/skills/capi-test-naming-verifier/scripts/verify_naming.py:44-56` |
+| 单文件编译分析要求基于实际运行结果，`.ii` 由 `parse_ii.py` 解析 | `.claude/skills/compile-analysis/scripts/analyze_compile.sh:6-9` |
+| OHOS HiSysEvent 使用 `ACE` domain | `adapter/ohos/build/hisysevent.yaml:40`、`adapter/ohos/services/hisysevent.yaml:14` |
+| Arkoala deploy 脚本用于复制生成的 `*Modifier.ets` 文件 | `frameworks/bridge/arkts_frontend/arkoala_generator/gn/command/deploy.py:15-31` |
+| Gesture Debug Boundary 有 manager、modifier、painter 与测试 | `frameworks/core/components_ng/manager/gesture_debug/`、`frameworks/core/components_ng/render/gesture_debug_boundary_painter.*`、`test/unittest/core/manager/gesture_debug_boundary_manager_test_ng.cpp` |
+
+### 9.2 推断内容
+
+以下内容是基于目录命名、文件组织和框架惯例的合理推断：
+
+| 推断 | 依据 |
+| --- | --- |
+| Project Root 文档应作为全仓架构合成入口 | 模块路径为 `.`，且 Module tree 覆盖全仓 |
+| 组件一般遵循 Model/Pattern/Layout/Paint/Event/Accessibility 分层 | 大量 `components_ng/pattern/*` 目录存在同名文件结构 |
+| Bridge 到 Core 的调用链通常从 ArkTS/JS 组件入口进入 native bridge，再落到 Model/Pattern | `ark_component`、`ark_modifier`、`engine/jsi/nativeModule` 与 `components_ng/pattern` 的配套命名 |
+| Native C API 生成接口与实现之间存在 codegen/bridge 关系 | `generated/interface`、`implementation`、`node`、`utility` 目录并存 |
+
+### 9.3 缺失或未展开证据
+
+| 项 | 说明 |
+| --- | --- |
+| 顶层 `BUILD.gn` / `.gn` 内容未在证据中展开 | 构建规则细节需在后续设计合成时读取实际构建文件 |
+| `bundle.json` 内容未展开 | bundle 元数据与部件声明需单独读取确认 |
+| 各组件具体 API 声明未逐一读取 | 本文只描述仓库级结构，不替代组件级知识库 |
+| 运行时调用栈未通过调试器或 trace 验证 | 核心流程为源码组织与文档证据推导，具体调用顺序需针对场景验证 |
+| CI 全量配置未完全展开 | 仅确认 Koala 相关 CI 片段，OpenHarmony 主仓 CI 不在当前证据范围内 |
+
+## 10. 后续 design.md 合成建议
+
+后续合成仓库级 `design.md` 时建议按以下边界组织：
+
+1. 先描述 ACE Engine 总体分层：`adapter`、`frameworks/bridge`、`frameworks/core`、`interfaces`、`test`。
+2. 再按关键链路展开：组件创建链路、Native C API 链路、无障碍链路、构建与测试链路。
+3. 组件级内容只引用知识库入口，不在根模块重复展开全部组件。
+4. 构建与故障处理应保留 runbook，因为 `.claude/skills` 提供了明确的脚本和模式证据。
+5. 对涉及具体函数调用顺序、线程模型、符号导出规则的描述，应在合成前继续读取对应 `BUILD.gn`、`Pattern`、`PipelineContext`、`TaskExecutor`、`libace.map` 等源码。

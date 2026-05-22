@@ -1,0 +1,169 @@
+# Switch 模块中间设计文档（服务侧）
+
+## 1. 模块目的与职责
+`Switch` 模块负责管理分布式粘贴板开关状态的本地持久化读取、变化监听与状态上报，属于 `pasteboard` 服务内部控制链路的一部分。其核心职责是：
+1. 从系统参数/数据库键读取开关值并同步到设备能力状态。
+2. 监听分布式粘贴板开关配置变更，触发异步更新。
+3. 提供查询接口用于读取设备协同能力开关。
+4. 将当前开关状态上报至 UE 统计事件。
+
+锚点：
+- [PastedSwitch 类](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.h)
+- [PastedSwitchObserver 类](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.h)
+- [services/switch/pasteboard_switch.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)
+
+## 2. 目录结构
+模块目录结构如下：
+
+- `services/switch/pasteboard_switch.h`
+- `services/switch/pasteboard_switch.cpp`
+
+仅包含该模块核心实现，未见公开接口文件。
+
+## 3. 核心组件与数据结构
+
+| 组件 | 位置 | 作用 | 关键字段/方法 |
+|---|---|---|---|
+| `PastedSwitch` | `pasteboard_switch.h/cpp` | 分布式粘贴板开关主控对象 | `Init(int32_t)`, `DeInit()`, `SetSwitch(int32_t)`, `GetDeviceCollabSwitch(int32_t)`, `userId_`, `switchObserver_` |
+| `PastedSwitchObserver` | `pasteboard_switch.h/cpp` | DataAbility 观察者，监听配置变化 | `OnChange()`, 回调 `func_` |
+| 配置常量 | `pasteboard_switch.cpp` | 绑定数据源与状态语义 | `DISTRIBUTED_PASTEBOARD_SWITCH`, `SUPPORT_STATUS`, `DISABLE_DISTRIBUTED_PASTEBOARD`, `UE_SWITCH_STATUS` |
+
+锚点：
+- `class PastedSwitch`、`int32_t userId_`、`sptr<PastedSwitchObserver> switchObserver_`
+- `PastedSwitch::Init` / `PastedSwitch::DeInit` / `PastedSwitch::SetSwitch` / `PastedSwitch::GetDeviceCollabSwitch` / `PastedSwitch::ReportUeSwitchEvent`
+- `PastedSwitchObserver::OnChange`  
+来源锚点均位于 [pasteboard_switch.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp) 与 [pasteboard_switch.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.h)。
+
+## 4. 核心流程
+
+### 4.1 初始化流程
+1. `Init(userId)` 读取系统参数 `const.pasteboard.disable_crossdevice_clipboard`。若为 true：调用 `DevProfile::GetInstance().PutDeviceStatus(false)` 并提前返回。  
+2. 校验 `userId` 是否为 `-1`（`ERROR_USERID`），无效则返回。  
+3. 缓存 `userId` 并同步到 `DataShareDelegate`。  
+4. 注册观察者：`DataShareDelegate::GetInstance().RegisterObserver("distributed_pasteboard_switch", switchObserver_)`。  
+5. 调用 `SetSwitch(userId)` 立刻刷新一次状态。  
+6. 调用 `ReportUeSwitchEvent()` 上报开关状态。
+
+锚点：[PastedSwitch::Init](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)
+
+### 4.2 开关同步流程
+- 观察者回调 `PastedSwitchObserver::OnChange()` 触发后启动异步线程，调用 `SetSwitch(userId_)`。  
+- `SetSwitch` 从 `DataShareDelegate` 查询 `distributed_pasteboard_switch`：
+  - 空值：默认启用并记录日志。  
+  - 非空值：仅当值等于 `"1"` 时视为开启，其余视为关闭，写入 `DevProfile` 状态。
+
+锚点：
+- [PastedSwitchObserver::OnChange](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)
+- [PastedSwitch::SetSwitch](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)
+
+### 4.3 协同开关查询流程
+- `GetDeviceCollabSwitch(userId)` 读取 `DEVICE_COLLAB_SWITCH`：
+  - 空值默认返回 `true`。
+  - 否则以 `"1"` 代表开启。
+
+锚点：[PastedSwitch::GetDeviceCollabSwitch](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)
+
+### 4.4 退出流程
+- `DeInit()` 注销 `distributed_pasteboard_switch` 观察者。
+
+锚点：[PastedSwitch::DeInit](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)
+
+## 5. 接口与数据结构约束
+
+### 5.1 接口契约
+- 无对外公开 API，服务内调用函数。
+- 返回值语义：
+  - `GetDeviceCollabSwitch`：缺失值按“启用”处理（`true`）。
+  - `SetSwitch` 不返回值，依赖 `DevProfile` 副作用生效。
+- `Init` 对无效用户和禁用参数场景直接短路，避免继续注册观察者。
+
+### 5.2 关键常量语义
+- `DISTRIBUTED_PASTEBOARD_SWITCH`：主开关数据源键名。  
+- `DEVICE_COLLAB_SWITCH`：设备协同开关查询键名。  
+- `SUPPORT_STATUS = "1"`：通用“开启”判定值。  
+- `DISABLE_DISTRIBUTED_PASTEBOARD = "const.pasteboard.disable_crossdevice_clipboard"`：全局参数短路开关。  
+- `UE_SWITCH_STATUS = "PASTEBOARD_SWITCH_STATUS"`：UE 事件名。  
+
+## 6. 依赖关系
+- 观察者基类依赖 `AAFwk::DataAbilityObserverStub`（观察能力变化事件）。  
+- 状态读写依赖 `DataShareDelegate`，表示配置来源于跨进程共享数据源。  
+- 设备状态落地依赖 `DevProfile`。  
+- 日志与事件依赖 `pasteboard_hilog.h` 与 `pasteboard_event_ue.h`。  
+- 运行时参数判断依赖 `parameters.h`。  
+
+锚点：
+- 包含头文件见 [pasteboard_switch.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.h) 与 [pasteboard_switch.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)。
+
+## 7. 运行手册（Runbook）
+
+### 7.1 Build（构建）
+- 证据缺口：当前未给出该模块对应的 build target 或命令。  
+- 操作建议（推断）：在仓库构建入口按服务模块进行全量/增量构建，并确保 `services/switch/*` 被编译纳入 `pasteboard` 服务目标。  
+- 关联锚点：文件变更范围限定于本模块源码文件。
+
+### 7.2 Validation（验证）
+- 验证点 1：服务启动后执行一次 `Init`，日志应出现初始化与上报相关信息。  
+- 验证点 2：修改 `distributed_pasteboard_switch` 值，观察状态回调后设备状态变化。  
+- 验证点 3：`userId = -1` 调用 `Init` 不应注册观察者。  
+- 验证点 4：未设置开关值时 `SetSwitch` 默认为开启（`true` 写入 `DevProfile`）。  
+- 验证点 5：`GetDeviceCollabSwitch` 在空值下应返回 true。  
+- 证据锚点：[PastedSwitch::Init](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp), [PastedSwitch::SetSwitch](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp), [PastedSwitch::GetDeviceCollabSwitch](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)
+
+### 7.3 Deployment（部署）
+- 部署依赖系统参数与 DataShare key 可用性，默认行为在配置缺失时偏向“开启”以保证兼容。  
+- 关键部署检查点：`const.pasteboard.disable_crossdevice_clipboard` 与 `distributed_pasteboard_switch` 两项配置在设备侧可被正常读取。  
+- 事件埋点通过 `UE_SWITCH_STATUS` 上报，可用于开关变更审计（对应模板与事件体系可由 `pasteboardEvent.yaml` 中的事件定义流程确认）。
+
+### 7.4 Rollback（回滚）
+- 回滚策略：恢复旧版 `pasteboard_switch.cpp/h` 与 DataShare 键值策略（尤其 `distributed_pasteboard_switch` 默认值解释）并重启 pasteboard 服务。
+- 风险控制：将 `DISABLE_DISTRIBUTED_PASTEBOARD` 置为 true 可在平台层禁用分布式粘贴板能力，作为紧急降级手段。
+
+### 7.5 Failure-mode notes（故障模式）
+- 观察者未触发：检查 `RegisterObserver` 是否成功、DataShare key 名是否一致。  
+- 开关始终开启：常见于配置值缺失（代码默认开启）或读取异常。  
+- 开关状态抖动：关注多线程回调和 `userId` 变更时序，观察 `SetSwitch` 调度线程。  
+
+## 8. 调试指引（按模块）
+### 8.1 初始化与观察链路
+- 症状：服务启动后仍未响应开关变化。  
+- 可能区域：`PastedSwitch::Init` / `DataShareDelegate::RegisterObserver` / `PastedSwitchObserver::OnChange`。  
+- 检查文件：  
+  - [pasteboard_switch.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)  
+  - 建议命令：检查日志是否出现 `Init SetSwitch`、`empty switch`、`not support distributed pasteboard` 等关键字。
+
+### 8.2 状态读取与默认行为
+- 症状：配置为空时状态不符合预期。  
+- 可能区域：`PastedSwitch::SetSwitch` 与 `GetDeviceCollabSwitch` 的空值分支。  
+- 检查文件：  
+  - [pasteboard_switch.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)  
+  - 检查点：`SUPPORT_STATUS` 和两个关键键值的实际存储内容。
+
+### 8.3 全局禁用参数
+- 症状：即使开关配置已开启也显示关闭。  
+- 可能区域：`Init` 初始参数短路。  
+- 检查文件：  
+  - [pasteboard_switch.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)  
+  - 检查系统参数 `const.pasteboard.disable_crossdevice_clipboard` 是否被置为 true。
+
+### 8.4 UE 上报
+- 症状：开关变更埋点缺失。  
+- 可能区域：`PastedSwitch::ReportUeSwitchEvent` 与 UE 宏接口。  
+- 检查文件：  
+  - [pasteboard_switch.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)  
+  - 事件名锚点：`UE_SWITCH_STATUS`。  
+  - 进一步对齐到事件定义规范可参考 `pasteboardEvent.yaml` 中的事件元数据说明。  
+
+## 9. 约束与风险
+1. 数据源键值缺失时默认值策略固定为“开启”，可能掩盖配置错误。  
+2. 回调中 `std::thread` `detach` 不能回收，需通过生命周期管理避免资源泄漏级累积。  
+3. `OnChange` 回调捕获的 `userId_` 为构造时拷贝（`userId = userId_`），在并发切换用户场景下可能出现短时不同步。  
+4. `DeInit` 仅注销观察者，无显式等待线程收敛。  
+
+## 10. 证据确认边界
+### Source-confirmed（源码确认）
+- 模块代码结构、类、函数、常量、默认值逻辑、线程化回调和状态上报调用均来自 [pasteboard_switch.h](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.h) 与 [pasteboard_switch.cpp](C:\Users\kvenu\playground\codewiki-community\benchmark\gitcode\repos\openharmony\distributeddatamgr_pasteboard\services\switch\pasteboard_switch.cpp)。
+- 事件定义流程的总体模板性约束来自 `pasteboardEvent.yaml` 的元数据说明。
+
+### Inferred / Missing Evidence（推断或缺失）
+- 具体构建目标、编译命令、部署脚本、完整调用方链路未在提供证据中出现。  
+- `DataShareDelegate`、`DevProfile`、`UE_SWITCH` 的底层实现和持久化行为属于外部依赖，当前未直接读取其源码，行为为推断。
