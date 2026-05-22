@@ -773,6 +773,118 @@ test("planner bounds component child modules by source size", () => {
   assert.equal(plan.modules.at(-1).path, "component/service-4");
 });
 
+test("planner discovers OpenHarmony components_v2 modules", () => {
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: [
+      "frameworks/core/components_v2/water_flow/water_flow_component.cpp",
+      "frameworks/core/components_v2/water_flow/render_water_flow.cpp",
+      "frameworks/core/components_v2/water_flow/water_flow_element.cpp",
+      "frameworks/core/components_v2/list/list_component.cpp",
+      "frameworks/core/components_v2/list/render_list.cpp"
+    ],
+    sourceFileStats: [
+      { path: "frameworks/core/components_v2/water_flow/water_flow_component.cpp", lines: 120 },
+      { path: "frameworks/core/components_v2/water_flow/render_water_flow.cpp", lines: 300 },
+      { path: "frameworks/core/components_v2/water_flow/water_flow_element.cpp", lines: 150 },
+      { path: "frameworks/core/components_v2/list/list_component.cpp", lines: 80 },
+      { path: "frameworks/core/components_v2/list/render_list.cpp", lines: 90 }
+    ]
+  };
+
+  const plan = planModules("C:/repo/arkui_ace_engine", scan);
+
+  assert.ok(plan.modules.some((module) => module.path === "frameworks/core/components_v2/water_flow"));
+  assert.ok(plan.modules.some((module) => module.path === "frameworks/core/components_v2/list"));
+  assert.doesNotMatch(plan.modules[0].description, /Fallback/);
+});
+
+test("planner discovers OpenHarmony components_ng pattern modules", () => {
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: [
+      "frameworks/core/components_ng/pattern/list/list_pattern.cpp",
+      "frameworks/core/components_ng/pattern/list/list_layout_algorithm.cpp",
+      "frameworks/core/components_ng/pattern/waterflow/water_flow_pattern.cpp",
+      "frameworks/core/components_ng/pattern/waterflow/water_flow_layout_algorithm.cpp"
+    ],
+    sourceFileStats: [
+      { path: "frameworks/core/components_ng/pattern/list/list_pattern.cpp", lines: 250 },
+      { path: "frameworks/core/components_ng/pattern/list/list_layout_algorithm.cpp", lines: 220 },
+      { path: "frameworks/core/components_ng/pattern/waterflow/water_flow_pattern.cpp", lines: 300 },
+      { path: "frameworks/core/components_ng/pattern/waterflow/water_flow_layout_algorithm.cpp", lines: 260 }
+    ]
+  };
+
+  const plan = planModules("C:/repo/arkui_ace_engine", scan);
+
+  assert.ok(plan.modules.some((module) => module.path === "frameworks/core/components_ng/pattern/list"));
+  assert.ok(plan.modules.some((module) => module.path === "frameworks/core/components_ng/pattern/waterflow"));
+});
+
+test("planner discovers SDK training and custom operator modules", () => {
+  const scan = {
+    primaryExtension: ".py",
+    includedFiles: [
+      "training/tf_rec_v1/python/core/emb/emb_factory.py",
+      "training/tf_rec_v2/mxrec/core/train.py",
+      "training/torch_rec_v1/hybrid_torchrec/pipeline.py",
+      "training/torch_rec_v2/dynamic_emb/table.py",
+      "cust_op/tf_cpu_op/src/kernel.cc"
+    ],
+    sourceFileStats: [
+      { path: "training/tf_rec_v1/python/core/emb/emb_factory.py", lines: 100 },
+      { path: "training/tf_rec_v2/mxrec/core/train.py", lines: 120 },
+      { path: "training/torch_rec_v1/hybrid_torchrec/pipeline.py", lines: 140 },
+      { path: "training/torch_rec_v2/dynamic_emb/table.py", lines: 160 },
+      { path: "cust_op/tf_cpu_op/src/kernel.cc", lines: 180 }
+    ]
+  };
+
+  const plan = planModules("C:/repo/RecSDK", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.ok(paths.includes("training/tf_rec_v1"));
+  assert.ok(paths.includes("training/tf_rec_v2"));
+  assert.ok(paths.includes("training/torch_rec_v1"));
+  assert.ok(paths.includes("training/torch_rec_v2"));
+  assert.ok(paths.includes("cust_op/tf_cpu_op"));
+});
+
+test("planner does not label large fallback repositories as small projects", () => {
+  const includedFiles = Array.from({ length: 1001 }, (_, index) => `flat/file-${index}.cpp`);
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles,
+    sourceFileStats: includedFiles.map((file) => ({ path: file, lines: 1 }))
+  };
+
+  const plan = planModules("C:/repo/large-flat", scan);
+
+  assert.equal(plan.modules.length, 1);
+  assert.equal(plan.modules[0].path, ".");
+  assert.doesNotMatch(plan.modules[0].description, /small project/i);
+  assert.match(plan.modules[0].description, /no safe module boundaries/i);
+});
+
+test("planner keeps small project root fallback wording for tiny repositories", () => {
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: ["main.cpp"],
+    sourceFileStats: [{ path: "main.cpp", lines: 20 }]
+  };
+
+  const plan = planModules("C:/repo/tiny", scan);
+
+  assert.deepEqual(plan.modules, [
+    {
+      name: "Project Root",
+      path: ".",
+      description: "Fallback module for a small project without obvious source module directories."
+    }
+  ]);
+});
+
 test("generate planning falls back to Project Root when no obvious module exists", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));

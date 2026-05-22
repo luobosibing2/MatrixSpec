@@ -2,6 +2,50 @@ import path from "node:path";
 
 const CORE_DIRS = ["src", "lib", "pkg", "packages", "app", "server", "cmd"];
 const COMPONENT_ROOTS = ["component", "components", "services", "plugins", "modules", "tools", "cmd"];
+const OPENHARMONY_MODULE_PATTERNS = [
+  {
+    prefix: ["frameworks", "core", "components_v2"],
+    depth: 4,
+    description: "OpenHarmony component module discovered under frameworks/core/components_v2."
+  },
+  {
+    prefix: ["frameworks", "core", "components_ng", "pattern"],
+    depth: 5,
+    description: "OpenHarmony NG pattern module discovered under frameworks/core/components_ng/pattern."
+  },
+  {
+    prefix: ["frameworks", "core", "interfaces", "native"],
+    depth: 5,
+    description: "OpenHarmony native interface module discovered under frameworks/core/interfaces/native."
+  },
+  {
+    prefix: ["frameworks", "bridge"],
+    depth: 3,
+    description: "OpenHarmony bridge subsystem discovered under frameworks/bridge."
+  },
+  {
+    prefix: ["adapter"],
+    depth: 2,
+    description: "OpenHarmony adapter subsystem discovered under adapter."
+  },
+  {
+    prefix: ["interfaces"],
+    depth: 2,
+    description: "OpenHarmony interface surface discovered under interfaces."
+  }
+];
+const SDK_MODULE_PATTERNS = [
+  {
+    prefix: ["training"],
+    depth: 2,
+    description: "SDK training module discovered under training."
+  },
+  {
+    prefix: ["cust_op"],
+    depth: 2,
+    description: "SDK custom operator module discovered under cust_op."
+  }
+];
 const SKIP_MODULE_DIRS = new Set(["__tests__", "__mocks__", "test", "tests", "spec", "fixtures", "fixture", "demo", "demos", "examples"]);
 const LARGE_FILE_LINES = 2000;
 const MAX_COMPONENT_MODULES = 8;
@@ -34,15 +78,7 @@ export function planModules(root, scan) {
     projectName: path.basename(root),
     language: LANGUAGE_BY_EXTENSION[primaryExtension] || null,
     primaryExtension,
-    modules: modules.length
-      ? modules
-      : [
-          {
-            name: "Project Root",
-            path: ".",
-            description: "Fallback module for a small project without obvious source module directories."
-          }
-        ]
+    modules: modules.length ? modules : [fallbackModule(scan)]
   };
 }
 
@@ -84,6 +120,7 @@ export function validateAndFixModules(modules, scan) {
 function discoverModules(files, primaryExtension, sourceFileStats = null) {
   const modules = [];
   const seen = new Set();
+  const sourceFiles = sourceFileStats || files.map((file) => ({ path: file, lines: 0 }));
 
   const javaModules = primaryExtension === ".java" ? discoverJavaModules(files) : [];
   for (const module of javaModules) {
@@ -91,7 +128,17 @@ function discoverModules(files, primaryExtension, sourceFileStats = null) {
   }
   if (modules.length >= 2) return modules;
 
-  for (const module of discoverComponentModules(sourceFileStats || files.map((file) => ({ path: file, lines: 0 })))) {
+  for (const module of discoverPatternModules(sourceFiles, OPENHARMONY_MODULE_PATTERNS)) {
+    addModule(modules, seen, module.path, module.name, module.description);
+  }
+  if (modules.length) return modules;
+
+  for (const module of discoverPatternModules(sourceFiles, SDK_MODULE_PATTERNS)) {
+    addModule(modules, seen, module.path, module.name, module.description);
+  }
+  if (modules.length) return modules;
+
+  for (const module of discoverComponentModules(sourceFiles)) {
     addModule(modules, seen, module.path, module.name, module.description);
   }
   if (modules.length) return modules;
@@ -120,6 +167,44 @@ function discoverModules(files, primaryExtension, sourceFileStats = null) {
   return modules;
 }
 
+function discoverPatternModules(sourceFiles, patterns) {
+  const candidates = new Map();
+  for (const file of sourceFiles) {
+    const parts = file.path.split("/");
+    for (const pattern of patterns) {
+      if (parts.length <= pattern.depth - 1 || !matchesPrefix(parts, pattern.prefix)) continue;
+      const segment = parts[pattern.depth - 1];
+      if (!segment || SKIP_MODULE_DIRS.has(segment.toLowerCase())) continue;
+      const modulePath = parts.slice(0, pattern.depth).join("/");
+      const current = candidates.get(modulePath) || {
+        path: modulePath,
+        files: 0,
+        lines: 0,
+        description: pattern.description
+      };
+      current.files += 1;
+      current.lines += file.lines || 0;
+      candidates.set(modulePath, current);
+    }
+  }
+
+  return rankedModuleCandidates(candidates).map((candidate) => ({
+    path: candidate.path,
+    name: moduleName(candidate.path),
+    description: candidate.description
+  }));
+}
+
+function matchesPrefix(parts, prefix) {
+  return prefix.every((part, index) => parts[index] === part);
+}
+
+function rankedModuleCandidates(candidates) {
+  return [...candidates.values()]
+    .sort((a, b) => b.files - a.files || b.lines - a.lines || a.path.localeCompare(b.path))
+    .slice(0, MAX_COMPONENT_MODULES);
+}
+
 function discoverComponentModules(sourceFiles) {
   const candidates = new Map();
   for (const file of sourceFiles) {
@@ -132,14 +217,11 @@ function discoverComponentModules(sourceFiles) {
     current.lines += file.lines || 0;
     candidates.set(modulePath, current);
   }
-  return [...candidates.values()]
-    .sort((a, b) => b.files - a.files || b.lines - a.lines || a.path.localeCompare(b.path))
-    .slice(0, MAX_COMPONENT_MODULES)
-    .map((candidate) => ({
-      path: candidate.path,
-      name: moduleName(candidate.path),
-      description: `Component source module discovered under ${candidate.path.split("/")[0]}/.`
-    }));
+  return rankedModuleCandidates(candidates).map((candidate) => ({
+    path: candidate.path,
+    name: moduleName(candidate.path),
+    description: `Component source module discovered under ${candidate.path.split("/")[0]}/.`
+  }));
 }
 
 function discoverJavaModules(files) {
@@ -285,6 +367,21 @@ function statsForModule(modulePath, sourceStats) {
     files: files.length,
     lines: files.reduce((total, file) => total + (file.lines || 0), 0)
   };
+}
+
+function fallbackModule(scan) {
+  const large = isLargeRepository(scan);
+  return {
+    name: "Project Root",
+    path: ".",
+    description: large
+      ? "Fallback module because no safe module boundaries were detected for this large repository."
+      : "Fallback module for a small project without obvious source module directories."
+  };
+}
+
+function isLargeRepository(scan) {
+  return (scan.includedFiles || []).length >= 1000 || (scan.sourceFileStats || []).length >= 1000;
 }
 
 function fallbackSourceStats(files) {
