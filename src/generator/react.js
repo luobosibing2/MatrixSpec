@@ -16,29 +16,25 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
   const isFake = strategy.provider === "fake";
   const guard = isFake ? null : createWorkspaceGuard(paths, run);
   const moduleResults = [];
+  const moduleFailures = [];
   for (const [index, module] of plan.modules.entries()) {
     const slug = `${slugify(module.path) || "project-root"}.md`;
     progress?.(`Module ${index + 1}/${plan.modules.length}: ${module.name} (${module.path})`);
-    const prompt = buildModulePrompt(scan, module, options);
-    const promptFile = path.join(modulePromptsDir, slug);
-    fs.writeFileSync(promptFile, prompt, "utf8");
-
-    const result = isFake
-      ? fakeCompletion({
-          task: "module",
-          prompt,
-          plan: module,
-          model: strategy.model,
-          options
-        })
-      : externalCompletion({
-          paths,
-          run,
-          strategy,
-          task: `module-${slugify(module.path) || "project-root"}`,
-          prompt
-        });
-    if (!result.ok && !result.text) return result;
+    const result = runModuleWithFallbacks({
+      paths,
+      run,
+      scan,
+      module,
+      strategy,
+      isFake,
+      modulePromptsDir,
+      options
+    });
+    if (!result.ok && !result.text) {
+      moduleFailures.push(moduleFailure(module, result));
+      progress?.(`Module failed after fallbacks: ${module.name} (${module.path})`);
+      continue;
+    }
 
     const moduleFile = path.join(modulesDir, slug);
     fs.writeFileSync(moduleFile, result.text, "utf8");
@@ -46,14 +42,23 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
       module,
       content: result.text,
       artifact: rel(run.dir, moduleFile),
-      prompt: rel(run.dir, promptFile),
+      prompt: result.prompt,
+      attempts: result.attempts,
       usage: result.usage,
       runnerLog: result.log
     });
   }
+  if (!moduleResults.length) {
+    return {
+      ok: false,
+      code: "REACT_MODULES_FAILED",
+      message: "All module generation attempts failed.",
+      moduleFailures
+    };
+  }
 
   progress?.("Composing design.md");
-  const designPrompt = buildDesignPrompt(scan, plan, moduleResults, options);
+  const designPrompt = buildDesignPrompt(scan, plan, moduleResults, moduleFailures, options);
   const designPromptFile = path.join(promptsDir, "design.md");
   fs.writeFileSync(designPromptFile, designPrompt, "utf8");
   const designResult = isFake
@@ -104,9 +109,11 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
       path: module.module.path,
       artifact: module.artifact,
       prompt: module.prompt,
+      attempts: module.attempts,
       usage: module.usage,
       runnerLog: module.runnerLog
     })),
+    moduleFailures,
     prompts: {
       design: rel(run.dir, designPromptFile),
       spec: rel(run.dir, specPromptFile)
@@ -137,7 +144,74 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
     tokens,
     provider: strategy.provider,
     model: strategy.model,
-    reason: strategy.generationReason
+    reason: strategy.generationReason,
+    moduleFailures
+  };
+}
+
+function runModuleWithFallbacks({ paths, run, scan, module, strategy, isFake, modulePromptsDir, options = {} }) {
+  const baseSlug = slugify(module.path) || "project-root";
+  const attempts = [
+    { name: "standard", prompt: buildModulePrompt(scan, module, options) },
+    { name: "compressed", prompt: buildCompressedModulePrompt(scan, module, options) },
+    { name: "autonomous", prompt: buildAutonomousModulePrompt(module, options) }
+  ];
+  const attemptResults = [];
+
+  for (const attempt of attempts) {
+    const promptFile = path.join(modulePromptsDir, `${baseSlug}.${attempt.name}.md`);
+    fs.writeFileSync(promptFile, attempt.prompt, "utf8");
+    const result = isFake
+      ? fakeCompletion({
+          task: "module",
+          prompt: attempt.prompt,
+          plan: module,
+          model: strategy.model,
+          options
+        })
+      : externalCompletion({
+          paths,
+          run,
+          strategy,
+          task: `module-${baseSlug}-${attempt.name}`,
+          prompt: attempt.prompt
+        });
+    const attemptLog = {
+      name: attempt.name,
+      prompt: rel(run.dir, promptFile),
+      ok: Boolean(result.ok || result.text),
+      code: result.code,
+      message: result.message,
+      runnerLog: result.log
+    };
+    attemptResults.push(attemptLog);
+    if (result.ok || result.text) {
+      return {
+        ...result,
+        ok: true,
+        prompt: rel(run.dir, promptFile),
+        attempts: attemptResults,
+        usage: result.usage || { input: estimateTokens(attempt.prompt), output: estimateTokens(result.text) }
+      };
+    }
+  }
+
+  const last = attemptResults.at(-1) || {};
+  return {
+    ok: false,
+    code: last.code || "MODULE_GENERATION_FAILED",
+    message: last.message || `Module generation failed: ${module.path}`,
+    attempts: attemptResults
+  };
+}
+
+function moduleFailure(module, result) {
+  return {
+    name: module.name,
+    path: module.path,
+    code: result.code || "MODULE_GENERATION_FAILED",
+    message: result.message || `Module generation failed: ${module.path}`,
+    attempts: result.attempts || []
   };
 }
 
@@ -186,7 +260,51 @@ This module has few files but many source lines. Split the analysis into functio
 `;
 }
 
-function buildDesignPrompt(scan, plan, moduleResults, options = {}) {
+function buildCompressedModulePrompt(scan, module, options = {}) {
+  const moduleFiles = scan.includedFiles.filter((file) => module.path === "." || file === module.path || file.startsWith(`${module.path}/`));
+  return `You are the MatSpec module documentation runner.
+Task: generate an intermediate module design document for later design.md synthesis.
+
+${commonOutputRules(options)}
+
+This is a compressed retry prompt. Analyze the repository yourself as needed instead of relying on large pasted context.
+
+Module: ${module.name}
+Path: ${module.path}
+Description: ${module.description}
+Source files: ${module.sourceFiles || moduleFiles.length || "unknown"}
+Source lines: ${module.sourceLines || "unknown"}
+
+Key module files:
+${moduleFiles.slice(0, 30).map((file) => `- ${file}`).join("\n") || "- none"}
+
+Requirements:
+1. Explain module purpose, structure, core classes/functions, flows, interfaces, and constraints.
+2. Prefer source-grounded claims with file paths and symbols.
+3. If details are unclear, mark them as uncertain instead of inventing behavior.
+`;
+}
+
+function buildAutonomousModulePrompt(module, options = {}) {
+  return `You are the MatSpec autonomous module analysis runner.
+Task: inspect the repository yourself and output a focused Markdown module document.
+
+${commonOutputRules(options)}
+
+Module: ${module.name}
+Path: ${module.path}
+
+Use your own read/search loop to inspect the module path and nearby call sites. Keep the workspace read-only. Do not modify files.
+
+Output requirements:
+1. Markdown only.
+2. Cover purpose, directory structure, core components, core flows, interfaces/data structures, operational notes, and uncertainty boundaries.
+3. Include concrete source anchors using file paths and symbols.
+4. Do not invent files, commands, or behavior that you cannot ground in the source.
+`;
+}
+
+function buildDesignPrompt(scan, plan, moduleResults, moduleFailures = [], options = {}) {
   const templates = readFullTemplates(options);
   return `You are the MatSpec design.md generation runner.
 Task: synthesize a project-level implementation design document from module documents.
@@ -209,6 +327,9 @@ ${moduleResults.map((module) => `- ${module.module.name}: ${module.module.path}`
 
 Module documents:
 ${moduleResults.map((module) => module.content).join("\n\n")}
+
+Failed modules:
+${moduleFailures.length ? moduleFailures.map((failure) => `- ${failure.name}: ${failure.path} (${failure.code}) ${failure.message}`).join("\n") : "- none"}
 
 Project README/docs evidence:
 ${repositoryEvidence(scan)}

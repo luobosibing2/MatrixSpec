@@ -78,10 +78,15 @@ export function generateDocs(options = {}) {
       tokens: react.tokens,
       logs: react.logs,
       modules: react.modules,
+      moduleFailures: react.moduleFailures,
+      status: react.moduleFailures?.length ? "partial_success" : "generated",
       warnings:
         strategy.provider === "fake"
           ? ["P3 fake react output; no real network LLM was called."]
-          : ["P3 CLI runner react output; module artifacts were staged under the run directory."],
+          : [
+              "P3 CLI runner react output; module artifacts were staged under the run directory.",
+              ...(react.moduleFailures?.length ? [`P2 partial_success; ${react.moduleFailures.length} module(s) failed after fallback attempts.`] : [])
+            ],
       reason: react.reason
     });
   } else {
@@ -575,6 +580,8 @@ function applyGenerationMetadata(manifest, metadata) {
   manifest.tokens = metadata.tokens || manifest.tokens;
   manifest.generationReason = metadata.reason || null;
   manifest.warnings = metadata.warnings || manifest.warnings;
+  if (metadata.status) manifest.status = metadata.status;
+  if (metadata.moduleFailures) manifest.moduleFailures = metadata.moduleFailures;
   if (metadata.logs?.llm) manifest.logs.llm = metadata.logs.llm;
   if (metadata.logs?.react) manifest.logs.react = metadata.logs.react;
   if (metadata.logs?.external) manifest.logs.external = metadata.logs.external;

@@ -103,6 +103,8 @@ const prompt = args[args.length - 1] || "";
 const outputPath = outputIndex >= 0 ? args[outputIndex + 1] || "" : "";
 const isSpec = outputPath.includes("-spec-") || (!outputPath && (previousCalls > 0 || prompt.includes("Generated design.md") || prompt.includes("spec.md")));
 const isModule = outputPath.includes("-module-");
+if (process.env.MOCK_FAIL_FIRST_MODULE_ATTEMPT === "1" && isModule && previousCalls === 0) process.exit(7);
+if (process.env.MOCK_FAIL_SRC_AUTH_MODULE === "1" && outputPath.includes("module-src-auth")) process.exit(7);
 const content = isSpec
   ? "# Mock Codex SPEC\\n\\nDerived from design by mock codex.\\n\\n## 1. Component Purpose\\nMock spec.\\n\\n## 2. Domain Terminology\\nMock terms.\\n\\n## 3. Actors and Boundaries\\nMock boundaries.\\n\\n## 4. DFX Constraints\\nMock DFX.\\n\\n## 5. Core Capabilities\\nMock capabilities.\\n\\n## 6. Data Constraints\\nMock data constraints.\\n"
   : isModule
@@ -1185,8 +1187,8 @@ test("fake react generate writes module documents and react log", () => {
   assert.ok(manifest.artifacts.modules.length > 0);
   assert.ok(fs.existsSync(path.join(runDir, "logs/react.json")));
   assert.ok(fs.existsSync(path.join(runDir, "modules/src-auth.md")));
-  assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/modules/src-auth.md")));
-  const modulePrompt = fs.readFileSync(path.join(runDir, "logs/prompts/modules/src-auth.md"), "utf8");
+  assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/modules/src-auth.standard.md")));
+  const modulePrompt = fs.readFileSync(path.join(runDir, "logs/prompts/modules/src-auth.standard.md"), "utf8");
   assert.match(modulePrompt, /Directory Source File Stats/);
   assert.match(modulePrompt, /Source excerpts with line numbers/);
   assert.match(modulePrompt, /Operational evidence/);
@@ -1230,6 +1232,57 @@ test("--mode react with mock codex writes module artifacts and react log", () =>
   assert.ok(fs.existsSync(path.join(runDir, "modules/src-auth.md")));
   assert.ok(fs.existsSync(path.join(runDir, "logs/react.json")));
   assert.match(fs.readFileSync(path.join(runDir, "spec.md"), "utf8"), /Derived from design/);
+});
+
+test("react generation retries module generation with compressed fallback", () => {
+  const root = tempProject();
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  const callsFile = path.join(binDir, "calls.txt");
+  makeMockRunner(binDir, "codex", codexMockScript());
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
+
+  const generated = json(
+    run(["--path", root, "generate", "--runner", "codex", "--mode", "react", "--json"], {
+      env: mockRunnerEnv(binDir, { MOCK_FAIL_FIRST_MODULE_ATTEMPT: "1", MOCK_CALLS_FILE: callsFile })
+    })
+  );
+  const runDir = path.join(root, ".matspec-cli/runs", generated.runId);
+  const reactLog = JSON.parse(fs.readFileSync(path.join(runDir, "logs/react.json"), "utf8"));
+
+  assert.equal(reactLog.modules[0].attempts.length, 2);
+  assert.equal(reactLog.modules[0].attempts[0].name, "standard");
+  assert.equal(reactLog.modules[0].attempts[1].name, "compressed");
+  assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/modules/src-auth.standard.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/modules/src-auth.compressed.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "modules/src-auth.md")));
+});
+
+test("react generation continues after a module fails all fallback attempts", () => {
+  const root = tempProject();
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  makeMockRunner(binDir, "codex", codexMockScript());
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
+  writeProjectFile(root, "src/payment/pay.js", "export function pay() {}\n");
+
+  const generated = json(
+    run(["--path", root, "generate", "--runner", "codex", "--mode", "react", "--json"], {
+      env: mockRunnerEnv(binDir, { MOCK_FAIL_SRC_AUTH_MODULE: "1" })
+    })
+  );
+  const runDir = path.join(root, ".matspec-cli/runs", generated.runId);
+  const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
+  const reactLog = JSON.parse(fs.readFileSync(path.join(runDir, "logs/react.json"), "utf8"));
+
+  assert.equal(manifest.status, "partial_success");
+  assert.equal(manifest.moduleFailures.length, 1);
+  assert.equal(manifest.moduleFailures[0].path, "src/auth");
+  assert.equal(manifest.artifacts.modules.length, 1);
+  assert.ok(manifest.artifacts.modules.includes("modules/src-payment.md"));
+  assert.equal(reactLog.moduleFailures[0].attempts.length, 3);
+  assert.ok(fs.existsSync(path.join(runDir, "design.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "spec.md")));
 });
 
 test("react non-json output shows per-module progress", () => {
@@ -1423,7 +1476,7 @@ test("external runner failures are structured and do not update latest", () => {
   json(run(["init", root, "--integration", "none", "--json"]));
   writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
 
-  const result = run(["--path", root, "generate", "--runner", "codex", "--json"], {
+  const result = run(["--path", root, "generate", "--runner", "codex", "--mode", "direct", "--json"], {
     env: mockRunnerEnv(binDir, { MOCK_FAIL: "1" })
   });
   assert.equal(result.status, 1);
@@ -1441,7 +1494,7 @@ test("external runner empty output fails", () => {
   json(run(["init", root, "--integration", "none", "--json"]));
   writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
 
-  const result = run(["--path", root, "generate", "--runner", "codex", "--json"], {
+  const result = run(["--path", root, "generate", "--runner", "codex", "--mode", "direct", "--json"], {
     env: mockRunnerEnv(binDir, { MOCK_EMPTY: "1" })
   });
   assert.equal(result.status, 1);
@@ -1457,7 +1510,7 @@ test("external runner non-markdown output fails", () => {
   json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
   writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
 
-  const result = run(["--path", root, "generate", "--runner", "codex", "--json"], {
+  const result = run(["--path", root, "generate", "--runner", "codex", "--mode", "direct", "--json"], {
     env: mockRunnerEnv(binDir, { MOCK_LOG_ONLY: "1" })
   });
   assert.equal(result.status, 1);
