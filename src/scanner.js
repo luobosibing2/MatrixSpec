@@ -1,11 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
+import createIgnore from "ignore";
 
 const ANY_DEPTH_IGNORED_DIRS = new Set([
   ".git",
   ".hg",
   ".svn",
   ".matspec-cli",
+  ".opencode",
+  ".codegenie",
+  ".agents",
+  ".claude",
+  ".cac",
+  "test",
+  "tests",
+  "__tests__",
+  "matspec",
   "node_modules",
   ".next",
   ".nuxt",
@@ -92,8 +102,10 @@ const ANALYZABLE_EXTENSIONS = new Set([
   ".json",
   ".md",
   ".mdx",
+  ".gn",
   ".yml",
   ".yaml",
+  ".xml",
   ".toml",
   ".ini",
   ".env",
@@ -169,10 +181,14 @@ const MAX_OPERATIONAL_SNIPPET_LINES = 40;
 
 export function scanRepository(root) {
   const includedFiles = [];
+  const documentFiles = [];
   const ignoredSample = [];
   const extensionCounts = {};
   let totalFiles = 0;
   let ignoredCount = 0;
+  const gitignore = createIgnore();
+  const gitignoreFile = path.join(root, ".gitignore");
+  if (fs.existsSync(gitignoreFile)) gitignore.add(fs.readFileSync(gitignoreFile, "utf8"));
 
   function ignore(relativePath, reason) {
     ignoredCount += 1;
@@ -187,7 +203,7 @@ export function scanRepository(root) {
       if (!relativePath) continue;
 
       if (entry.isDirectory()) {
-        const reason = ignoredDirectoryReason(relativePath, entry.name);
+        const reason = gitignore.ignores(`${relativePath}/`) ? ".gitignore" : ignoredDirectoryReason(relativePath, entry.name);
         if (reason) {
           ignore(relativePath, reason);
           continue;
@@ -198,7 +214,13 @@ export function scanRepository(root) {
 
       if (!entry.isFile()) continue;
       totalFiles += 1;
-      const reason = ignoredFileReason(absolute, relativePath, entry.name);
+      const ignoredByGit = gitignore.ignores(relativePath);
+      if (!ignoredByGit && (isReadme(relativePath) || (relativePath.startsWith("docs/") && /\.mdx?$/i.test(relativePath)))) documentFiles.push(relativePath);
+      const reason = ignoredByGit
+        ? ".gitignore"
+        : relativePath.startsWith("docs/")
+          ? "documentation file"
+          : ignoredFileReason(absolute, relativePath, entry.name);
       if (reason) {
         ignore(relativePath, reason);
         continue;
@@ -212,10 +234,10 @@ export function scanRepository(root) {
   walk(root);
   includedFiles.sort();
 
-  const readmeFiles = readProjectDocs(root, includedFiles.filter(isReadme), MAX_README_FILES);
+  const readmeFiles = readProjectDocs(root, documentFiles.filter(isReadme), MAX_README_FILES);
   const docsFiles = readProjectDocs(
     root,
-    includedFiles.filter((file) => file.startsWith("docs/") && /\.mdx?$/i.test(file)),
+    documentFiles.filter((file) => file.startsWith("docs/") && /\.mdx?$/i.test(file)),
     MAX_DOC_FILES
   );
   const sourceFileStats = buildSourceFileStats(root, includedFiles);
@@ -296,6 +318,8 @@ function isKnownConfig(name) {
     ".npmrc",
     ".nvmrc",
     ".editorconfig",
+    "BUILD.gn",
+    "CMakeLists.txt",
     "tsconfig",
     "package.json"
   ].some((prefix) => name === prefix || name.startsWith(`${prefix}.`));

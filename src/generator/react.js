@@ -1,12 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 import { fakeCompletion } from "../llm.js";
 import { ensureDir, rel, slugify, writeJson } from "../util.js";
 import { createWorkspaceGuard, runRunnerTask } from "./external.js";
 import { commonOutputRules, readFullTemplates, repositoryEvidence, specBlackBoxRules } from "./templates.js";
 import { isZh } from "../i18n.js";
 
-export function runReactGeneration({ paths, run, scan, plan, strategy, progress = null, options = {} }) {
+export async function runReactGeneration({ paths, run, scan, plan, strategy, progress = null, options = {} }) {
   const modulesDir = path.join(run.dir, "modules");
   const modulePromptsDir = path.join(run.dir, "logs/prompts/modules");
   const promptsDir = path.join(run.dir, "logs/prompts");
@@ -17,19 +18,13 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
   const guard = isFake ? null : createWorkspaceGuard(paths, run);
   const moduleResults = [];
   const moduleFailures = [];
+  const generatedModules = isFake
+    ? plan.modules.map((module) => runModuleWithFallbacks({ paths, run, scan, module, strategy, isFake, modulePromptsDir, options }))
+    : await runModuleWorkers({ paths, run, scan, modules: plan.modules, strategy, modulePromptsDir, options });
   for (const [index, module] of plan.modules.entries()) {
     const slug = `${slugify(module.path) || "project-root"}.md`;
     progress?.(`Module ${index + 1}/${plan.modules.length}: ${module.name} (${module.path})`);
-    const result = runModuleWithFallbacks({
-      paths,
-      run,
-      scan,
-      module,
-      strategy,
-      isFake,
-      modulePromptsDir,
-      options
-    });
+    const result = generatedModules[index];
     if (!result.ok && !result.text) {
       moduleFailures.push(moduleFailure(module, result));
       progress?.(`Module failed after fallbacks: ${module.name} (${module.path})`);
@@ -58,7 +53,8 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
   }
 
   progress?.("Composing design.md");
-  const designPrompt = buildDesignPrompt(scan, plan, moduleResults, moduleFailures, options);
+  const focusedModule = options.focusedModule ? moduleResults.find((result) => result.module.path === options.focusedModule)?.module || plan.modules.find((module) => module.path === options.focusedModule) : null;
+  const designPrompt = buildDesignPrompt(scan, plan, moduleResults, moduleFailures, options, focusedModule);
   const designPromptFile = path.join(promptsDir, "design.md");
   fs.writeFileSync(designPromptFile, designPrompt, "utf8");
   const designResult = isFake
@@ -67,7 +63,30 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
         usage: { input: estimateTokens(designPrompt), output: 0 }
       }
     : externalCompletion({ paths, run, strategy, task: "design", prompt: designPrompt });
-  if (!designResult.ok && !designResult.text) return designResult;
+  if (!designResult.ok && !designResult.text) {
+    const failureLog = writeReactLog({
+      run,
+      strategy,
+      moduleResults,
+      moduleFailures,
+      prompts: { design: rel(run.dir, designPromptFile) },
+      calls: [...moduleResults.map((module) => module.runnerLog).filter(Boolean), designResult.log].filter(Boolean),
+      tokens: partialTokens(moduleResults, designResult)
+    });
+    return {
+      ...designResult,
+      modules: moduleResults.map((module) => module.artifact),
+      logs: {
+        react: failureLog,
+        prompts: { design: rel(run.dir, designPromptFile) }
+      },
+      tokens: partialTokens(moduleResults, designResult),
+      provider: strategy.provider,
+      model: strategy.model,
+      reason: strategy.generationReason,
+      moduleFailures
+    };
+  }
   const design = designResult.text;
 
   progress?.("Deriving spec.md from design.md");
@@ -84,10 +103,35 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
         options
       })
     : externalCompletion({ paths, run, strategy, task: "spec", prompt: specPrompt });
-  if (!specResult.ok && !specResult.text) return specResult;
-
-  const workspaceError = guard?.changed();
-  if (workspaceError) return workspaceError;
+  if (!specResult.ok && !specResult.text) {
+    const tokens = partialTokens(moduleResults, designResult, specResult);
+    const prompts = {
+      design: rel(run.dir, designPromptFile),
+      spec: rel(run.dir, specPromptFile)
+    };
+    const failureLog = writeReactLog({
+      run,
+      strategy,
+      moduleResults,
+      moduleFailures,
+      prompts,
+      calls: [...moduleResults.map((module) => module.runnerLog).filter(Boolean), designResult.log, specResult.log].filter(Boolean),
+      tokens
+    });
+    return {
+      ...specResult,
+      modules: moduleResults.map((module) => module.artifact),
+      logs: {
+        react: failureLog,
+        prompts
+      },
+      tokens,
+      provider: strategy.provider,
+      model: strategy.model,
+      reason: strategy.generationReason,
+      moduleFailures
+    };
+  }
 
   const tokens = {
     input:
@@ -99,20 +143,10 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
       designResult.usage.output +
       specResult.usage.output
   };
-  const reactLog = {
-    runner: strategy.runner,
-    provider: strategy.provider,
-    model: strategy.model,
-    reason: strategy.generationReason,
-    modules: moduleResults.map((module) => ({
-      name: module.module.name,
-      path: module.module.path,
-      artifact: module.artifact,
-      prompt: module.prompt,
-      attempts: module.attempts,
-      usage: module.usage,
-      runnerLog: module.runnerLog
-    })),
+  const reactLogFile = writeReactLog({
+    run,
+    strategy,
+    moduleResults,
     moduleFailures,
     prompts: {
       design: rel(run.dir, designPromptFile),
@@ -124,9 +158,27 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
       specResult.log
     ].filter(Boolean),
     tokens
-  };
-  const reactLogFile = path.join(run.dir, "logs/react.json");
-  writeJson(reactLogFile, reactLog);
+  });
+
+  const workspaceError = guard?.changed();
+  if (workspaceError) {
+    return {
+      ...workspaceError,
+      modules: moduleResults.map((module) => module.artifact),
+      logs: {
+        react: reactLogFile,
+        prompts: {
+          design: rel(run.dir, designPromptFile),
+          spec: rel(run.dir, specPromptFile)
+        }
+      },
+      tokens,
+      provider: strategy.provider,
+      model: strategy.model,
+      reason: strategy.generationReason,
+      moduleFailures
+    };
+  }
   progress?.("Module-first generation complete");
 
   return {
@@ -135,7 +187,7 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
     spec: specResult.text,
     modules: moduleResults.map((module) => module.artifact),
     logs: {
-      react: rel(run.dir, reactLogFile),
+      react: reactLogFile,
       prompts: {
         design: rel(run.dir, designPromptFile),
         spec: rel(run.dir, specPromptFile)
@@ -149,13 +201,44 @@ export function runReactGeneration({ paths, run, scan, plan, strategy, progress 
   };
 }
 
+export function runModuleWorker(payload) {
+  return runModuleWithFallbacks({ ...payload, isFake: false });
+}
+
+async function runModuleWorkers({ paths, run, scan, modules, strategy, modulePromptsDir, options }) {
+  const results = Array(modules.length);
+  const concurrency = Math.min(modules.length, Math.max(1, Number(options.concurrency || 2)));
+  let cursor = 0;
+  const workerOptions = { ...options };
+  delete workerOptions.progress;
+  async function consume() {
+    while (cursor < modules.length) {
+      const index = cursor++;
+      results[index] = await runOneModuleWorker({ paths, run: { dir: run.dir }, scan, module: modules[index], strategy, modulePromptsDir, options: workerOptions });
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, consume));
+  return results;
+}
+
+function runOneModuleWorker(workerData) {
+  return new Promise((resolve) => {
+    const worker = new Worker(new URL("./module-worker.js", import.meta.url), { workerData });
+    worker.once("message", resolve);
+    worker.once("error", (error) => resolve({ ok: false, code: "MODULE_WORKER_FAILED", message: error.message }));
+    worker.once("exit", (code) => {
+      if (code !== 0) resolve({ ok: false, code: "MODULE_WORKER_FAILED", message: `Module worker exited with code ${code}.` });
+    });
+  });
+}
+
 function runModuleWithFallbacks({ paths, run, scan, module, strategy, isFake, modulePromptsDir, options = {} }) {
   const baseSlug = slugify(module.path) || "project-root";
   const attempts = [
     { name: "standard", prompt: buildModulePrompt(scan, module, options) },
     { name: "compressed", prompt: buildCompressedModulePrompt(scan, module, options) },
     { name: "autonomous", prompt: buildAutonomousModulePrompt(module, options) }
-  ];
+  ].slice(0, Math.max(1, Number(options.retries || 3)));
   const attemptResults = [];
 
   for (const attempt of attempts) {
@@ -182,6 +265,7 @@ function runModuleWithFallbacks({ paths, run, scan, module, strategy, isFake, mo
       ok: Boolean(result.ok || result.text),
       code: result.code,
       message: result.message,
+      diagnostics: result.diagnostics,
       runnerLog: result.log
     };
     attemptResults.push(attemptLog);
@@ -304,10 +388,13 @@ Output requirements:
 `;
 }
 
-function buildDesignPrompt(scan, plan, moduleResults, moduleFailures = [], options = {}) {
+function buildDesignPrompt(scan, plan, moduleResults, moduleFailures = [], options = {}, focusedModule = null) {
   const templates = readFullTemplates(options);
+  const task = focusedModule
+    ? `synthesize a focused implementation design document for ${focusedModule.path} from its module document.`
+    : "synthesize a project-level implementation design document from module documents.";
   return `You are the MatSpec design.md generation runner.
-Task: synthesize a project-level implementation design document from module documents.
+Task: ${task}
 
 ${commonOutputRules(options)}
 
@@ -331,9 +418,41 @@ ${moduleResults.map((module) => module.content).join("\n\n")}
 Failed modules:
 ${moduleFailures.length ? moduleFailures.map((failure) => `- ${failure.name}: ${failure.path} (${failure.code}) ${failure.message}`).join("\n") : "- none"}
 
-Project README/docs evidence:
-${repositoryEvidence(scan)}
+${focusedModule ? "Focused module README/docs evidence" : "Project README/docs evidence"}:
+${repositoryEvidence(scan, focusedModule)}
 `;
+}
+
+function writeReactLog({ run, strategy, moduleResults, moduleFailures, prompts, calls, tokens }) {
+  const reactLog = {
+    runner: strategy.runner,
+    provider: strategy.provider,
+    model: strategy.model,
+    reason: strategy.generationReason,
+    modules: moduleResults.map((module) => ({
+      name: module.module.name,
+      path: module.module.path,
+      artifact: module.artifact,
+      prompt: module.prompt,
+      attempts: module.attempts,
+      usage: module.usage,
+      runnerLog: module.runnerLog
+    })),
+    moduleFailures,
+    prompts,
+    calls,
+    tokens
+  };
+  const reactLogFile = path.join(run.dir, "logs/react.json");
+  writeJson(reactLogFile, reactLog);
+  return rel(run.dir, reactLogFile);
+}
+
+function partialTokens(moduleResults, ...results) {
+  return {
+    input: moduleResults.reduce((total, module) => total + module.usage.input, 0) + results.reduce((total, result) => total + (result?.usage?.input || 0), 0),
+    output: moduleResults.reduce((total, module) => total + module.usage.output, 0) + results.reduce((total, result) => total + (result?.usage?.output || 0), 0)
+  };
 }
 
 function buildSpecPrompt(design, options = {}) {

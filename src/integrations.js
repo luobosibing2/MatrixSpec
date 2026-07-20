@@ -1,12 +1,30 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { sha256, writeJson } from "./util.js";
 import { isZh } from "./i18n.js";
+import { assertNoLocalPackOverride, loadWorkflow } from "./workflow.js";
 
 const INTEGRATIONS = {
   opencode: {
     path: ".opencode/command",
     description: "opencode repository commands"
+  },
+  nga: {
+    path: ".opencode/command",
+    description: "NGA repository commands and subagents"
+  },
+  codegenie: {
+    path: ".codegenie/command",
+    description: "CodeGenie repository commands and subagents"
+  },
+  codeagent: {
+    path: "~/.cac/command",
+    description: "CodeAgent global commands and skill"
+  },
+  chrys: {
+    path: ".agents/skills/matspec",
+    description: "Chrys repository skill"
   },
   "claude-code": {
     path: ".claude/commands + .claude/skills",
@@ -26,6 +44,10 @@ function opencodeFiles(options = {}) {
   "matspec.delta-design.md": opencodeCommand("matspec.delta-design", "MatSpec Design Delta", stageCommandBody(stageDefinitions["delta-design"], options)),
   "matspec.tasks.md": opencodeCommand("matspec.tasks", "MatSpec Task Breakdown", stageCommandBody(stageDefinitions.tasks, options)),
   "matspec.validation.md": opencodeCommand("matspec.validation", "MatSpec Consistency Validation", stageCommandBody(stageDefinitions.validation, options))
+  ,"matspec.implement.md": opencodeCommand("matspec.implement", "MatSpec Implementation", "Run `matspec implement --run --json`, execute one returned task at a time, and report DONE, DONE_WITH_CONCERNS, BLOCKED, or NEEDS_CONTEXT."),
+  "matspec.review.md": opencodeCommand("matspec.review", "MatSpec Review", "Run `matspec review --json`, then `matspec go --json`; independently review implementation evidence and write only review.md."),
+  "matspec.audit.md": opencodeCommand("matspec.audit", "MatSpec Audit", "Run `matspec validate --json` and report findings without changing files."),
+  "matspec.back.md": opencodeCommand("matspec.back", "MatSpec Back", "Inspect the active workflow history and explain the last confirmed stage without changing state.")
   };
 }
 
@@ -66,6 +88,30 @@ function commands(options = {}) {
     title: "MatSpec Validation",
     description: "Validate coverage from proposal to tasks before implementation.",
     body: stageCommandBody(stageDefinitions.validation, options)
+  },
+  {
+    id: "matspec-implement",
+    title: "MatSpec Implement",
+    description: "Execute confirmed MatSpec tasks through task-executor.",
+    body: "Run `matspec implement --run --json`, then request and execute one Task at a time."
+  },
+  {
+    id: "matspec-review",
+    title: "MatSpec Review",
+    description: "Review a completed MatSpec implementation.",
+    body: "Run `matspec review --json`, then follow `matspec go --json` and write only review.md."
+  },
+  {
+    id: "matspec-audit",
+    title: "MatSpec Audit",
+    description: "Audit the active MatSpec change.",
+    body: "Run `matspec validate --json` and report findings without changing files."
+  },
+  {
+    id: "matspec-back",
+    title: "MatSpec Back",
+    description: "Explain the previous workflow stage.",
+    body: "Inspect status and history without mutating workflow state."
   }
   ];
 }
@@ -406,6 +452,14 @@ export function listIntegrations() {
 }
 
 export function installIntegration(root, name, options = {}) {
+  assertNoLocalPackOverride(root);
+  const configFile = path.join(root, ".matspec-cli/config.yaml");
+  const legacyWorkflow = path.join(root, ".matspec-cli/workflows/default.yaml");
+  if (fs.existsSync(legacyWorkflow) && (!fs.existsSync(configFile) || !/^\s*workflowPack\s*:/m.test(fs.readFileSync(configFile, "utf8")))) {
+    throw Object.assign(new Error("Legacy workflow requires an explicit workflowPack before installing integrations."), {
+      code: "WORKFLOW_PACK_REQUIRED"
+    });
+  }
   if (name === "all") {
     const results = Object.keys(INTEGRATIONS).map((integration) => installIntegration(root, integration, options));
     return {
@@ -417,34 +471,95 @@ export function installIntegration(root, name, options = {}) {
     };
   }
   if (name === "opencode") return installOpencode(root, options);
+  if (name === "nga") return installCommandIntegration(root, "nga", ".opencode/command", ".opencode/agents", options);
+  if (name === "codegenie") return installCommandIntegration(root, "codegenie", ".codegenie/command", ".codegenie/agents", options);
+  if (name === "codeagent") return installCodeagent(root, options);
+  if (name === "chrys") return installChrys(root, options);
   if (name === "claude-code") return installClaudeCode(root, options);
   if (name === "codex") return installCodex(root, options);
   throw new Error(`Unsupported integration: ${name}`);
 }
 
 function installOpencode(root, options = {}) {
-  const dir = path.join(root, INTEGRATIONS.opencode.path);
-  fs.mkdirSync(dir, { recursive: true });
+  return installCommandIntegration(root, "opencode", ".opencode/command", ".opencode/agents", options);
+}
+
+function installCommandIntegration(root, integration, commandPath, agentPath, options = {}) {
   const files = [];
-  for (const [fileName, content] of Object.entries(opencodeFiles(options))) {
-    const file = path.join(dir, fileName);
-    writeTrackedFile(file, content, files, root, options);
+  for (const [fileName, content] of Object.entries(effectiveOpencodeFiles(root, options))) {
+    writeTrackedFile(path.join(root, commandPath, fileName), content, files, root, options);
   }
-  writeManifest(root, "opencode", files);
-  return { ok: true, integration: "opencode", files };
+  writeTrackedFile(path.join(root, agentPath, "stage-generator.md"), stageGeneratorAsset(), files, root, options);
+  writeTrackedFile(path.join(root, agentPath, "task-executor.md"), taskExecutorAsset(), files, root, options);
+  writeManifest(root, integration, files);
+  return { ok: true, integration, files };
+}
+
+function installCodeagent(root, options = {}) {
+  const files = [];
+  const home = os.homedir();
+  for (const [fileName, content] of Object.entries(effectiveOpencodeFiles(root, options))) {
+    writeTrackedFile(path.join(home, ".cac/command", fileName), content, files, root, options, true);
+  }
+  writeTrackedFile(path.join(home, ".cac/skills/matspec/SKILL.md"), skillMarkdown(effectiveCommands(root, options)[0], "codeagent"), files, root, options, true);
+  writeManifest(root, "codeagent", files);
+  return { ok: true, integration: "codeagent", files };
+}
+
+function installChrys(root, options = {}) {
+  const files = [];
+  const base = path.join(root, ".agents/skills/matspec");
+  writeTrackedFile(path.join(base, "SKILL.md"), skillMarkdown(effectiveCommands(root, options)[0], "chrys"), files, root, options);
+  for (const [fileName, content] of Object.entries(effectiveOpencodeFiles(root, options))) {
+    writeTrackedFile(path.join(base, "references", `command.${fileName}`), content, files, root, options);
+  }
+  writeManifest(root, "chrys", files);
+  return { ok: true, integration: "chrys", files };
+}
+
+function effectiveOpencodeFiles(root, options) {
+  const files = opencodeFiles(options);
+  const workflow = loadWorkflow(root);
+  for (const stage of workflow.stages) {
+    const fileName = `${stage.command}.md`;
+    if (files[fileName]) continue;
+    const reference = stage.commandRef;
+    const source = reference?.projectPath ? path.join(root, reference.projectPath) : null;
+    files[fileName] = source && fs.existsSync(source)
+      ? fs.readFileSync(source, "utf8")
+      : opencodeCommand(stage.command, stage.label || stage.key, `Run \`matspec go --json\` and execute only the ${stage.key} stage.`);
+  }
+  return files;
+}
+
+function effectiveCommands(root, options) {
+  const result = commands(options);
+  const known = new Set(result.map((command) => command.id));
+  const files = effectiveOpencodeFiles(root, options);
+  for (const stage of loadWorkflow(root).stages) {
+    if (stage.command.startsWith("matspec.") || known.has(stage.command)) continue;
+    result.push({
+      id: stage.command,
+      title: `MatSpec ${stage.label || stage.key}`,
+      description: stage.objective || `Execute the ${stage.key} workflow stage.`,
+      body: files[`${stage.command}.md`]
+    });
+    known.add(stage.command);
+  }
+  return result;
 }
 
 function installClaudeCode(root, options = {}) {
   const files = [];
   const commandDir = path.join(root, ".claude/commands");
   fs.mkdirSync(commandDir, { recursive: true });
-  for (const command of commands(options)) {
+  for (const command of effectiveCommands(root, options)) {
     writeTrackedFile(path.join(commandDir, `${command.id}.md`), claudeCommand(command), files, root, options);
   }
 
   const skillsDir = path.join(root, ".claude/skills");
   fs.mkdirSync(skillsDir, { recursive: true });
-  for (const command of commands(options)) {
+  for (const command of effectiveCommands(root, options)) {
     writeTrackedFile(path.join(skillsDir, command.id, "SKILL.md"), skillMarkdown(command, "claude"), files, root, options);
   }
 
@@ -454,27 +569,29 @@ function installClaudeCode(root, options = {}) {
 
 function installCodex(root, options = {}) {
   const files = [];
-  const skillsDir = path.join(root, ".agents/skills");
-  fs.mkdirSync(skillsDir, { recursive: true });
-  for (const command of commands(options)) {
-    writeTrackedFile(path.join(skillsDir, command.id, "SKILL.md"), skillMarkdown(command, "codex"), files, root, options);
+  for (const command of effectiveCommands(root, options)) {
+    writeTrackedFile(path.join(root, ".agents/skills", command.id, "SKILL.md"), skillMarkdown(command, "codex"), files, root, options);
   }
-
   writeManifest(root, "codex", files);
   return { ok: true, integration: "codex", files };
 }
 
-function writeTrackedFile(file, content, files, root, options) {
-  if (!fs.existsSync(file) || options.force) {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, content, "utf8");
-  }
-  files.push({ path: path.relative(root, file).replaceAll(path.sep, "/"), sha256: sha256(file) });
+function writeTrackedFile(file, content, files, root, options, isGlobal = false) {
+  if (fs.existsSync(file) && !options.force) return;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content, "utf8");
+  files.push({
+    path: path.relative(isGlobal ? os.homedir() : root, file).replaceAll(path.sep, "/"),
+    sha256: sha256(file),
+    managed: "file",
+    isGlobal
+  });
 }
 
 function writeManifest(root, integration, files) {
   writeJson(path.join(root, `.matspec-cli/manifests/integrations/${integration}.json`), {
     integration,
+    version: "0.4.1-beta.3",
     installedAt: new Date().toISOString(),
     files
   });
@@ -531,7 +648,7 @@ export function removeIntegration(root, name, options = {}) {
   const removed = [];
   const kept = [];
   for (const entry of manifest.files || []) {
-    const file = path.join(root, entry.path);
+    const file = path.join(entry.isGlobal ? os.homedir() : root, entry.path);
     if (!fs.existsSync(file)) continue;
     const modified = sha256(file) !== entry.sha256;
     if (modified && !options.force) {
@@ -542,5 +659,22 @@ export function removeIntegration(root, name, options = {}) {
     removed.push(entry.path);
   }
   fs.unlinkSync(manifestFile);
+  for (const dir of [...new Set(removed.map((file) => path.dirname(path.join(root, file))))].sort((a, b) => b.length - a.length)) {
+    try { if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir); } catch {}
+  }
   return { ok: true, integration: name, removed, kept, message: `Removed ${name} integration.` };
+}
+
+function stageGeneratorAsset() {
+  return `# MatSpec stage-generator
+
+Explore the repository independently, read all confirmed MatSpec documents, and write only the delegated validation or review artifact. Never confirm for the user.
+`;
+}
+
+function taskExecutorAsset() {
+  return `# MatSpec task-executor
+
+Execute exactly one Task returned by \`matspec implement --task N --json\`. Verify it and report DONE, DONE_WITH_CONCERNS, BLOCKED, or NEEDS_CONTEXT.
+`;
 }

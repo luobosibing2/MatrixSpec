@@ -3,8 +3,9 @@ import path from "node:path";
 import { isZh } from "./i18n.js";
 
 export function resolveGenerationStrategy(paths, options = {}, env = process.env, context = {}) {
-  const runner = normalizeProvider(options.runner || readConfigDefaultRunner(paths) || "auto");
-  const requestedMode = normalizeProvider(options.mode || env.MATSPEC_GENERATION_MODE || "auto");
+  const runner = normalizeProvider(options.runner || readConfigDefaultRunner(paths) || "opencode");
+  const rawMode = normalizeProvider(options.mode || env.MATSPEC_GENERATION_MODE || "module-first");
+  const requestedMode = rawMode === "module-first" ? "auto" : rawMode;
   if (!["auto", "direct", "react"].includes(requestedMode)) {
     return {
       ok: false,
@@ -15,13 +16,13 @@ export function resolveGenerationStrategy(paths, options = {}, env = process.env
     };
   }
 
-  if (!["auto", "codex", "claude", "opencode"].includes(runner)) {
+  if (!["auto", "opencode", "opencode-serve", "relay-serve", "relay-pool", "nga", "codegenie", "codeagent", "chrys", "codex", "claude"].includes(runner)) {
     return {
       ok: false,
       code: "RUNNER_NOT_IMPLEMENTED",
       runner,
       message: `Runner is not implemented: ${runner}.`,
-      next: ["matspec generate --runner auto"]
+      next: ["matspec generate --runner opencode"]
     };
   }
 
@@ -32,7 +33,7 @@ export function resolveGenerationStrategy(paths, options = {}, env = process.env
       ok: true,
       generationMode: selection.generationMode,
       generationReason: selection.reason,
-      runner: "auto",
+      runner,
       provider: "fake",
       model: options.model || env.MATSPEC_LLM_MODEL || env.LLM_MODEL || "fake-matspec-model"
     };
@@ -44,23 +45,12 @@ export function resolveGenerationStrategy(paths, options = {}, env = process.env
       code: "LLM_PROVIDER_NOT_IMPLEMENTED",
       provider,
       message: `LLM provider is not supported: ${provider}. MatSpec generation uses local Codex, Claude Code, or opencode CLI runners.`,
-      next: ["unset MATSPEC_LLM_PROVIDER", "matspec generate --runner auto"]
+      next: ["unset MATSPEC_LLM_PROVIDER", "matspec generate --runner opencode"]
     };
   }
 
   const selected = selectRunner(runner, env);
   if (!selected.ok) return selected;
-  if (selected.runner === "stub") {
-    return {
-      ok: true,
-      generationMode: "stub",
-      generationReason: "no_local_runner",
-      runner: "auto",
-      provider: null,
-      model: options.model || null
-    };
-  }
-
   const selection = selectGenerationMode({ requestedMode });
   return {
     ok: true,
@@ -70,7 +60,9 @@ export function resolveGenerationStrategy(paths, options = {}, env = process.env
     provider: selected.runner,
     model: options.model || defaultExternalModel(selected.runner),
     fallbackModel: options.model ? null : fallbackExternalModel(selected.runner),
-    executable: selected.executable
+    executable: selected.executable,
+    serveUrl: options.serve_url || null,
+    agent: options.agent || null
   };
 }
 
@@ -83,7 +75,6 @@ function selectGenerationMode({ requestedMode }) {
 function defaultExternalModel(runner) {
   if (runner === "codex") return "gpt-5.5";
   if (runner === "claude") return "claude-sonnet-4-6";
-  if (runner === "opencode") return null;
   return null;
 }
 
@@ -93,13 +84,21 @@ function fallbackExternalModel(runner) {
 
 function selectRunner(requestedRunner, env) {
   if (requestedRunner === "auto") {
-    for (const candidate of ["codex", "claude", "opencode"]) {
+    for (const candidate of ["opencode", "nga", "codegenie", "codeagent", "chrys", "codex", "claude"]) {
       const executable = findExecutable(candidate, env);
       if (executable) return { ok: true, runner: candidate, executable };
     }
-    return { ok: true, runner: "stub" };
+    return {
+      ok: false,
+      code: "RUNNER_NOT_FOUND",
+      runner: "auto",
+      message: "No supported MatSpec runner was found.",
+      next: ["Install and authenticate opencode, nga, codegenie, codeagent, or chrys"]
+    };
   }
-
+  if (["opencode-serve", "relay-serve", "relay-pool"].includes(requestedRunner)) {
+    return { ok: true, runner: requestedRunner, executable: process.execPath };
+  }
   const executable = findExecutable(requestedRunner, env);
   if (!executable) {
     return {
@@ -107,7 +106,7 @@ function selectRunner(requestedRunner, env) {
       code: "RUNNER_NOT_FOUND",
       runner: requestedRunner,
       message: `${requestedRunner} was not found. Install and authenticate the CLI, or use matspec generate --runner auto.`,
-      next: ["matspec generate --runner auto", `Confirm ${requestedRunner} is installed and authenticated`]
+      next: [`Confirm ${requestedRunner} is installed and authenticated`]
     };
   }
   return { ok: true, runner: requestedRunner, executable };
@@ -438,7 +437,7 @@ function readConfigDefaultRunner(paths) {
     if (line && !line.startsWith(" ")) break;
     generation.push(line);
   }
-  return generation.join("\n").match(/^  defaultRunner:\s*["']?([^"'\s]+)["']?\s*$/m)?.[1] || "";
+  return generation.join("\n").match(/^  (?:runner|defaultRunner):\s*["']?([^"'\s]+)["']?\s*$/m)?.[1] || "";
 }
 
 function estimateTokens(text) {

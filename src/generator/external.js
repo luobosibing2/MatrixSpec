@@ -2,8 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import iconv from "iconv-lite";
 import { ensureDir, rel, slugify, writeJson } from "../util.js";
 import { commonOutputRules, readFullTemplates, repositoryEvidence, specBlackBoxRules } from "./templates.js";
+
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 export function runExternalGeneration({ paths, run, scan, plan, strategy, options = {} }) {
   const executable = strategy.executable || findExecutable(strategy.runner);
@@ -95,7 +99,7 @@ export function runRunnerTask({ paths, run, executable, strategy, task, prompt }
     const stderrFile = path.join(run.dir, `logs/${strategy.runner}-${attemptName}.stderr.log`);
     const outputFile = path.join(run.dir, `logs/${strategy.runner}-${attemptName}-last-message.md`);
     const args = buildArgs({ paths, strategy: attemptStrategy, outputFile });
-    const result = spawnRunner(resolvedExecutable, args, paths.root, prompt);
+    const result = spawnRunner(resolvedExecutable, args, paths.root, prompt, strategy.runner);
     fs.writeFileSync(stdoutFile, result.stdout || "", "utf8");
     fs.writeFileSync(stderrFile, result.stderr || "", "utf8");
 
@@ -116,7 +120,8 @@ export function runRunnerTask({ paths, run, executable, strategy, task, prompt }
         status: result.status,
         log: commandLog,
         attempts: attemptLogs,
-        stderr: result.stderr
+        stderr: result.stderr,
+        diagnostics: result.error?.message
       });
       continue;
     }
@@ -151,7 +156,15 @@ function buildArgs({ paths, strategy, outputFile }) {
   if (strategy.runner === "codex") {
     return ["exec", "-C", paths.root, "--model", strategy.model, "--sandbox", "read-only", "--output-last-message", outputFile, "-"];
   }
-  if (strategy.runner === "opencode") {
+  if (["opencode-serve", "relay-serve", "relay-pool"].includes(strategy.runner)) {
+    return [
+      path.join(packageRoot, "scripts/runner-bridge.js"),
+      "--runner", strategy.runner,
+      "--url", strategy.serveUrl || defaultServeUrl(strategy.runner),
+      ...(strategy.model ? ["--model", strategy.model] : [])
+    ];
+  }
+  if (strategy.runner === "opencode" || strategy.runner === "codegenie") {
     return [
       "run",
       "--format",
@@ -159,6 +172,21 @@ function buildArgs({ paths, strategy, outputFile }) {
       "--dir",
       paths.root,
       ...(strategy.model ? ["--model", strategy.model] : [])
+    ];
+  }
+  if (strategy.runner === "nga") {
+    return ["run", "generate", "-f", "-", ...(strategy.model ? ["--model", strategy.model] : []), "--agent", "plan"];
+  }
+  if (strategy.runner === "chrys") {
+    return ["run", "-t", "__MATSPEC_PROMPT__", "-a", strategy.agent || "plan", "-C", paths.root, "--json"];
+  }
+  if (strategy.runner === "codeagent") {
+    return ["-p", "--output-format", "json", "--add-dir", paths.root, ...(strategy.model ? ["--model", strategy.model] : [])];
+  }
+  if (strategy.runner === "claude") {
+    return [
+      "--model", strategy.model, "-p", "--output-format", "json", "--max-turns", "3",
+      "--permission-mode", "plan", "--tools", "Read,Grep,Glob"
     ];
   }
   return [
@@ -176,15 +204,31 @@ function buildArgs({ paths, strategy, outputFile }) {
   ];
 }
 
-function spawnRunner(executable, args, cwd, prompt) {
-  return spawnSync(executable, args, {
+function spawnRunner(executable, args, cwd, prompt, runner) {
+  const resolvedArgs = args.map((arg) => arg === "__MATSPEC_PROMPT__" ? prompt : arg);
+  const codeagent = runner === "codeagent";
+  const result = spawnSync(executable, resolvedArgs, {
     cwd,
-    encoding: "utf8",
+    encoding: codeagent ? null : "utf8",
     input: prompt,
-    shell: process.platform === "win32" && /\.(cmd|bat)$/i.test(executable),
+    shell: process.platform === "win32" && /\.(cmd|bat)$/i.test(executable)
+      ? process.env.ComSpec || path.join(process.env.SystemRoot || "C:\\Windows", "System32", "cmd.exe")
+      : false,
     windowsHide: true,
-    timeout: 300000
+    timeout: ["opencode-serve", "relay-serve", "relay-pool"].includes(runner) ? 30 * 60 * 1000 : 60 * 60 * 1000
   });
+  if (!codeagent) return result;
+  return {
+    ...result,
+    stdout: Buffer.isBuffer(result.stdout) ? result.stdout.toString("utf8") : result.stdout,
+    stderr: Buffer.isBuffer(result.stderr) ? iconv.decode(result.stderr, "gbk") : result.stderr
+  };
+}
+
+function defaultServeUrl(runner) {
+  if (runner === "opencode-serve") return "http://127.0.0.1:4096";
+  if (runner === "relay-pool") return "ws://localhost:8080/ws/matspec-pool";
+  return "ws://localhost:8080/ws/matspec-client";
 }
 
 function parseOutput({ strategy, task, stdout, outputFile }) {

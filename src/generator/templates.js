@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import YAML from "yaml";
 import { isZh, tr } from "../i18n.js";
 
 const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -10,20 +11,38 @@ const EN_FULL_TEMPLATE_DIR = path.join(PACKAGE_ROOT, "templates", "en", "full");
 
 export function readFullTemplates(options = {}) {
   const templateDir = isZh(options) ? FULL_TEMPLATE_DIR : EN_FULL_TEMPLATE_DIR;
+  const extension = extensionFullTemplates(options);
   return {
-    design: readTemplate(templateDir, "DESIGN.md"),
-    spec: readTemplate(templateDir, "SPEC.md"),
+    design: options.design_template ? readExplicitTemplate(options.design_template, options) : extension?.design || readTemplate(templateDir, "DESIGN.md"),
+    spec: options.spec_template ? readExplicitTemplate(options.spec_template, options) : extension?.spec || readTemplate(templateDir, "SPEC.md"),
     specAnnotated: readTemplate(templateDir, "SPEC-annotated.md")
   };
 }
 
+function extensionFullTemplates(options) {
+  const root = path.resolve(options.path || process.cwd());
+  const configFile = path.join(root, ".matspec-cli/config.yaml");
+  try {
+    const config = YAML.parse(fs.readFileSync(configFile, "utf8")) || {};
+    for (const [name, record] of Object.entries(config.extensions || {})) {
+      if (!record?.enabled) continue;
+      const design = path.join(root, "matspec/extensions", name, "full-design.md");
+      const spec = path.join(root, "matspec/extensions", name, "full-spec.md");
+      if (fs.existsSync(design) && fs.existsSync(spec)) return { design: fs.readFileSync(design, "utf8").trim(), spec: fs.readFileSync(spec, "utf8").trim() };
+    }
+  } catch {}
+  return null;
+}
+
 export function requiredSpecSections(options = {}) {
+  if (options.spec_template) return fixedSections(readExplicitTemplate(options.spec_template, options));
   return isZh(options)
     ? [["组件定位", "Component Purpose"], ["领域术语", "Domain Terminology"], ["角色与边界", "Actors and Boundaries"], ["DFX 约束", "DFX Constraints"], ["核心能力", "Core Capabilities"], ["数据约束", "Data Constraints"]]
     : [["Component Purpose", "组件定位"], ["Domain Terminology", "领域术语"], ["Actors and Boundaries", "角色与边界"], ["DFX Constraints", "DFX 约束"], ["Core Capabilities", "核心能力"], ["Data Constraints", "数据约束"]];
 }
 
 export function requiredDesignSections(options = {}) {
+  if (options.design_template) return fixedSections(readExplicitTemplate(options.design_template, options));
   return isZh(options)
     ? [["设计概述", "Design overview"], ["系统架构", "System architecture"], ["数据模型", "Data model"], ["接口设计", "Interface design"], ["核心流程设计", "Core flow design"], ["算法设计", "Algorithm design"], ["缓存设计", "Caching design"], ["异常处理设计", "Error handling design"], ["监控与日志", "Observability"], ["安全设计", "Security design"]]
     : [["Design overview", "设计概述"], ["System architecture", "系统架构"], ["Data model", "数据模型"], ["Interface design", "接口设计"], ["Core flow design", "核心流程设计"], ["Algorithm design", "算法设计"], ["Caching design", "缓存设计"], ["Error handling design", "异常处理设计"], ["Observability", "监控与日志"], ["Security design", "安全设计"]];
@@ -69,17 +88,23 @@ export function repositoryEvidence(scan, module = null) {
   const sourceExcerpts = module
     ? (scan.sourceExcerpts || []).filter((item) => module.path === "." || item.path === module.path || item.path.startsWith(`${module.path}/`))
     : scan.sourceExcerpts || [];
-  const coreStats = (scan.coreDirStats || []).map((item) => `- ${item.path}/: ${item.files} files, ${item.lines} lines`).join("\n") || "- none";
-  const readmeContext = (scan.readmeFiles || []).map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n") || "(none)";
-  const docsContext = (scan.docsFiles || []).map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n") || "(none)";
-  const opsContext = formatOperationalEvidence(scan.operationalEvidence);
+  const dirStats = module ? focusedDirStats(scan.dirStats, module) : scan.dirStats;
+  const coreStats = (module
+    ? (scan.coreDirStats || []).filter((item) => module.path === "." || module.path === item.path || module.path.startsWith(`${item.path}/`) || item.path.startsWith(`${module.path}/`))
+    : scan.coreDirStats || []
+  ).map((item) => `- ${item.path}/: ${item.files} files, ${item.lines} lines`).join("\n") || "- none";
+  const readmeFiles = module ? focusedEvidenceFiles(scan.readmeFiles, module) : scan.readmeFiles || [];
+  const docsFiles = module ? focusedEvidenceFiles(scan.docsFiles, module) : scan.docsFiles || [];
+  const readmeContext = readmeFiles.map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n") || "(none)";
+  const docsContext = docsFiles.map((file) => `--- ${file.path}${file.truncated ? " (truncated)" : ""} ---\n${file.content}`).join("\n\n") || "(none)";
+  const opsContext = formatOperationalEvidence(module ? focusedOperationalEvidence(scan.operationalEvidence, module) : scan.operationalEvidence);
   const excerptContext =
     sourceExcerpts
       .slice(0, module ? 12 : 24)
       .map((item) => `--- ${item.path}${item.truncated ? " (truncated)" : ""} ---\n${item.content}`)
       .join("\n\n") || "(none)";
   return `Directory Source File Stats:
-${scan.dirStats || "(none)"}
+${dirStats || "(none)"}
 
 Core Directory Coverage:
 ${coreStats}
@@ -103,6 +128,32 @@ Developer documentation requirements:
 - State certainty boundaries: mark source-confirmed facts separately from inferred behavior or missing evidence.`;
 }
 
+function focusedDirStats(dirStats = "", module) {
+  if (!module) return dirStats;
+  if (module.path === ".") return dirStats;
+  const prefix = `${module.path.replace(/\/+$/, "")}/`;
+  return String(dirStats || "")
+    .split(/\r?\n/)
+    .filter((line) => line.trimStart().startsWith(prefix))
+    .join("\n");
+}
+
+function focusedEvidenceFiles(files = [], module) {
+  if (!module || module.path === ".") return files || [];
+  const prefix = `${module.path.replace(/\/+$/, "")}/`;
+  return (files || []).filter((file) => file.path === module.path || file.path.startsWith(prefix));
+}
+
+function focusedOperationalEvidence(operationalEvidence = {}, module) {
+  if (!module || module.path === ".") return operationalEvidence;
+  const filter = (items = []) => focusedEvidenceFiles(items, module);
+  return {
+    build: filter(operationalEvidence.build),
+    config: filter(operationalEvidence.config),
+    troubleshooting: filter(operationalEvidence.troubleshooting)
+  };
+}
+
 function formatOperationalEvidence(operationalEvidence = {}) {
   const sections = [
     ["Build evidence", operationalEvidence.build || []],
@@ -121,4 +172,18 @@ function formatOperationalEvidence(operationalEvidence = {}) {
 
 function readTemplate(templateDir, name) {
   return fs.readFileSync(path.join(templateDir, name), "utf8").trim();
+}
+
+function readExplicitTemplate(input, options) {
+  const file = path.resolve(options.path || process.cwd(), input);
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+    throw Object.assign(new Error(`Template not found: ${input}`), { code: "TEMPLATE_NOT_FOUND", path: input });
+  }
+  return fs.readFileSync(file, "utf8").trim();
+}
+
+function fixedSections(template) {
+  return template.split(/\r?\n/)
+    .map((line) => line.match(/^#{1,2}\s+(.+?)\s*$/)?.[1])
+    .filter((title) => title && !title.includes("[") && !/module:start|module:end/i.test(title));
 }
