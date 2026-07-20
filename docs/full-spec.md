@@ -17,8 +17,7 @@ CodeSpec 是一个面向规格驱动开发（Specification-Driven Development，
 3. 在每个文档阶段完成后要求用户确认，禁止无确认自动推进。
 4. 将阶段命令、模板和 SubAgent 定义安装到多种 Coding Agent 环境。
 5. 从现有代码仓生成候选全量 `spec.md` 和 `design.md`，审查后才应用为权威文档。
-6. 从 CodeWiki 同步真实全量规格与设计。
-7. 在结束变更前验证阶段状态，并验证全量规格和设计已在实现后刷新。
+6. 在结束变更前验证阶段状态，并验证全量规格和设计已在实现后刷新。
 
 ### 1.2 权威资产
 
@@ -44,7 +43,6 @@ CodeSpec CLI 负责：
 - 项目初始化、变更创建、状态推进、检查和归档。
 - 工作流包、项目工作流、模板、扩展和 Agent 集成管理。
 - 候选全量文档生成、展示和应用。
-- CodeWiki 登录与同步。
 - 实现任务上下文解析和任务状态标记。
 - 命令输出、错误契约、更新检查和匿名/登录态使用上报。
 
@@ -54,7 +52,7 @@ CodeSpec CLI 不负责：
 - 自动批准阶段内容。
 - 在 `start` 时复制空阶段模板到业务变更目录。
 - 在 `init` 时用模板伪造全量 `spec.md` 或 `design.md`。
-- 提供 CodeWiki 服务端、遥测服务端或 Dashboard 后端。
+- 提供遥测服务端或 Dashboard 后端。
 - 将静态官网或运营 Dashboard 作为 SDD 主流程的运行时依赖。
 
 ## 2. 用户与外部系统
@@ -63,12 +61,12 @@ CodeSpec CLI 不负责：
 
 | 角色 | 能力 |
 |---|---|
-| 开发者 | 初始化项目、创建变更、生成/同步文档、执行任务、完成归档 |
+| 开发者 | 初始化项目、创建变更、生成文档、执行任务、完成归档 |
 | 需求/产品/架构评审者 | 审查阶段 Markdown 并明确确认或拒绝 |
 | 主 Agent | 调用 `go --json` 获取阶段，生成主 Agent 阶段文档，协调 SubAgent |
 | `stage-generator` | 独立探索代码库，生成 `validation.md` 或 `review.md` |
 | `task-executor` | 按 CLI 注入的单个 Task 上下文实现代码并返回标准报告 |
-| CI/自动化 | 使用 `--json`、显式 token、非交互 runner 和退出码集成 |
+| CI/自动化 | 使用 `--json`、非交互 runner 和退出码集成 |
 
 ### 2.2 外部依赖
 
@@ -77,8 +75,6 @@ CodeSpec CLI 不负责：
 | 本地文件系统 | Markdown、配置、状态、日志、manifest | 是 |
 | Git | 推导 origin、分支、当前 commit | 部分命令需要 |
 | Coding Agent CLI/API | 生成全量文档和执行阶段 | 生成/Agent 流程需要 |
-| CodeWiki API | 同步全量规格和设计 | 可选 |
-| 云龙认证服务 | 浏览器登录、token 获取和刷新 | CodeWiki 普通用户需要 |
 | CodeSpec 遥测服务 | 使用统计 | 否，失败不得阻断命令 |
 | 公司 npm 仓 | 版本检查和自更新提示 | 否，失败静默 |
 
@@ -162,7 +158,6 @@ project-root/
 │  └─ extensions/                # 已安装领域模板扩展
 ├─ .codespec-cli/
 │  ├─ config.yaml
-│  ├─ codewiki.json
 │  ├─ manifests/
 │  │  └─ integrations/
 │  ├─ workflows/
@@ -182,7 +177,6 @@ project-root/
 
 ```text
 ~/.codespec/
-├─ auth.json
 └─ templates/
    ├─ proposal.md
    ├─ delta-spec.md
@@ -237,8 +231,6 @@ validation:
 integrations:
   default: generic
   enabled: [generic]
-sync:
-  provider: none
 generation:
   runner: opencode
   supported_runners:
@@ -252,9 +244,6 @@ generation:
     - nga
   mode: module-first
   apply_requires_force_on_existing: true
-codewiki:
-  auth: yunlong-codewiki
-  auth_help: "执行 codespec auth login，通过浏览器完成云龙登录"
 extensions: {}
 ```
 
@@ -413,17 +402,13 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 
 ```text
 --help -h --json --force --path --change --integration
---confirm-compatible --token --project-url --codewiki-project-url
---project-id --codewiki-project-id --codehub-project-id
---network-zone --zone --branch --module-path --visibility
---no-open --no-probe --auth-poll-attempts --auth-poll-interval-ms
---no-codewiki --no-template-update --all --no-persist-env --generate
+--confirm-compatible --module-path --no-template-update
 --runner --serve-url --model --agent --concurrency --retries --batch
 --design-template --spec-template --knowledge --template
 --run --complete --block --resume --mock --task
---max-lag --commit-scan-limit --no-update-check
+--no-update-check
 --file --label --delegate --objective --after --required --clean
---no-color --codewiki-timeout-ms
+--no-color
 ```
 
 `--module-path` 和生成命令中的 `--task` 可重复。`--concurrency` 只允许 `1..10`。
@@ -446,8 +431,6 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 | `validate [change]` | 校验项目和文档链 |
 | `doctor` | 在 validate 基础上诊断 `.gitignore` |
 | `generate` / `show` / `apply` | 候选全量文档生命周期 |
-| `sync` / `codewiki pull` | CodeWiki 同步 |
-| `auth login/status/logout` | 云龙登录态 |
 | `integration list/install/remove` | Agent 集成 |
 | `workflow refresh-snapshot` | 审计后刷新漂移 hash |
 | `stages init/list/add/remove/validate/cleanup` | 项目工作流 |
@@ -474,7 +457,7 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 5. 交互环境提示选择 Agent 集成；显式 `--integration` 直接使用；非 TTY 或 JSON 模式默认 `nga`。
 6. 安装选中的集成，且不覆盖用户已存在文件。
 7. 不创建任何业务阶段文档或全量文档。
-8. 缺少全量文档时提示本地 `generate → show → apply`，并可提示 `sync`；`--no-codewiki` 隐藏 CodeWiki 路线。
+8. 缺少全量文档时只提示本地 `generate → show → apply`。
 
 ### 7.2 `codespec start/new <change>`
 
@@ -949,66 +932,9 @@ finalization:
 
 任一模块失败时批次状态为 partial，CLI `ok=false`，但保留成功模块产物。
 
-## 13. CodeWiki 与认证
+## 13. 输出、退出码、更新与遥测
 
-### 13.1 登录
-
-凭据文件：`~/.codespec/auth.json`，权限意图为 `0600`。
-
-token 选择优先级：
-
-1. CLI `--token`。
-2. 本地未过期 access token。
-3. `CODESPEC_CODEWIKI_TOKEN`。
-4. 已过期本地登录态的 refresh token 自动刷新。
-5. 明确允许且 TTY/非 JSON 时启动交互登录。
-
-access/refresh token 默认使用从 username、home、hostname 和固定盐派生的 AES-256-GCM 本地密钥加密，格式：
-
-```text
-v1:{base64 iv}:{base64 authTag}:{base64 ciphertext}
-```
-
-过期判断提前 5 分钟。`logout` 删除 auth 文件。
-
-### 13.2 CodeWiki 区域
-
-区域优先级/集合：
-
-1. CBG：`https://codewiki.cbg.huawei.com/`
-2. 黄区：`https://codewiki-y.rnd.huawei.com/`
-3. 绿区：`https://codewiki.rnd.huawei.com/`
-
-可从显式项目 URL 固定区域；否则并行尝试。多区域命中时优先使用 `.codespec-cli/codewiki.json` 保存的 zone，否则要求选择。所有 Huawei CodeWiki/CodeHub 域必须并入 `NO_PROXY/no_proxy`。
-
-### 13.3 项目定位与同步
-
-项目引用来源：
-
-- `--project-id`
-- `--codehub-project-id`
-- `--project-url`
-- git origin 推导出的 CodeHub URL 和项目名
-- 当前/显式 branch
-
-必须校验 Git URL 和分支；显式 ID 不匹配时返回确认请求。同步流程：
-
-1. 认证。
-2. 定位区域和项目。
-3. 查找最近已有 full design；默认最多扫描 500 commits，分页 50。
-4. 计算 design 相对最新 commit 的 lag。
-5. 无 design 时默认不生成；只有 `--generate` 可触发生成。
-6. 获取与 design version 绑定的 spec；缺失时回退项目最新 spec。
-7. spec 为 RUNNING/PENDING 时返回 generating 状态。
-8. 验证两份 Markdown 有实质内容。
-9. 本地已存在文档且无 `--force` 时拒绝覆盖。
-10. 写入 `codespec/specs/spec.md` 和 `design.md`。
-
-默认允许最大 lag 20；自动同步模式超限阻断，手工 sync 允许但报告滞后。请求默认超时 10 秒。
-
-## 14. 输出、退出码、更新与遥测
-
-### 14.1 输出
+### 13.1 输出
 
 - `--json`：stdout 只输出 JSON 结果；异常由入口写 stderr JSON。
 - 普通模式：品牌头、状态、条目、Next Actions。
@@ -1016,11 +942,11 @@ v1:{base64 iv}:{base64 authTag}:{base64 ciphertext}
 - `validate/doctor` 以 finding 列表展示。
 - 业务失败结果应设置 `process.exitCode=1`；抛出异常由入口 `process.exit(1)`。
 
-### 14.2 更新检查
+### 13.2 更新检查
 
 除 `--json` 或 `--no-update-check` 外，每次命令前检查公司 npm 仓最新版本。网络失败静默。新版本提醒 24 小时内最多一次；TTY 下 Enter 执行全局 npm 更新，Esc 取消。
 
-### 14.3 遥测
+### 13.3 遥测
 
 命令通过 HTTPS POST 上报到 CodeSpec 服务，至少包括：
 
@@ -1028,13 +954,13 @@ v1:{base64 iv}:{base64 authTag}:{base64 ciphertext}
 - change、flowId、stage、runId。
 - CLI/Node/平台、runner/model。
 - git URL。
-- 用户标识：云龙用户优先，其次系统用户名，最后稳定匿名 ID。
+- 用户标识：系统用户名优先，否则使用稳定匿名 ID。
 
 敏感 option key（包含 token/password/secret/key/apiKey）必须替换为 `***REDACTED***`。上报失败不得影响命令，写入 `.codespec-cli/report-queue/`；最多 100 条，每条最多重试 3 次。`CODESPEC_NO_REPORT` 或内部 `noReport` 关闭上报。
 
-## 15. Web 附属物
+## 14. Web 附属物
 
-### 15.1 静态官网
+### 14.1 静态官网
 
 `npm run web` 启动零依赖 Node HTTP 静态服务器：
 
@@ -1044,7 +970,7 @@ v1:{base64 iv}:{base64 authTag}:{base64 ciphertext}
 - 防止路径穿越。
 - 按扩展名返回 MIME；404/403/405/400 有明确状态。
 
-### 15.2 运营 Dashboard
+### 14.2 运营 Dashboard
 
 Dashboard 是独立 Vue 3/Vite 应用，不属于 CLI npm 主构建。它依赖外部 API：
 
@@ -1060,18 +986,17 @@ GET  /dashboard/spec-stats
 
 展示用户分布钻取、命令/阶段分布、留存、趋势、runner、成功率和用户排行。后端不在本仓库，完整复刻 CLI 时可不实现 Dashboard。
 
-## 16. 安全与质量属性
+## 15. 安全与质量属性
 
-### 16.1 安全
+### 15.1 安全
 
 - pack、workflow、finalization、静态服务路径必须防目录穿越。
-- auth token 不得明文持久化，不得出现在遥测。
 - 集成卸载不得默认删除用户修改过的文件。
 - 生成 runner prompt 必须声明只读仓库，产物只由 CLI 写 run 目录。
-- CodeWiki 覆盖和 apply 覆盖必须显式 `--force`。
+- apply 覆盖必须显式 `--force`。
 - `done` 不允许 `--force`。
 
-### 16.2 可靠性
+### 15.2 可靠性
 
 - init 和目录创建幂等。
 - 候选生成与权威应用分离。
@@ -1080,15 +1005,14 @@ GET  /dashboard/spec-stats
 - 生成失败保留 run manifest 和日志。
 - 批量生成保留部分成功产物。
 
-### 16.3 性能
+### 15.3 性能
 
 - 仓库扫描单次遍历，忽略大文件和非目标目录。
 - 模块分析并发受全局 `1..10` 控制。
-- CodeWiki commits 分页扫描且有上限。
 - Relay pool 可复用 WebSocket。
 - 模板同步用 hash 和 CLI 版本缓存减少重复扫描。
 
-### 16.4 兼容性
+### 15.4 兼容性
 
 - Windows/Linux/macOS。
 - 支持 legacy workflow 和旧 tasks 格式。
@@ -1096,7 +1020,7 @@ GET  /dashboard/spec-stats
 - 自动迁移旧 `stages.yaml`，保留 7 天备份。
 - 兼容多种 Agent 命令目录和全局/项目级安装。
 
-## 17. 行为兼容测试清单
+## 16. 行为兼容测试清单
 
 复刻实现至少覆盖：
 
@@ -1114,13 +1038,11 @@ GET  /dashboard/spec-stats
 12. extension 冲突、配置修复、安装移除。
 13. 本地 generate 的 runner 选择、扫描、计划、模块并发、质量重试、run/apply。
 14. batch 输入校验、partial 结果。
-15. auth 加密、token 优先级、刷新、logout。
-16. CodeWiki 区域、项目/分支/Git URL、lag、分页、生成、fallback、覆盖。
-17. JSON/普通输出、颜色、错误码、退出码。
-18. 遥测脱敏、失败队列和禁用。
-19. 静态服务 GET/HEAD、MIME 和路径穿越。
+15. JSON/普通输出、颜色、错误码、退出码。
+16. 遥测脱敏、失败队列和禁用。
+17. 静态服务 GET/HEAD、MIME 和路径穿越。
 
-## 18. 当前实现兼容注意事项
+## 17. 当前实现兼容注意事项
 
 以下是当前源码的真实行为，严格复刻时应保留；若做修正版，应明确作为不兼容修复：
 

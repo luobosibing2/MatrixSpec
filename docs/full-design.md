@@ -23,8 +23,7 @@ src/cli.js ──────────────── 输出 / 更新检�
         ├─ 模板与扩展 ───── template-sync.js / extensions.js
         ├─ Agent 集成 ───── integrations.js / adapters/*
         ├─ 全量生成 ─────── generation.js / batch-generation.js / generator/*
-        ├─ 实现任务 ─────── implement/*
-        └─ CodeWiki ─────── auth.js / yunlong.js / codewiki.js
+        └─ 实现任务 ─────── implement/*
 ```
 
 核心数据流：
@@ -115,9 +114,6 @@ workflow pack + project override
 | `src/adapters/*` | 各 Agent 的目标目录和特殊安装 |
 | `src/extensions.js` | HarmonyOS/UX 模板套件 |
 | `src/template-sync.js` | 用户级模板和 Agent 命令 hash 同步 |
-| `src/auth.js` | 凭据存储、加密和 token 选择 |
-| `src/yunlong.js` | 登录 URL、轮询、刷新 |
-| `src/codewiki.js` | 多区项目解析、文档 API、覆盖门 |
 | `src/reporter.js` | 遥测、脱敏、离线队列 |
 
 ## 3. CLI 控制流设计
@@ -812,85 +808,9 @@ manifest 示例：
 
 解析模板时遍历 config 中已启用 extension，首个存在对应 stage 文件的扩展获胜；因此 config 对象顺序在多扩展强制安装时会影响优先级。
 
-## 15. CodeWiki 设计
+## 15. 遥测设计
 
-### 15.1 Auth 数据
-
-```ts
-type AuthStore = {
-  version: 1
-  provider: "yunlong-codewiki"
-  accountId?: string
-  userName?: string
-  access: string
-  refresh: string
-  expiresAt: number
-  updatedAt: string
-}
-```
-
-AES-GCM：
-
-```text
-key = SHA256(username | homedir | hostname | "codespec-yunlong-codewiki")
-iv = random 12 bytes
-encrypted, tag = AES-256-GCM(key, iv, plaintext)
-```
-
-此方案提供本机混淆和完整性，不等价于操作系统密钥链。行为兼容复刻应保留；安全增强版可提供 keychain 注入但须兼容旧格式读取。
-
-### 15.2 登录协议
-
-默认配置：
-
-- API base：`https://codeagentcli.rnd.huawei.com/codeAgentPro`
-- auth base：公司 SSO proxy
-- client ID：`com.huawei.devmind.codebot.apibot`
-- scope：`1000:1002`
-- resource：`devuc`
-- 最多轮询 1800 次，间隔 1000 ms
-
-这些值可由 `CODESPEC_YUNLONG_*` 或测试 options 覆盖。
-
-### 15.3 CodeWiki project resolution
-
-规范化 Git URL必须：
-
-- 去 URL credential。
-- 兼容 SSH/HTTPS 表达。
-- 去多余 slash。
-- 用 `.git` 和项目名推导搜索词。
-
-分区查询并行执行后：
-
-- 0 匹配：综合权限/网络错误或 not found。
-- 1 匹配：使用并缓存。
-- 多匹配：显式 `--zone` 优先；否则缓存 zone；否则返回选择要求。
-- 同项目多分支：匹配本地/显式 branch，否则列可用分支。
-
-### 15.4 文档查找
-
-优先“最新设计 API”；必要时分页扫描 commit 对应的 design。lag 是最新 commit 列表中 doc commit 的索引。达到内部展示阈值时可只报告“超过阈值”。
-
-Spec：
-
-- 首选 designVersionId 绑定 spec。
-- 没有绑定且 `--generate`，提交生成。
-- 生成中返回结构化状态，不在一次命令中无限等待。
-- 没绑定且不能生成，回退项目最近 spec。
-
-### 15.5 HTTP
-
-使用 Node `https`，默认 10 秒，Bearer token。401 时：
-
-- 本地受管 token 可尝试 refresh 后重试一次。
-- 环境 token 不自动刷新，提示清除环境变量。
-
-403 报权限。非 2xx 尝试解析服务端 JSON 错误，再构造带状态和 body preview 的错误。
-
-## 16. 遥测设计
-
-### 16.1 事件
+### 15.1 事件
 
 `OPERATION_TYPES` 为命令成功/失败提供稳定字符串。通用映射：
 
@@ -901,7 +821,7 @@ command.toUpperCase().replace("-", "_")
 → codespec-{command}-{success|failed}
 ```
 
-### 16.2 投递
+### 15.2 投递
 
 ```text
 retry up to 10 queued files
@@ -915,11 +835,9 @@ retry up to 10 queued files
 
 队列记录 attempts、createdAt、lastAttemptAt、lastError。attempts >= 3 的旧记录删除。
 
-HTTPS 当前 `rejectUnauthorized=false` 以兼容公司自签名证书；公共环境复刻应提供受信 CA 配置，而不是默认关闭校验。
+## 16. 输出与错误设计
 
-## 17. 输出与错误设计
-
-### 17.1 Result 约定
+### 16.1 Result 约定
 
 所有 handler 应尽量返回：
 
@@ -943,7 +861,7 @@ type Result = {
 - JSON 模式不得夹杂品牌/颜色。
 - 更新检查在 JSON 模式完全禁用。
 
-### 17.2 关键错误码
+### 16.2 关键错误码
 
 实现必须稳定支持：
 
@@ -984,22 +902,19 @@ EXTENSION_NOT_INSTALLED
 TEMPLATE_CONFLICT
 BASE_TEMPLATE_NOT_FOUND
 GLOBAL_TEMPLATE_EXTENDS_GLOBAL
-CODESPEC_SYNC_OVERWRITE_REQUIRED
-CODEWIKI_DESIGN_NOT_GENERATED
-CODESPEC_SPEC_GENERATING
 ```
 
 Runner 错误使用 `{RUNNER}_NOT_FOUND/FAILED/EMPTY_OUTPUT`。
 
-## 18. 静态 Web 与 Dashboard 设计
+## 17. 静态 Web 与 Dashboard 设计
 
-### 18.1 静态服务器
+### 17.1 静态服务器
 
 使用 Node `http.createServer`。URL 先用 `new URL` 解析和 decode，normalize 后 `path.relative(staticRoot, candidate)` 验证不以 `..` 开头且不是绝对路径。
 
 只需流式读取文件，不做缓存、压缩、目录列表或 SPA fallback。
 
-### 18.2 Dashboard
+### 17.2 Dashboard
 
 独立 workspace：
 
@@ -1013,9 +928,9 @@ Runner 错误使用 `{RUNNER}_NOT_FOUND/FAILED/EMPTY_OUTPUT`。
 
 Dashboard 的 API server、鉴权和部署不在本仓实现。
 
-## 19. 测试设计
+## 18. 测试设计
 
-### 19.1 单元测试
+### 18.1 单元测试
 
 使用 `node:test` + `assert`，不引入测试框架。
 
@@ -1027,10 +942,9 @@ Dashboard 的 API server、鉴权和部署不在本仓实现。
 - task 两种格式与 marker。
 - runner stdout parser。
 - scanner ignore/language。
-- auth encrypt/decrypt 和 token priority。
 - report option 脱敏。
 
-### 19.2 CLI 集成测试
+### 18.2 CLI 集成测试
 
 每个测试使用临时目录，调用真实 `bin/codespec.js`，断言：
 
@@ -1041,7 +955,7 @@ Dashboard 的 API server、鉴权和部署不在本仓实现。
 
 测试环境应设置 `--no-update-check` 或注入等价禁用，避免每个子进程访问版本服务。
 
-### 19.3 生成测试
+### 18.3 生成测试
 
 通过 options 注入 fake runner，不依赖真实 Agent：
 
@@ -1051,20 +965,15 @@ Dashboard 的 API server、鉴权和部署不在本仓实现。
 4. 断言 run、manifest、logs、apply。
 5. 质量失败用固定序列响应测试 retry。
 
-### 19.4 CodeWiki 测试
-
-通过 options 注入 request/auth 数据或 mock HTTPS，覆盖三区、分页、分支、Git URL、401 refresh、403、生成状态、fallback 和覆盖。
-
-### 19.5 E2E
+### 18.4 E2E
 
 真实 E2E 默认 skip，由环境开关运行，验证：
 
 - 真实 Agent 安装。
-- CodeWiki 同步。
 - 完整 change 进入 archive。
 - full spec/design 在 baseline 后发生更新。
 
-## 20. 构建与发布
+## 19. 构建与发布
 
 根包：
 
@@ -1096,7 +1005,7 @@ Dashboard 的 API server、鉴权和部署不在本仓实现。
 
 Dashboard 独立在其目录执行 `npm install && npm run build`，不影响 CLI 包发布。
 
-## 21. 复刻实施顺序
+## 20. 复刻实施顺序
 
 为降低返工，按以下垂直切片：
 
@@ -1108,21 +1017,20 @@ Dashboard 独立在其目录执行 `npm install && npm run build`，不影响 CL
 6. tasks parser、implement、review。
 7. scanner、template loader、fake runner 生成、show/apply。
 8. 各真实 runner 和 batch。
-9. auth + CodeWiki。
-10. 遥测、版本检查、终端 UI。
-11. 静态官网；如确有运营需要再实现 Dashboard。
+9. 遥测、版本检查、终端 UI。
+10. 静态官网；如确有运营需要再实现 Dashboard。
 
 每一切片必须带最小可运行测试；不要先搭建插件框架、数据库或常驻服务。
 
-## 22. 当前缺陷的实现决策
+## 21. 当前缺陷的实现决策
 
 复刻前必须选择：
 
-### 22.1 严格兼容模式
+### 21.1 严格兼容模式
 
-保留 `spec.md` 第 18 节全部行为，包括未实现 `template validate`、review 直接返回缺 delegate 字段、implementation 可提前 accept 等。适合替换现有二进制而不改变自动化。
+保留 `spec.md` 第 17 节全部行为，包括未实现 `template validate`、review 直接返回缺 delegate 字段、implementation 可提前 accept 等。适合替换现有二进制而不改变自动化。
 
-### 22.2 修正版模式
+### 21.2 修正版模式
 
 建议只做以下最小修复，并以 minor/major 版本声明：
 

@@ -63,7 +63,7 @@ matspec/
 
 `generate` 只在 `.matspec-cli/runs/` 写候选文档；`apply` 才会发布到 `matspec/specs/`，已有文件必须用 `--force` 才能覆盖。
 
-## 生成与同步
+## 离线生成
 
 默认 runner 是 `opencode`，支持：
 
@@ -80,14 +80,7 @@ matspec generate --batch modules.json --concurrency 4
 matspec generate --knowledge docs/context
 ```
 
-也可以从 CodeWiki 同步：
-
-```bash
-matspec auth login
-matspec sync
-# 等价入口
-matspec codewiki pull
-```
+全量文档只通过本地 `generate → show → apply` 流程产生，不依赖远程规格服务。
 
 ## 工作流定制
 
