@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { projectPaths } from "./project.js";
-import { ensureDir, rel, slugify, writeJson, readJson } from "./util.js";
+import { ensureDir, moduleSlug, rel, slugify, writeJson, readJson } from "./util.js";
 import { scanRepository, normalizePath } from "./scanner.js";
 import { planModules } from "./planner.js";
 import { resolveGenerationStrategy } from "./llm.js";
@@ -285,7 +285,7 @@ export async function generateModule(modulePath, options = {}) {
       reason: react.reason
     });
   } else {
-    const fileName = `${slugify(relativeModulePath) || "project-root"}.md`;
+    const fileName = `${moduleSlug(relativeModulePath)}.md`;
     const moduleFile = path.join(modulesDir, fileName);
     fs.writeFileSync(moduleFile, moduleStub(relativeModulePath, run.manifest, options), "utf8");
     fs.writeFileSync(designPath, focusedDesignStub(paths.root, relativeModulePath, run.manifest, options), "utf8");

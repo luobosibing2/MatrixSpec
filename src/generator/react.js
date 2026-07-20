@@ -2,10 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 import { fakeCompletion } from "../llm.js";
-import { ensureDir, rel, slugify, writeJson } from "../util.js";
+import { ensureDir, moduleSlug, rel, writeJson } from "../util.js";
 import { createWorkspaceGuard, runRunnerTask } from "./external.js";
 import { commonOutputRules, readFullTemplates, repositoryEvidence, specBlackBoxRules } from "./templates.js";
 import { isZh } from "../i18n.js";
+import { MODULE_PROMPT_LIMITS, limitedLines } from "./limits.js";
+
+const { MAX_MODULE_FILES_IN_PROMPT, MAX_MODULE_TREE_LINES } = MODULE_PROMPT_LIMITS;
 
 export async function runReactGeneration({ paths, run, scan, plan, strategy, progress = null, options = {} }) {
   const modulesDir = path.join(run.dir, "modules");
@@ -22,7 +25,7 @@ export async function runReactGeneration({ paths, run, scan, plan, strategy, pro
     ? plan.modules.map((module) => runModuleWithFallbacks({ paths, run, scan, module, strategy, isFake, modulePromptsDir, options }))
     : await runModuleWorkers({ paths, run, scan, modules: plan.modules, strategy, modulePromptsDir, options });
   for (const [index, module] of plan.modules.entries()) {
-    const slug = `${slugify(module.path) || "project-root"}.md`;
+    const slug = `${moduleSlug(module.path)}.md`;
     progress?.(`Module ${index + 1}/${plan.modules.length}: ${module.name} (${module.path})`);
     const result = generatedModules[index];
     if (!result.ok && !result.text) {
@@ -233,7 +236,7 @@ function runOneModuleWorker(workerData) {
 }
 
 function runModuleWithFallbacks({ paths, run, scan, module, strategy, isFake, modulePromptsDir, options = {} }) {
-  const baseSlug = slugify(module.path) || "project-root";
+  const baseSlug = moduleSlug(module.path);
   const attempts = [
     { name: "standard", prompt: buildModulePrompt(scan, module, options) },
     { name: "compressed", prompt: buildCompressedModulePrompt(scan, module, options) },
@@ -318,6 +321,7 @@ function buildModulePrompt(scan, module, options = {}) {
   const moduleTree = buildTree(moduleFiles);
   return `You are the MatSpec module documentation runner.
 Task: generate an intermediate module design document for later design.md synthesis.
+Use only the repository scan context in this prompt. Do not call tools or request additional repository reads.
 
 ${commonOutputRules(options)}
 
@@ -331,10 +335,11 @@ Path: ${module.path}
 Description: ${module.description}
 
 Module files:
-${moduleFiles.slice(0, 40).map((file) => `- ${file}`).join("\n") || "- none"}
+${moduleFiles.slice(0, MAX_MODULE_FILES_IN_PROMPT).map((file) => `- ${file}`).join("\n") || "- none"}
+${moduleFiles.length > MAX_MODULE_FILES_IN_PROMPT ? `\n... ${moduleFiles.length - MAX_MODULE_FILES_IN_PROMPT} more files omitted from prompt` : ""}
 
 Module tree:
-${moduleTree || "(empty)"}
+${limitedLines(moduleTree, MAX_MODULE_TREE_LINES) || "(empty)"}
 
 Repository evidence:
 ${repositoryEvidence(scan, module)}

@@ -114,7 +114,8 @@ export function runRunnerTask({ paths, run, executable, strategy, task, prompt }
     attemptLogs.push(commandLog);
 
     if (result.error || result.status !== 0) {
-      lastFailure = failure("EXTERNAL_RUNNER_FAILED", `External runner failed: ${strategy.runner} ${task}`, {
+      const runnerError = parseRunnerError(result.stdout || "", result.stderr || "");
+      lastFailure = failure(runnerError.code, runnerError.message || `External runner failed: ${strategy.runner} ${task}`, {
         runner: strategy.runner,
         task,
         status: result.status,
@@ -185,8 +186,8 @@ function buildArgs({ paths, strategy, outputFile }) {
   }
   if (strategy.runner === "claude") {
     return [
-      "--model", strategy.model, "-p", "--output-format", "json", "--max-turns", "3",
-      "--permission-mode", "plan", "--tools", "Read,Grep,Glob"
+      "--model", strategy.model, "-p", "--output-format", "json", "--max-turns", "1",
+      "--permission-mode", "plan", "--disallowedTools", "Read,Grep,Glob,Bash,Edit,Write,Task,WebSearch,WebFetch,NotebookEdit"
     ];
   }
   return [
@@ -196,11 +197,11 @@ function buildArgs({ paths, strategy, outputFile }) {
     "--output-format",
     "json",
     "--max-turns",
-    "3",
+    "1",
     "--permission-mode",
     "plan",
-    "--tools",
-    "Read,Grep,Glob"
+    "--disallowedTools",
+    "Read,Grep,Glob,Bash,Edit,Write,Task,WebSearch,WebFetch,NotebookEdit"
   ];
 }
 
@@ -278,12 +279,58 @@ function parseOutput({ strategy, task, stdout, outputFile }) {
   };
 }
 
+const RATE_LIMIT_PHRASE = /\b(rate[\s-]?limit(ed)?|hit (your )?limit|quota|too many requests)\b/i;
+
+function parseRunnerError(stdout, stderr = "") {
+  const fallback = { code: "EXTERNAL_RUNNER_FAILED", message: "" };
+  const event = extractRunnerErrorEvent(String(stdout || "").trim()) || extractRunnerErrorEvent(String(stderr || "").trim());
+  if (!event) return fallback;
+  const message = String(event.result || event.error?.message || event.message || "").trim();
+  const status = event.api_error_status || event.status;
+  if (status === 429 || (status !== 200 && RATE_LIMIT_PHRASE.test(message))) {
+    return {
+      code: "EXTERNAL_RUNNER_RATE_LIMITED",
+      message: message ? `External runner rate limited: ${message}` : "External runner rate limited."
+    };
+  }
+  if (message) return { code: "EXTERNAL_RUNNER_FAILED", message: `External runner returned an error: ${message}` };
+  return fallback;
+}
+
+function extractRunnerErrorEvent(trimmed) {
+  if (!trimmed) return null;
+  try {
+    const json = JSON.parse(trimmed);
+    if (isErrorEvent(json)) return json;
+  } catch {
+    // Fall through to JSONL scan.
+  }
+  const lines = trimmed.split(/\r?\n/);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try {
+      const event = JSON.parse(lines[index]);
+      if (isErrorEvent(event)) return event;
+    } catch {
+      // Ignore non-JSON log lines.
+    }
+  }
+  return null;
+}
+
+function isErrorEvent(event) {
+  return Boolean(
+    event &&
+      typeof event === "object" &&
+      (event.is_error === true || event.api_error_status || event.status === 429 || event.error)
+  );
+}
+
 function buildDesignPrompt(scan, plan, runner, options = {}) {
   const templates = readFullTemplates(options);
   return `${commonOutputRules(options)}
 
 You are the MatSpec documentation generation runner (${runner}).
-Read and analyze the repository only.
+Use only the repository scan context in this prompt.
 Do not modify any files.
 Do not call git apply.
 Do not write to matspec/specs.
@@ -394,7 +441,22 @@ function snapshotWorkspace(root, allowedRunDir) {
 }
 
 function fileHash(file) {
-  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+  const stats = fs.statSync(file);
+  if (stats.size <= 256 * 1024) return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+  const fd = fs.openSync(file, "r");
+  const hash = crypto.createHash("sha256");
+  const buffer = Buffer.alloc(256 * 1024);
+  try {
+    let position = 0;
+    while (position < stats.size) {
+      const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, position);
+      hash.update(buffer.subarray(0, bytesRead));
+      position += bytesRead;
+    }
+    return hash.digest("hex");
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function isAllowedRunPath(file, allowedRunDir) {
@@ -472,6 +534,8 @@ function nextForError(code) {
       return ["matspec generate --runner auto", "Confirm the matching CLI is installed and authenticated"];
     case "EXTERNAL_RUNNER_FAILED":
       return ["Inspect logs/*stdout.log and logs/*stderr.log under the run directory", "matspec generate --runner auto"];
+    case "EXTERNAL_RUNNER_RATE_LIMITED":
+      return ["Wait for the runner quota to reset", "matspec generate --runner auto"];
     case "EXTERNAL_RUNNER_EMPTY_OUTPUT":
     case "EXTERNAL_RUNNER_UNPARSEABLE_OUTPUT":
       return ["Inspect logs/*stdout.log and logs/*stderr.log under the run directory", "Confirm the runner's final output has a Markdown heading"];

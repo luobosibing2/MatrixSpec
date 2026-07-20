@@ -130,6 +130,16 @@ const previousCalls = process.env.MOCK_CALLS_FILE && fs.existsSync(process.env.M
   ? fs.readFileSync(process.env.MOCK_CALLS_FILE, "utf8").split("\\n").filter(Boolean).length
   : 0;
 if (process.env.MOCK_CALLS_FILE) fs.appendFileSync(process.env.MOCK_CALLS_FILE, args.join("\\u0000") + "\\n", "utf8");
+if (process.env.MOCK_RATE_LIMIT === "1") {
+  process.stdout.write(JSON.stringify({ type: "result", is_error: true, api_error_status: 429, result: "You've hit your limit - resets later" }));
+  process.exit(1);
+}
+if (process.env.MOCK_RATE_LIMIT_JSONL === "1") {
+  process.stdout.write(JSON.stringify({ type: "assistant", content: "thinking..." }) + "\\n");
+  process.stdout.write(JSON.stringify({ type: "system", message: "retrying" }) + "\\n");
+  process.stdout.write(JSON.stringify({ type: "result", is_error: true, api_error_status: 429, result: "You've hit your limit - resets later" }) + "\\n");
+  process.exit(1);
+}
 if (process.env.MOCK_FAIL === "1") process.exit(7);
 if (process.env.MOCK_EMPTY === "1") process.exit(0);
 const prompt = args[args.indexOf("-p") + 1] || "";
@@ -1294,6 +1304,82 @@ test("generate planning falls back to Project Root when no obvious module exists
   ]);
 });
 
+test("generate planning splits large top-level C++ layouts instead of root fallback", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+  for (let index = 0; index < 4; index += 1) {
+    writeProjectFile(root, `frameworks/core/component-${index}.cpp`, "int core() { return 0; }\n");
+    writeProjectFile(root, `frameworks/bridge/bridge-${index}.cpp`, "int bridge() { return 0; }\n");
+    writeProjectFile(root, `adapter/ohos/adapter-${index}.cpp`, "int adapter() { return 0; }\n");
+    writeProjectFile(root, `interfaces/native/native-${index}.cpp`, "int native_api() { return 0; }\n");
+    writeProjectFile(root, `test/unittest/test-${index}.cpp`, "int test_case() { return 0; }\n");
+  }
+
+  const generated = json(run(["--path", root, "generate", "--json"]));
+  const plan = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "plan.json"), "utf8"));
+  assert.deepEqual(
+    plan.modules.map((module) => module.path),
+    ["frameworks", "adapter", "interfaces"]
+  );
+});
+
+test("generate planning splits oversize top-level dir into second-level modules", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+  // 5 files under frameworks/core + 4 under frameworks/bridge (total 9 > threshold 8) triggers second-level split.
+  // adapter and interfaces stay below the threshold and remain top-level entries.
+  for (let index = 0; index < 5; index += 1) writeProjectFile(root, `frameworks/core/core-${index}.cpp`, "int core() { return 0; }\n");
+  for (let index = 0; index < 4; index += 1) writeProjectFile(root, `frameworks/bridge/bridge-${index}.cpp`, "int bridge() { return 0; }\n");
+  for (let index = 0; index < 3; index += 1) writeProjectFile(root, `adapter/ohos/adapter-${index}.cpp`, "int adapter() { return 0; }\n");
+  for (let index = 0; index < 3; index += 1) writeProjectFile(root, `interfaces/native/native-${index}.cpp`, "int native_api() { return 0; }\n");
+
+  const generated = json(run(["--path", root, "generate", "--json"], {
+    env: { MATSPEC_FALLBACK_OVERSIZE_THRESHOLD: "8" }
+  }));
+  const plan = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "plan.json"), "utf8"));
+  assert.deepEqual(
+    plan.modules.map((module) => module.path),
+    ["frameworks/core", "frameworks/bridge", "adapter", "interfaces"]
+  );
+});
+
+test("generate planning keeps oversize parent when its files collapse into a single child", () => {
+  // Pins current behavior: when an oversize top-level dir has all files under one subdir
+  // (e.g. frameworks/ with everything in frameworks/core/), we DO NOT recurse further -
+  // the parent group is selected instead. Bounded depth keeps the plan stable; revisit if
+  // real OpenHarmony-scale repos show this is too coarse.
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+  for (let index = 0; index < 10; index += 1) writeProjectFile(root, `frameworks/core/core-${index}.cpp`, "int core() { return 0; }\n");
+  writeProjectFile(root, "adapter/ohos/adapter.cpp", "int adapter() { return 0; }\n");
+
+  const generated = json(run(["--path", root, "generate", "--json"], {
+    env: { MATSPEC_FALLBACK_OVERSIZE_THRESHOLD: "8" }
+  }));
+  const plan = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "plan.json"), "utf8"));
+  assert.deepEqual(
+    plan.modules.map((module) => module.path),
+    ["frameworks", "adapter"]
+  );
+});
+
+test("generate planning does not misfilter latest/attestation directories", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+  writeProjectFile(root, "latest/build/main.cpp", "int main() { return 0; }\n");
+  writeProjectFile(root, "attestation/api/attest.cpp", "int attest() { return 0; }\n");
+  writeProjectFile(root, "testing-utils/helper.cpp", "int helper() { return 0; }\n");
+
+  const generated = json(run(["--path", root, "generate", "--json"]));
+  const plan = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "plan.json"), "utf8"));
+  const paths = plan.modules.map((module) => module.path);
+  // latest / attestation / testing-utils are real source modules; they must not be excluded
+  // just because their names contain the substring "test".
+  assert.ok(paths.includes("latest"), `expected "latest" in ${JSON.stringify(paths)}`);
+  assert.ok(paths.includes("attestation"), `expected "attestation" in ${JSON.stringify(paths)}`);
+  assert.ok(paths.includes("testing-utils"), `expected "testing-utils" in ${JSON.stringify(paths)}`);
+});
+
 test("generate plans Java Spring packages as domain modules", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
@@ -1584,6 +1670,31 @@ test("fake provider auto mode uses module-first generation", () => {
   assert.ok(manifest.artifacts.modules.length > 0);
 });
 
+test("module-first generation uses stable project-root artifact names", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+  writeProjectFile(root, "main.cpp", "int main() { return 0; }\n");
+
+  const generated = json(run(["--path", root, "generate", "--mode", "react", "--json"], { env: { MATSPEC_LLM_PROVIDER: "fake" } }));
+  const runDir = path.join(root, ".matspec-cli/runs", generated.runId);
+  const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
+  assert.deepEqual(manifest.artifacts.modules, ["modules/project-root.md"]);
+  assert.ok(fs.existsSync(path.join(runDir, "modules/project-root.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/modules/project-root.standard.md")));
+  assert.equal(fs.existsSync(path.join(runDir, "modules/..md")), false);
+});
+
+test("moduleSlug maps repo paths to stable slug names", async () => {
+  const { moduleSlug } = await import("../src/util.js");
+  assert.equal(moduleSlug("."), "project-root");
+  assert.equal(moduleSlug(""), "project-root");
+  assert.equal(moduleSlug("  "), "project-root");
+  assert.equal(moduleSlug("src/foo"), "src-foo");
+  assert.equal(moduleSlug("a.b.c"), "a-b-c");
+  assert.equal(moduleSlug("packages/@scope/lib"), "packages-scope-lib");
+  assert.equal(moduleSlug("已弃用/legacy"), "legacy");
+});
+
 test("--mode react with mock codex writes module artifacts and react log", () => {
   const root = tempProject();
   const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
@@ -1732,7 +1843,7 @@ test("generate module creates focused design and spec artifacts", () => {
   assert.deepEqual(plan.modules.map((module) => module.path), ["frameworks/core/components_v2/water_flow"]);
   assert.ok(fs.existsSync(path.join(runDir, "design.md")));
   assert.ok(fs.existsSync(path.join(runDir, "spec.md")));
-  assert.ok(fs.existsSync(path.join(runDir, "modules/frameworks-core-components_v2-water_flow.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "modules/frameworks-core-components-v2-water-flow.md")));
   assert.match(fs.readFileSync(path.join(runDir, "design.md"), "utf8"), /Water Flow|water_flow/);
   assert.doesNotMatch(fs.readFileSync(path.join(runDir, "design.md"), "utf8"), /grid_component/);
   const designPrompt = fs.readFileSync(path.join(runDir, "logs/prompts/design.md"), "utf8");
@@ -1969,7 +2080,65 @@ test("external claude runner parses JSON result output", () => {
   assert.equal(manifest.model, "claude-sonnet-4-6");
   assert.match(fs.readFileSync(path.join(runDir, "design.md"), "utf8"), /Mock Claude Design/);
   assert.match(fs.readFileSync(path.join(runDir, "spec.md"), "utf8"), /Derived from design by mock claude/);
-  assert.match(fs.readFileSync(callsFile, "utf8"), /claude-sonnet-4-6/);
+  const calls = fs.readFileSync(callsFile, "utf8");
+  assert.match(calls, /claude-sonnet-4-6/);
+  assert.match(calls, /--max-turns\u00001\u0000/);
+  assert.match(calls, /Task,WebSearch/);
+});
+
+test("external claude runner reports rate limits from JSON error output", () => {
+  const root = tempProject();
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  makeMockRunner(binDir, "claude", claudeMockScript());
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
+
+  const result = run(["--path", root, "generate", "--runner", "claude", "--mode", "direct", "--json"], {
+    env: mockRunnerEnv(binDir, { MOCK_RATE_LIMIT: "1" })
+  });
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.code, "EXTERNAL_RUNNER_RATE_LIMITED");
+  assert.match(payload.message, /hit your limit/);
+  assert.ok(payload.next.some((item) => item.includes("quota")));
+});
+
+test("external claude runner reports rate limits from JSONL streaming output", () => {
+  const root = tempProject();
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  makeMockRunner(binDir, "claude", claudeMockScript());
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
+
+  const result = run(["--path", root, "generate", "--runner", "claude", "--mode", "direct", "--json"], {
+    env: mockRunnerEnv(binDir, { MOCK_RATE_LIMIT_JSONL: "1" })
+  });
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.code, "EXTERNAL_RUNNER_RATE_LIMITED");
+  assert.match(payload.message, /hit your limit/);
+});
+
+const winShellTestOptions = { skip: process.platform !== "win32" ? "Windows-only test" : false };
+test("external claude runner survives project paths with cmd metacharacters on Windows", winShellTestOptions, () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-test-"));
+  const root = path.join(parent, "path & with % chars");
+  fs.mkdirSync(root, { recursive: true });
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  makeMockRunner(binDir, "claude", claudeMockScript());
+  const callsFile = path.join(binDir, "calls.log");
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
+
+  const result = run(["--path", root, "generate", "--runner", "claude", "--mode", "direct", "--json"], {
+    env: mockRunnerEnv(binDir, { MOCK_CALLS_FILE: callsFile })
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  // Mock binary actually ran and produced design.md, which means cmd.exe did not split on & or %.
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", payload.runId, "manifest.json"), "utf8"));
+  assert.equal(manifest.runner, "claude");
 });
 
 test("external runner failures are structured and update latest diagnostics", () => {

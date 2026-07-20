@@ -99,6 +99,9 @@ const SDK_CUSTOM_OP_SURFACE_PATTERNS = [
   }
 ];
 const SKIP_MODULE_DIRS = new Set(["__tests__", "__mocks__", "test", "tests", "spec", "fixtures", "fixture", "demo", "demos", "examples"]);
+const FALLBACK_SKIP_DIRS = new Set([...SKIP_MODULE_DIRS, "docs"]);
+const MAX_FALLBACK_MODULES = 8;
+const DEFAULT_OVERSIZED_FALLBACK_MODULE_FILES = 800;
 const LARGE_FILE_LINES = 2000;
 const LARGE_REPOSITORY_FILES = 300;
 const MAX_COMPONENT_MODULES = 8;
@@ -132,7 +135,17 @@ const LANGUAGE_BY_EXTENSION = {
 };
 
 export function planModules(root, scan, options = {}) {
-  const modules = validateAndFixModules(discoverModules(scan.includedFiles || [], scan.primaryExtension || null, scan.sourceFileStats || null), scan);
+  const files = scan.includedFiles || [];
+  const discovered = discoverModules(files, scan.primaryExtension || null, scan.sourceFileStats || null);
+  const fallback = discoverFallbackModules(files, scan.primaryExtension || null);
+  const hasSourceHeavyModules = discovered.some((module) => module.description.startsWith("Source-heavy module"));
+  const selected =
+    fallback.length > 1 && !hasSourceHeavyModules && !hasSpecificRepositoryLayout(files, scan)
+      ? fallback
+      : discovered.length
+        ? discovered
+        : fallback;
+  const modules = validateAndFixModules(selected, scan);
   const primaryExtension = scan.primaryExtension || null;
   const focused = validateFocusedTarget(modules, options.focusedTarget, plannerFileStats(scan));
   const base = {
@@ -155,6 +168,60 @@ export function planModules(root, scan, options = {}) {
     ...(focused.focusedTarget ? { focusedTarget: focused.focusedTarget } : {}),
     modules: focused.modules.length ? focused.modules : [fallbackModule(scan)]
   };
+}
+
+function discoverFallbackModules(files, primaryExtension) {
+  const codeFiles = primaryExtension ? files.filter((file) => path.extname(file).toLowerCase() === primaryExtension) : files;
+  const topLevel = groupBySegment(codeFiles, 1)
+    .filter((group) => isFallbackModulePath(group.path))
+    .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path));
+  const modules = [];
+  const seen = new Set();
+  if (topLevel.length < 2) return modules;
+
+  for (const group of topLevel) {
+    const children =
+      group.count > oversizedThreshold()
+        ? groupBySegment(codeFiles.filter((file) => file.startsWith(`${group.path}/`)), 2).sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
+        : [];
+    for (const candidate of children.length > 1 ? children : [group]) {
+      if (!isFallbackModulePath(candidate.path)) continue;
+      addModule(modules, seen, candidate.path, moduleName(candidate.path), "Source module discovered from top-level repository layout.");
+      if (modules.length >= MAX_FALLBACK_MODULES) return modules;
+    }
+  }
+  return modules;
+}
+
+function hasSpecificRepositoryLayout(files, scan) {
+  const patternFiles = withPlannerSurfaceFiles(plannerFileStats(scan), files);
+  return (
+    hasWebViewSignal(patternFiles) ||
+    hasSdkSignal(patternFiles) ||
+    files.some((file) => file.startsWith("frameworks/core/components_v2/") || file.startsWith("frameworks/core/components_ng/pattern/"))
+  );
+}
+
+function groupBySegment(files, depth) {
+  const counts = new Map();
+  for (const file of files) {
+    const parts = file.split("/").filter(Boolean);
+    if (parts.length <= depth) continue;
+    const key = parts.slice(0, depth).join("/");
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return [...counts.entries()].map(([modulePath, count]) => ({ path: modulePath, count }));
+}
+
+function isFallbackModulePath(modulePath) {
+  const parts = modulePath.split("/");
+  const leaf = parts.at(-1)?.toLowerCase();
+  return Boolean(leaf && !leaf.startsWith(".") && !FALLBACK_SKIP_DIRS.has(leaf) && !FALLBACK_SKIP_DIRS.has(parts[0].toLowerCase()));
+}
+
+function oversizedThreshold() {
+  const value = Number(process.env.MATSPEC_FALLBACK_OVERSIZE_THRESHOLD);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_OVERSIZED_FALLBACK_MODULE_FILES;
 }
 
 export function validateAndFixModules(modules, scan) {
