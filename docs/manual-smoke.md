@@ -104,6 +104,36 @@ powershell -ExecutionPolicy Bypass -File .\scripts\psmux-e2e.ps1 `
 5. 断言 validation 后出现 `文档链已验证，可进入实现`，且没有出现 `matspec done` 或 `归档完成`。
 6. 检查 `matspec/changes/{REQ}/` 下五个阶段文档存在，并且文档包含 `决策台账` 或实现前风险门禁内容。
 
+### 5.4 Codex 历史需求全流程实验
+
+该脚本从 `../repos/echo` 克隆隔离工作区，回到历史提交
+`dac56bceda4c9e799afc3cee2d4f137c8102db58` 的父提交，并让 Codex 通过
+psmux 完成真实的 `init -> generate -> apply -> start -> workflow -> done`。
+需求澄清和各阶段确认由脚本按默认通过处理。
+
+```powershell
+npm run test:e2e:codex-history
+```
+
+实验覆盖 proposal、delta-spec、delta-design、tasks、validation、implementation、
+review 和 full-document finalization，并验证：
+
+1. Codex 实现后的 `binder.go` diff 与历史提交完全一致。
+2. Echo 的 `go test ./...` 全量通过。
+3. review 后、full spec/design 尚未更新时，`done` 返回 `FULL_DOCS_NOT_UPDATED`。
+4. full spec/design 更新后可成功归档。
+
+失败现场默认保留在系统临时目录；使用输出中的仓库路径可以从实现后继续：
+
+```powershell
+pwsh -File .\scripts\psmux-codex-history-e2e.ps1 `
+  -ResumeRepository C:\path\to\retained\repo `
+  -KeepArtifacts
+```
+
+运行依赖 `node`、`codex`、`psmux`、`git`、`go`，会调用真实 Codex 并消耗 token，
+因此不进入默认 CI。
+
 ## 6. Apply
 
 确认最近 run 内容可接受后执行：
