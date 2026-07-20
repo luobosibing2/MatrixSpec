@@ -2,23 +2,41 @@ import fs from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "./args.js";
-import { STAGES } from "./constants.js";
+import { VERSION } from "./constants.js";
 import { detectExternalAgents, initProject, projectPaths } from "./project.js";
-import { acceptStage, archiveChange, getStatus, listChanges, resolveChange, startChange } from "./state.js";
+import { acceptStage, archiveChange, currentStagePayload, enterReview, getStatus, listChanges, loadState, resolveChange, stagesOf, startChange } from "./state.js";
 import { doctor, validateProject } from "./validation.js";
 import { hasError } from "./util.js";
 import { installIntegration, listIntegrations, removeIntegration } from "./integrations.js";
 import { applyLatestRun, generateDocs, generateModule, showLatestRun } from "./runs.js";
 import { printProgress, printProgressTitle, printResult, style } from "./output.js";
 import { isZh, tr } from "./i18n.js";
+import { implementCommand } from "./implement.js";
+import { refreshWorkflowSnapshot } from "./workflow.js";
+import { extensionCommand, stagesCommand, templateCommand } from "./customization.js";
+import { authCommand } from "./auth.js";
+import { codewikiCommand, syncFromCodeWiki } from "./codewiki.js";
+import { reportUsage } from "./reporter.js";
+import { checkForUpdates } from "./version-check.js";
+import { generateBatch } from "./batch-generation.js";
 
 export async function main(argv = []) {
+  const startedAt = Date.now();
   const parsed = parseArgs(argv);
   const { command, args, options } = parsed;
-  if (options.help || command === "help") return printResult(help(options), options);
+  if (options.no_color) process.env.NO_COLOR = "1";
+  if (options.help || command === "help") {
+    const text = help(options);
+    return printResult(options.json ? { ok: true, help: text } : text, options);
+  }
+  const update = await checkForUpdates(options);
+  if (update && !options.json) console.error(`MatSpec ${update.latest} 可用（当前 ${update.current}）。`);
 
   let result;
   switch (command) {
+    case "version":
+      result = { ok: true, version: VERSION, message: VERSION };
+      break;
     case "init":
       result = await initCommand(args[0], options);
       break;
@@ -51,20 +69,55 @@ export async function main(argv = []) {
     case "done":
       result = doneCommand(options, args[0]);
       break;
+    case "implement":
+      result = implementCommand(options, args[0]);
+      break;
+    case "review":
+      result = enterReview(options, args[0]);
+      break;
     case "archive":
       result = archiveChange(options, args[0]);
       break;
     case "integration":
       result = integrationCommand(options, args);
       break;
+    case "workflow":
+      result = workflowCommand(options, args);
+      break;
+    case "stages":
+      result = stagesCommand(options, args);
+      break;
+    case "template":
+      result = templateCommand(options, args);
+      break;
+    case "extension":
+      result = extensionCommand(options, args);
+      break;
+    case "auth":
+      result = await authCommand(options, args);
+      break;
+    case "sync":
+      result = await syncFromCodeWiki(options);
+      break;
+    case "codewiki":
+      result = await codewikiCommand(options, args);
+      break;
     case "generate":
-      result = generateCommand(options, args);
+      result = await generateCommand(options, args);
       break;
     case "show":
       result = showLatestRun(options);
       break;
     case "apply":
       result = applyLatestRun(options);
+      break;
+    case "generation":
+      result = {
+        ok: false,
+        code: "DEPRECATED_COMMAND",
+        message: "generation 已废弃，请使用 matspec generate --design-template/--spec-template。",
+        next: ["matspec generate"]
+      };
       break;
     default:
       throw new Error(tr(options, `Unknown command: ${command}`, `未知命令：${command}`));
@@ -73,15 +126,11 @@ export async function main(argv = []) {
   printResult(result, options);
   if (result.findings && hasError(result.findings)) process.exitCode = 1;
   if (result.ok === false && result.code !== "NO_ACTIVE_CHANGE") process.exitCode = 1;
+  void reportUsage(command, options, result, Date.now() - startedAt);
 }
 
 async function initCommand(targetPath, options) {
-  const externalAgents = detectExternalAgents();
-  if (!options.default_runner && shouldPrompt(options)) {
-    options.default_runner = await promptDefaultRunner(externalAgents);
-  }
-  const validation = validateDefaultRunner(options.default_runner, externalAgents, options);
-  if (validation) return validation;
+  if (!options.integration) options.integration = shouldPrompt(options) ? await promptIntegration() : "nga";
   return initProject(targetPath, options);
 }
 
@@ -89,48 +138,17 @@ function shouldPrompt(options) {
   return !options.json && process.stdin.isTTY && process.stdout.isTTY;
 }
 
-async function promptDefaultRunner(externalAgents) {
-  const choices = ["auto"];
-  if (externalAgents.codex.available) choices.push("codex");
-  if (externalAgents.claude.available) choices.push("claude");
-  if (externalAgents.opencode.available) choices.push("opencode");
-
+async function promptIntegration() {
+  const choices = ["nga", "opencode", "codegenie", "codeagent", "chrys", "claude-code", "none"];
   console.log(style("matspec init", "title"));
-  console.log("Choose the default documentation generation tool. matspec generate will use this choice later.");
-  console.log("");
-  console.log("  auto   Recommended: codex -> claude -> opencode -> deterministic stub");
-  if (choices.includes("codex")) console.log("  codex  Use the locally authenticated Codex CLI");
-  if (choices.includes("claude")) console.log("  claude Use the locally authenticated Claude Code CLI");
-  if (choices.includes("opencode")) console.log("  opencode Use the locally authenticated opencode CLI");
-
+  console.log("Choose the Coding Agent integration.");
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const answer = (await rl.question(`\nDefault tool [${choices.join("/")}] (auto): `)).trim().toLowerCase();
-    return choices.includes(answer) ? answer : "auto";
+    const answer = (await rl.question(`\nIntegration [${choices.join("/")}] (nga): `)).trim().toLowerCase();
+    return choices.includes(answer) ? answer : "nga";
   } finally {
     rl.close();
   }
-}
-
-function validateDefaultRunner(defaultRunner, externalAgents = null, options = {}) {
-  if (!defaultRunner) return null;
-  if (["codex", "claude", "opencode"].includes(defaultRunner) && externalAgents && !externalAgents[defaultRunner]?.available) {
-    return {
-      ok: false,
-      code: "RUNNER_NOT_FOUND",
-      runner: defaultRunner,
-      message: tr(options, `Could not find ${defaultRunner}; it cannot be set as the default runner.`, `未找到 ${defaultRunner}，不能设为默认生成工具。`),
-      next: isZh(options) ? ["matspec init --default-runner auto", `安装并登录 ${defaultRunner} 后重试`] : ["matspec init --default-runner auto", `Install and authenticate ${defaultRunner}, then retry`]
-    };
-  }
-  if (["auto", "codex", "claude", "opencode"].includes(defaultRunner)) return null;
-  return {
-    ok: false,
-    code: "RUNNER_NOT_IMPLEMENTED",
-    runner: defaultRunner,
-    message: tr(options, `Unsupported default runner: ${defaultRunner}. Use auto, codex, claude, or opencode.`, `不支持的默认生成工具：${defaultRunner}。请使用 auto、codex、claude 或 opencode。`),
-    next: ["matspec init --default-runner auto"]
-  };
 }
 
 function attachGenerateProgress(options) {
@@ -159,7 +177,7 @@ function statusCommand(options, explicit) {
   return {
     ...result,
     message: tr(options, `Change status: ${result.change}`, `变更状态：${result.change}`),
-    items: result.stages.map((stage) => `${stage.status.padEnd(9)} ${stage.key} ${stage.filePath}`)
+    items: result.stages.map((stage) => `${stage.status.padEnd(16)} ${stage.key} ${stage.filePath || "(no file)"}`)
   };
 }
 
@@ -174,42 +192,53 @@ function goCommand(options, explicit) {
       next: ["matspec start REQ202604270001-feature-name"]
     };
   }
+  const state = loadState(paths.root, change);
+  if (!state) return { ok: false, code: "CHANGE_STATE_MISSING", change, message: "活动变更缺少状态文件。" };
   const status = getStatus(options, change);
-  const current = status.stages.find((stage) => stage.key === status.currentStage) ?? status.stages.find((stage) => stage.status !== "confirmed");
-  if (!current) {
+  if (status.drift?.length) {
+    return { ok: false, code: "WORKFLOW_PACK_DRIFT", change, findings: status.drift, message: "冻结工作流引用已漂移。" };
+  }
+  const current = stagesOf(state).find((stage) => stage.key === state.currentStage);
+  if (!current || state.currentStage === "completed") {
     return {
       ok: true,
       change,
-      nextAction: "implementation",
-      message: tr(options, "The document chain is validated; implementation may start. Archive only after implementation, verification, and done finalization pass.", "文档链已验证，可进入实现。实现、验证和 done finalization 完成后再归档。"),
-      next: isZh(options) ? ["按 tasks.md 执行实现", "运行必要测试和验证", "done finalization 更新 full spec/design 后执行 matspec done"] : ["Implement the tasks in tasks.md", "Run the required tests and verification", "Run matspec done after done finalization"]
+      nextAction: "done",
+      message: tr(options, "All workflow stages are confirmed. Complete finalization, then run matspec done.", "所有工作流阶段均已确认。完成全量文档最终化后执行 matspec done。"),
+      next: ["matspec done"]
     };
   }
-  const nextAction = current.status === "draft" ? "await_user_accept" : current.status === "blocked" ? "complete_previous_stage" : "open_agent_stage";
+  if (
+    current.key === "review" &&
+    state.stages?.implementation?.confirmed &&
+    !state.history?.some((event) => event.action === "enter-review-stage")
+  ) {
+    return {
+      ok: true,
+      change,
+      flowId: state.flowId,
+      reviewReady: true,
+      nextAction: "review",
+      message: tr(options, "Implementation is confirmed. Enter the review stage.", "实现已确认，可以进入审查阶段。"),
+      next: ["matspec review"]
+    };
+  }
+  const stage = currentStagePayload(paths.root, change, state, current);
+  let nextAction;
+  if (current.delegate) nextAction = "delegate-subagent";
+  else nextAction = stage.status === "draft" ? "await_user_accept" : stage.status === "blocked" ? "complete_previous_stage" : "open_agent_stage";
   return {
     ok: true,
     change,
-    stage: {
-      index: current.index,
-      total: STAGES.length,
-      key: current.key,
-      name: current.name,
-      status: current.status,
-      file: path.join(paths.root, current.filePath).replaceAll(path.sep, "/"),
-      filePath: current.filePath,
-      allowedWritePath: current.filePath,
-      inputs: stageInputs(current, change, paths.root),
-      requiresFullSpec: Boolean(current.requiresFullSpec),
-      requiresFullDesign: Boolean(current.requiresFullDesign),
-      requiresUserGenerationApproval: true,
-      agentCommand: current.agentCommand,
-      entryCommand: "/matspec",
-      objective: current.objective
-    },
+    flowId: state.flowId,
+    stage,
+    ...(current.delegate ? { delegate: current.delegate, delegateInputs: stage.inputs } : {}),
     nextAction,
     next: nextAction === "await_user_accept"
       ? [tr(options, "Run matspec accept after user confirmation", "确认后执行 matspec accept")]
-      : [tr(options, "Run /matspec in your coding agent", "在 opencode 中执行 /matspec")]
+      : nextAction === "delegate-subagent"
+        ? [current.key === "implementation" ? "matspec implement --run --json" : `委托 ${current.delegate}`]
+        : [tr(options, "Run /matspec in your coding agent", "在 Coding Agent 中执行 /matspec")]
   };
 }
 
@@ -264,7 +293,7 @@ function doneCommand(options, explicit) {
 
 function integrationCommand(options, args) {
   const action = args[0] || "list";
-  const name = args[1] || "opencode";
+  const name = args[1] || "nga";
   const root = projectPaths(options).root;
   if (action === "list") {
     const integrations = listIntegrations();
@@ -274,13 +303,24 @@ function integrationCommand(options, args) {
     const result = installIntegration(root, name, options);
     return { ...result, message: result.message || tr(options, `Installed ${name} integration.`, `已安装 ${name} 集成。`), items: result.files.map((file) => file.path) };
   }
-  if (action === "remove") return removeIntegration(root, name, options);
+  if (action === "remove" || action === "uninstall") return removeIntegration(root, name, options);
   throw new Error(tr(options, `Unknown integration command: ${action}`, `未知 integration 命令：${action}`));
 }
 
-function generateCommand(options, args) {
+function workflowCommand(options, args) {
+  const action = args[0];
+  if (action !== "refresh-snapshot") {
+    return { ok: false, code: "WORKFLOW_COMMAND_USAGE", message: "用法：matspec workflow refresh-snapshot <change> --confirm-compatible <说明>" };
+  }
+  const root = projectPaths(options).root;
+  const change = args[1] || resolveChange(options);
+  return refreshWorkflowSnapshot(root, change, options.confirm_compatible);
+}
+
+async function generateCommand(options, args) {
   const action = args[0];
   const generateOptions = attachGenerateProgress(options);
+  if (options.batch) return generateBatch(options.batch, generateOptions);
   if (!options.json) {
     if (!action) printProgressTitle("matspec generate");
     if (action === "module") printProgressTitle("matspec generate module");
@@ -292,89 +332,50 @@ function generateCommand(options, args) {
 
 function help(options = {}) {
   if (isZh(options)) return helpZh();
-  return `╭─ MatSpec CLI ─────────────────────────────────────────╮
-│ Repo-aware specs from local coding agents               │
-╰─────────────────────────────────────────────────────────╯
-
-Common workflow:
-  matspec init [path]
-  matspec generate
-  matspec show
-  matspec apply
-
-Document generation:
-  matspec generate [--runner auto|codex|claude|opencode] [--mode auto|direct|react] [--model model]
-  matspec generate module <path>
-
-Project changes:
-  matspec start <change>
-  matspec list
-  matspec status [change]
-  matspec go [change] --json
-  matspec accept [change]
-  matspec confirm <stage> [change]
-  matspec validate [change]
-  matspec doctor
-  matspec done [change]                         archive after implementation, verification, and done finalization
-  matspec archive [change] [--force]
-
-Integrations:
-  matspec integration list
-  matspec integration install|remove opencode|claude-code|codex|all
-
-Options:
-  --runner auto|codex|claude|opencode   generation tool, default auto
-  --mode auto|direct|react              generation mode, default auto
-  --model model                         override the runner default model
-  --lang en|zh-CN                       output language, default zh-CN
-  --json                                machine-readable JSON output
-
-Notes:
-  No API key is required by default. auto reuses authenticated local Codex/Claude/opencode CLIs first.
-  If no local tool is available, MatSpec falls back to the deterministic stub.
-`;
+  return helpText("Commands", "Options");
 }
 
 function helpZh() {
-  return `╭─ MatSpec CLI ─────────────────────────────────────────╮
-│ Repo-aware specs from local coding agents               │
+  return helpText("命令", "选项");
+}
+
+function helpText(commandLabel, optionLabel) {
+  return `╭─ MatSpec CLI 0.4.1-beta.3 ───────────────────────────╮
+│ Markdown-first specification-driven development        │
 ╰─────────────────────────────────────────────────────────╯
 
-常用流程：
+${commandLabel}:
   matspec init [path]
-  matspec generate
-  matspec show
-  matspec apply
-
-生成文档：
-  matspec generate [--runner auto|codex|claude|opencode] [--mode auto|direct|react] [--model model]
-  matspec generate module <path>
-
-项目变更：
-  matspec start <change>
-  matspec list
-  matspec status [change]
-  matspec go [change] --json
-  matspec accept [change]
-  matspec confirm <stage> [change]
+  matspec start|new <change>
+  matspec list|status|go|next|accept|confirm
+  matspec implement [--run|--task N|--complete N|--block N]
+  matspec review [change]
   matspec validate [change]
   matspec doctor
-  matspec done [change]                         实现、验证和 done finalization 完成后归档
-  matspec archive [change] [--force]
+  matspec done|archive [change]
+  matspec generate [module <path>] [--batch modules.json]
+  matspec show|apply
+  matspec sync
+  matspec codewiki pull
+  matspec auth login|status|logout
+  matspec integration list|install|remove
+  matspec workflow refresh-snapshot
+  matspec stages init|list|add|remove|validate|cleanup
+  matspec template list|show|copy|sync
+  matspec extension list|install|remove
+  matspec version
 
-集成：
-  matspec integration list
-  matspec integration install|remove opencode|claude-code|codex|all
-
-选项：
-  --runner auto|codex|claude|opencode   生成工具，默认 auto
-  --mode auto|direct|react              生成模式，默认 auto
-  --model model                         覆盖 runner 默认模型
-  --lang en|zh-CN                       输出语言，默认 zh-CN
-  --json                                输出机器可读 JSON
-
-说明：
-  默认不需要 API key。auto 会优先复用本机已登录的 Codex/Claude/opencode CLI；
-  没有可用本地工具时会 fallback 到 deterministic stub。
+${optionLabel}:
+  --runner opencode|opencode-serve|relay-serve|relay-pool|nga|codegenie|codeagent|chrys
+  --concurrency 1..10
+  --retries N
+  --design-template path
+  --spec-template path
+  --knowledge path
+  --json
+  --force
+  --path path
+  --no-color
+  --no-update-check
 `;
 }

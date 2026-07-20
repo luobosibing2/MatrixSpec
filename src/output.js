@@ -98,7 +98,7 @@ function printFindings(findings, result = {}, options = {}) {
 }
 
 function shouldColor() {
-  return Boolean(process.stdout.isTTY && !process.env.NO_COLOR);
+  return Boolean((process.stdout.isTTY || process.env.FORCE_COLOR) && !process.env.NO_COLOR);
 }
 
 function isInteractive() {
