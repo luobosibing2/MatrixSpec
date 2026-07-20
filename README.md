@@ -1,61 +1,37 @@
 # MatSpec
 
-先恢复系统全量规格，再安全地做增量变更。
-
-MatSpec 是面向已有代码库的规格驱动开发工作流。它先扫描仓库，恢复全量 `spec.md` 和 `design.md`，再把每个新需求放进 proposal、spec 增量、design 增量、任务拆解、一致性验证、实现、done finalization 和归档流程。
-
-## 核心差异
-
-很多 AI coding 工作流从“下一个需求”开始。MatSpec 从更早的一层开始：先让 agent 理解当前仓库，形成稳定的业务规格和软件设计基线，然后再修改。
+MatSpec 是 Markdown-first 的规格驱动开发 CLI。它从已有代码恢复全量 `spec.md` / `design.md`，再用可冻结、可审计的七阶段工作流管理每次变更。
 
 ```text
-恢复全量 spec/design -> 需求澄清 -> spec 增量 -> design 增量 -> 任务拆解 -> 一致性验证 -> 实现 -> done finalization -> 归档
+proposal → delta-spec → delta-design → tasks → validation → implementation → review → finalization/archive
 ```
-
-这使它更适合 brownfield 项目，而不只是新项目。
 
 ## 快速开始
 
+要求 Node.js 18 或更高版本。
+
 ```bash
+npm install
 matspec init
 matspec generate
 matspec show
 matspec apply
 ```
 
-新需求：
+开始一次变更：
 
 ```bash
-matspec start REQ20260428-owner-phone-validation
+matspec start AR-feature-name
 matspec go --json
 matspec accept
-matspec validate
+matspec implement --run --json
+matspec review
 matspec done
 ```
 
-Agent 入口：
+Coding Agent 的统一入口是 `/matspec`。非交互初始化默认安装 `nga` 集成，也可显式选择 `opencode`、`codegenie`、`codeagent`、`chrys`、`claude-code` 或 `none`。
 
-```text
-/matspec
-```
-
-## 语言
-
-MatSpec 默认中文输出。需要英文输出时使用：
-
-```bash
-matspec --lang en --help
-matspec --lang en init
-```
-
-或设置环境变量：
-
-```bash
-$env:MATSPEC_LANG = "en"
-matspec --help
-```
-
-## 目录结构
+## 核心目录
 
 ```text
 matspec/
@@ -63,62 +39,83 @@ matspec/
     spec.md
     design.md
   changes/
-    REQ20260428-owner-phone-validation/
+    {change}/
       proposal.md
       delta-spec.md
       delta-design.md
       tasks.md
       validation.md
+      review.md
       .matspec-state.json
+      workflow.yaml
     archives/
+  templates/
+  extensions/
 
 .matspec-cli/
   config.yaml
+  workflows/
+  workflow-commands/
+  manifests/
   runs/
+  report-queue/
 ```
 
-`generate` 只写入 `.matspec-cli/runs/` 候选产物。`apply` 才会把审查后的文档发布到 `matspec/specs/`。已有全量规格默认不会被覆盖，除非显式传 `--force`。
+`generate` 只在 `.matspec-cli/runs/` 写候选文档；`apply` 才会发布到 `matspec/specs/`，已有文件必须用 `--force` 才能覆盖。
 
-`generate/apply` 只用于 baseline recovery。已确认变更的全量文档演进发生在 done finalization：实现和验证完成后，coding agent 根据 `delta-spec.md` 更新 `matspec/specs/spec.md`，根据 `delta-design.md` 更新 `matspec/specs/design.md`，然后再执行 `matspec done`。
+## 生成与同步
 
-## 为什么不是普通增量 spec
-
-OpenSpec 类工具很适合轻量增量变更，但如果没有恢复当前系统的全量基线，增量 spec 容易漂移。MatSpec 的重点是：
-
-- 先恢复全量业务规格 `spec.md`
-- 先恢复全量软件设计 `design.md`
-- 每个增量变更都必须对齐这两个基线
-- Agent 只能写 CLI 授权的阶段产物
-- validation 之后不能立刻 done，必须先实现、验证，并在 done finalization 更新全量 `spec.md` / `design.md`
-
-## Agent 集成
-
-```bash
-matspec integration install all
-```
-
-`generate --runner auto` 会优先复用本机已登录的工具：
+默认 runner 是 `opencode`，支持：
 
 ```text
-codex -> claude -> opencode -> deterministic stub
+opencode  opencode-serve  relay-serve  relay-pool
+nga       codegenie       codeagent    chrys
 ```
 
-支持仓库级：
+模块分析默认并发 2、最多 10，默认重试 3 次。支持聚焦模块、batch、多路径模块、知识文件、显式 full 模板和领域扩展：
 
-- opencode commands
-- Claude Code commands and skills
-- Codex repository skills
+```bash
+matspec generate module src/auth
+matspec generate --batch modules.json --concurrency 4
+matspec generate --knowledge docs/context
+```
+
+也可以从 CodeWiki 同步：
+
+```bash
+matspec auth login
+matspec sync
+# 等价入口
+matspec codewiki pull
+```
+
+## 工作流定制
+
+```bash
+matspec stages init
+matspec stages add security-review --after tasks --delegate stage-generator
+matspec stages validate
+
+matspec template list
+matspec template copy proposal
+matspec template sync
+
+matspec extension install harmonyos
+matspec extension install ux
+```
+
+每个 change 在创建时冻结工作流、模板和命令的 SHA-256。引用发生漂移后，导航、确认和归档都会阻断；确认兼容后可审计刷新：
+
+```bash
+matspec workflow refresh-snapshot <change> --confirm-compatible "已审查模板变更"
+```
 
 ## 开发验证
 
 ```bash
 npm test
-node bin/matspec.js --help
-node bin/matspec.js --lang en --help
+npm pack --dry-run
+npm run web
 ```
 
-## 来源与致谢
-
-MatSpec 基于 MetaSpec 派生，并在此基础上进行中文文档、本地化命令入口和命名调整。
-
-MetaSpec 原项目：https://github.com/kvenux/metaspec
+当前实现与行为契约见 [docs/full-spec.md](docs/full-spec.md) 和 [docs/full-design.md](docs/full-design.md)。产品、命令、目录、环境变量和 Agent 命令统一使用 `matspec` / `MATSPEC_*`，不提供旧名称兼容入口。
