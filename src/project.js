@@ -76,7 +76,7 @@ export function initProject(targetPath, options = {}) {
     message: tr(options, `Checked MatSpec project: ${root}`, `已检查 matspec 项目：${root}`),
     next: existingDocs.length
       ? ["matspec start AR-feature-name"]
-      : ["matspec generate", "matspec show", "matspec apply", ...(!options.no_codewiki ? ["matspec sync"] : [])]
+      : ["matspec generate", "matspec show", "matspec apply"]
   };
 }
 

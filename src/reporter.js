@@ -5,7 +5,6 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { projectPaths } from "./project.js";
 import { VERSION } from "./constants.js";
-import { readAuth } from "./auth.js";
 
 export async function reportUsage(command, options, result, durationMs) {
   if (process.env.MATSPEC_NO_REPORT || options.noReport) return;
@@ -88,8 +87,6 @@ function queue(runtime, event, error) {
 }
 
 function identity() {
-  const auth = readAuth();
-  if (auth?.userName || auth?.accountId) return auth.userName || auth.accountId;
   try { return os.userInfo().username; } catch {}
   return crypto.createHash("sha256").update(`${os.homedir()}|${os.hostname()}`).digest("hex").slice(0, 16);
 }

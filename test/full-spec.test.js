@@ -6,10 +6,8 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { builtinWorkflow, validateWorkflow } from "../src/workflow.js";
 import { parseArgs } from "../src/args.js";
-import { encryptToken, decryptToken } from "../src/auth.js";
 import { parseTasks } from "../src/implement.js";
 import { redact } from "../src/reporter.js";
-import { sanitizeGitUrl } from "../src/codewiki.js";
 
 const CLI = path.resolve("bin/matspec.js");
 
@@ -64,6 +62,22 @@ test("argument parser preserves documented repeatable and strict-unknown behavio
   assert.deepEqual(parsed.options.task, ["1", "2"]);
   assert.equal(parseArgs(["--unknown", "value"]).command, "--unknown");
   assert.throws(() => parseArgs(["generate", "--concurrency", "11"]), { code: "INVALID_CONCURRENCY" });
+});
+
+test("CLI exposes offline generation without remote sync or authentication", () => {
+  const root = project();
+  const initialized = json(run(root, ["init", "--integration", "none", "--no-template-update"]));
+  assert.deepEqual(initialized.next, ["matspec generate", "matspec show", "matspec apply"]);
+  const config = fs.readFileSync(path.join(root, ".matspec-cli/config.yaml"), "utf8");
+  assert.doesNotMatch(config, /codewiki|auth:|provider:\s*none/i);
+
+  const help = json(run(root, ["help"])).help;
+  assert.doesNotMatch(help, /matspec (?:sync|codewiki|auth)\b/i);
+  for (const command of ["sync", "codewiki", "auth"]) {
+    const result = json(run(root, [command]), 1);
+    assert.equal(result.code, "CLI_ERROR");
+    assert.match(result.message, new RegExp(command));
+  }
 });
 
 test("custom stage commands are installed and frozen drift blocks navigation", () => {
@@ -139,7 +153,7 @@ Implement it.
   assert.equal(json(run(root, ["go", started.change])).nextAction, "delegate-subagent");
 });
 
-test("extensions, batch generation, encryption and redaction use MatSpec-only contracts", () => {
+test("extensions, batch generation and redaction use MatSpec-only contracts", () => {
   const root = project();
   json(run(root, ["init", "--integration", "none", "--no-template-update"]));
   const installed = json(run(root, ["extension", "install", "harmonyos"]));
@@ -153,14 +167,10 @@ test("extensions, batch generation, encryption and redaction use MatSpec-only co
   const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", batch.runId, "manifest.json"), "utf8"));
   assert.deepEqual(manifest.modules[0].paths, ["src/a", "src/b"]);
 
-  const encrypted = encryptToken("secret-token");
-  assert.match(encrypted, /^v1:/);
-  assert.equal(decryptToken(encrypted), "secret-token");
   assert.deepEqual(redact({ token: "x", nested: { apiKey: "y", safe: "z" } }), {
     token: "***REDACTED***",
     nested: { apiKey: "***REDACTED***", safe: "z" }
   });
-  assert.doesNotMatch(sanitizeGitUrl("https://user:pass@example.com/team/repo.git"), /user|pass/);
 });
 
 test("static website serves GET and HEAD and rejects unsupported methods", async (t) => {

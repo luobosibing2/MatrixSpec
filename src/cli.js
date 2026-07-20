@@ -14,8 +14,6 @@ import { isZh, tr } from "./i18n.js";
 import { implementCommand } from "./implement.js";
 import { refreshWorkflowSnapshot } from "./workflow.js";
 import { extensionCommand, stagesCommand, templateCommand } from "./customization.js";
-import { authCommand } from "./auth.js";
-import { codewikiCommand, syncFromCodeWiki } from "./codewiki.js";
 import { reportUsage } from "./reporter.js";
 import { checkForUpdates } from "./version-check.js";
 import { generateBatch } from "./batch-generation.js";
@@ -92,15 +90,6 @@ export async function main(argv = []) {
       break;
     case "extension":
       result = extensionCommand(options, args);
-      break;
-    case "auth":
-      result = await authCommand(options, args);
-      break;
-    case "sync":
-      result = await syncFromCodeWiki(options);
-      break;
-    case "codewiki":
-      result = await codewikiCommand(options, args);
       break;
     case "generate":
       result = await generateCommand(options, args);
@@ -355,9 +344,6 @@ ${commandLabel}:
   matspec done|archive [change]
   matspec generate [module <path>] [--batch modules.json]
   matspec show|apply
-  matspec sync
-  matspec codewiki pull
-  matspec auth login|status|logout
   matspec integration list|install|remove
   matspec workflow refresh-snapshot
   matspec stages init|list|add|remove|validate|cleanup

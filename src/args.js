@@ -1,18 +1,15 @@
 const VALUE_OPTIONS = new Set([
-  "--path", "--change", "--integration", "--confirm-compatible", "--token", "--project-url",
-  "--codewiki-project-url", "--project-id", "--codewiki-project-id", "--codehub-project-id",
-  "--network-zone", "--zone", "--branch", "--visibility", "--auth-poll-attempts",
-  "--auth-poll-interval-ms", "--runner", "--serve-url", "--model", "--agent", "--concurrency",
+  "--path", "--change", "--integration", "--confirm-compatible",
+  "--runner", "--serve-url", "--model", "--agent", "--concurrency",
   "--retries", "--batch", "--design-template", "--spec-template", "--knowledge", "--template",
-  "--complete", "--block", "--max-lag", "--commit-scan-limit", "--file", "--label", "--delegate",
-  "--objective", "--after", "--codewiki-timeout-ms", "--lang", "--default-runner", "--mode"
+  "--complete", "--block", "--file", "--label", "--delegate",
+  "--objective", "--after", "--lang", "--default-runner", "--mode"
 ]);
 
 const REPEATABLE_OPTIONS = new Set(["--module-path"]);
 
 const BOOLEAN_OPTIONS = new Set([
-  "--help", "-h", "--json", "--force", "--no-open", "--no-probe", "--no-codewiki",
-  "--no-template-update", "--all", "--no-persist-env", "--generate", "--run", "--resume",
+  "--help", "-h", "--json", "--force", "--no-template-update", "--run", "--resume",
   "--mock", "--no-update-check", "--required", "--clean", "--no-color", "--probe-models"
 ]);
 

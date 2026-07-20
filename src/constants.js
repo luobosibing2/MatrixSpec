@@ -132,8 +132,6 @@ validation:
 integrations:
   default: generic
   enabled: [generic]
-sync:
-  provider: none
 generation:
   runner: opencode
   supported_runners:
@@ -147,9 +145,6 @@ generation:
     - nga
   mode: module-first
   apply_requires_force_on_existing: true
-codewiki:
-  auth: yunlong-codewiki
-  auth_help: "执行 matspec auth login，通过浏览器完成云龙登录"
 extensions: {}
 `;
 
