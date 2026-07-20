@@ -16,11 +16,16 @@ function tempProject() {
 
 function run(args, options = {}) {
   const { env, ...spawnOptions } = options;
+  const useFakeGeneration =
+    args.includes("generate") &&
+    !args.includes("--runner") &&
+    !(env && Object.hasOwn(env, "MATSPEC_LLM_PROVIDER")) &&
+    !(env?.PATH || env?.Path);
   const result = spawnSync(process.execPath, [CLI, ...args], {
     encoding: "utf8",
     env: {
       ...process.env,
-      MATSPEC_LLM_PROVIDER: "",
+      MATSPEC_LLM_PROVIDER: useFakeGeneration ? "fake" : "",
       LLM_PROVIDER: "",
       MATSPEC_LLM_MODEL: "",
       LLM_MODEL: "",
@@ -105,6 +110,8 @@ const isSpec = outputPath.includes("-spec-") || (!outputPath && (previousCalls >
 const isModule = outputPath.includes("-module-");
 if (process.env.MOCK_FAIL_FIRST_MODULE_ATTEMPT === "1" && isModule && previousCalls === 0) process.exit(7);
 if (process.env.MOCK_FAIL_SRC_AUTH_MODULE === "1" && outputPath.includes("module-src-auth")) process.exit(7);
+if (process.env.MOCK_FAIL_SPEC === "1" && isSpec) process.exit(7);
+if (process.env.MOCK_FAIL_DESIGN === "1" && !isModule && !isSpec) process.exit(7);
 const content = isSpec
   ? "# Mock Codex SPEC\\n\\nDerived from design by mock codex.\\n\\n## 1. Component Purpose\\nMock spec.\\n\\n## 2. Domain Terminology\\nMock terms.\\n\\n## 3. Actors and Boundaries\\nMock boundaries.\\n\\n## 4. DFX Constraints\\nMock DFX.\\n\\n## 5. Core Capabilities\\nMock capabilities.\\n\\n## 6. Data Constraints\\nMock data constraints.\\n"
   : isModule
@@ -175,53 +182,47 @@ test("init is idempotent and does not copy business templates", () => {
   assert.ok(second.skipped.includes(".matspec-cli/config.yaml"));
 });
 
-test("init records local coding agent detection in result and config", () => {
+test("init records supported local coding agent detection", () => {
   const root = tempProject();
   const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-bin-"));
-  makeMockCommand(binDir, "codex", "codex mock 1.0.0");
+  makeMockCommand(binDir, "opencode", "opencode mock 1.0.0");
 
   const env = { ...process.env, PATH: binDir, Path: binDir };
   const result = json(run(["init", root, "--integration", "none", "--probe-models", "--json"], { env }));
   assert.equal(result.generation.probeModels.requested, true);
   assert.equal(result.generation.probeModels.status, "not_implemented");
-  assert.equal(result.generation.externalAgents.codex.available, true);
-  assert.equal(result.generation.externalAgents.codex.version, "codex mock 1.0.0");
-  assert.equal(result.generation.externalAgents.codex.recommendedModel, "gpt-5.5");
-  assert.equal(result.generation.externalAgents.codex.fallbackModel, undefined);
-  assert.equal(result.generation.externalAgents.claude.available, false);
-  assert.equal(result.generation.externalAgents.claude.recommendedModel, "claude-sonnet-4-6");
+  assert.equal(result.generation.externalAgents.opencode.available, true);
+  assert.equal(result.generation.externalAgents.opencode.version, "opencode mock 1.0.0");
+  assert.equal(result.generation.externalAgents.nga.available, false);
 
   const config = fs.readFileSync(path.join(root, ".matspec-cli/config.yaml"), "utf8");
   assert.match(config, /generation:/);
-  assert.match(config, /requested: true/);
-  assert.match(config, /status: not_implemented/);
-  assert.match(config, /externalAgents:/);
-  assert.match(config, /codex:\n      available: true/);
-  assert.match(config, /claude:\n      available: false/);
+  assert.match(config, /runner: opencode/);
+  assert.match(config, /supported_runners:/);
 });
 
-test("init can set default generation runner and generate honors it", () => {
+test("generate honors an explicit runner", () => {
   const root = tempProject();
   const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
   makeMockRunner(binDir, "codex", codexMockScript());
 
   const init = json(
-    run(["init", root, "--integration", "none", "--default-runner", "codex", "--json"], {
+    run(["init", root, "--integration", "none", "--json"], {
       env: mockRunnerEnv(binDir)
     })
   );
-  assert.equal(init.generation.defaultRunner, "codex");
+  assert.equal(init.generation.defaultRunner, "opencode");
   const config = fs.readFileSync(path.join(root, ".matspec-cli/config.yaml"), "utf8");
-  assert.match(config, /defaultRunner: codex/);
+  assert.match(config, /runner: opencode/);
 
   writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
-  const generated = json(run(["--path", root, "generate", "--json"], { env: mockRunnerEnv(binDir) }));
+  const generated = json(run(["--path", root, "generate", "--runner", "codex", "--json"], { env: mockRunnerEnv(binDir) }));
   const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "manifest.json"), "utf8"));
   assert.equal(manifest.runner, "codex");
   assert.equal(manifest.provider, "codex");
 });
 
-test("init preserves user-owned generation config while refreshing agent detection", () => {
+test("init preserves user-owned generation config", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
   const configFile = path.join(root, ".matspec-cli/config.yaml");
@@ -231,7 +232,6 @@ test("init preserves user-owned generation config while refreshing agent detecti
   json(run(["init", root, "--integration", "none", "--json"]));
   const config = fs.readFileSync(configFile, "utf8");
   assert.match(config, /customKey: keep-me/);
-  assert.match(config, /externalAgents:/);
   assert.equal((config.match(/generation:/g) || []).length, 1);
 });
 
@@ -249,7 +249,7 @@ test("status, go, accept, and archive follow the stage model", () => {
   json(run(["init", root, "--integration", "none", "--json"]));
   json(run(["--path", root, "start", "REQ20260428-user-login", "--json"]));
   let status = json(run(["--path", root, "status", "--json"]));
-  assert.equal(status.stages[0].status, "clarifying");
+  assert.equal(status.stages[0].status, "pending");
   assert.equal(status.stages[1].status, "blocked");
 
   const changeDir = path.join(root, "matspec/changes/REQ20260428-user-login");
@@ -265,7 +265,7 @@ test("status, go, accept, and archive follow the stage model", () => {
   assert.equal(accepted.acceptedStage, "proposal");
   status = json(run(["--path", root, "status", "--json"]));
   assert.equal(status.stages[0].status, "confirmed");
-  assert.equal(status.stages[1].status, "clarifying");
+  assert.equal(status.stages[1].status, "pending");
   go = json(run(["--path", root, "go", "--json"]));
   assert.equal(go.stage.key, "delta-spec");
   assert.equal(go.stage.requiresFullSpec, true);
@@ -281,20 +281,19 @@ test("status, go, accept, and archive follow the stage model", () => {
     fs.writeFileSync(path.join(changeDir, file), body, "utf8");
     const acceptedStage = json(run(["--path", root, "accept", "--json"]));
     if (file === "validation.md") {
-      assert.equal(acceptedStage.readyForImplementation, true);
-      assert.match(acceptedStage.message, /可进入实现/);
-      assert.ok(acceptedStage.next.some((item) => item.includes("执行实现")));
+      assert.equal(acceptedStage.waitForImplementation, true);
+      assert.equal(acceptedStage.nextStage.key, "implementation");
     }
   }
 
   go = json(run(["--path", root, "go", "--json"]));
-  assert.equal(go.nextAction, "implementation");
-  assert.match(go.message, /可进入实现/);
-  assert.ok(go.next.some((item) => item.includes("tasks.md")));
+  assert.equal(go.nextAction, "delegate-subagent");
+  assert.equal(go.delegate, "task-executor");
+  assert.ok(go.next.some((item) => item.includes("implement --run")));
 
   const blockedArchive = run(["--path", root, "archive", "--json"]);
   assert.equal(blockedArchive.status, 1);
-  assert.equal(JSON.parse(blockedArchive.stdout).code, "FULL_DOCS_NOT_UPDATED");
+  assert.equal(JSON.parse(blockedArchive.stderr).code, "STAGE_NOT_CONFIRMED");
 
   const archived = json(run(["--path", root, "archive", "--force", "--json"]));
   assert.match(archived.archive, /matspec\/changes\/archives\/\d{4}-\d{2}-\d{2}-REQ20260428-user-login/);
@@ -363,17 +362,17 @@ test("integration install supports Claude Code and Codex repository commands", (
   const list = json(run(["--path", root, "integration", "list", "--json"]));
   assert.deepEqual(
     list.integrations.map((integration) => integration.name),
-    ["opencode", "claude-code", "codex"]
+    ["opencode", "nga", "codegenie", "codeagent", "chrys", "claude-code", "codex"]
   );
 });
 
-test("init installs all supported integrations by default", () => {
+test("init installs nga integration by default in non-interactive mode", () => {
   const root = tempProject();
   const result = json(run(["init", root, "--json"]));
-  assert.equal(result.integration.integration, "all");
+  assert.equal(result.integration.integration, "nga");
   assert.ok(fs.existsSync(path.join(root, ".opencode/command/matspec.md")));
-  assert.ok(fs.existsSync(path.join(root, ".claude/commands/matspec.md")));
-  assert.ok(fs.existsSync(path.join(root, ".agents/skills/matspec/SKILL.md")));
+  assert.ok(fs.existsSync(path.join(root, ".opencode/agents/stage-generator.md")));
+  assert.ok(fs.existsSync(path.join(root, ".opencode/agents/task-executor.md")));
 });
 
 test("validate reports required structure errors", () => {
@@ -486,6 +485,9 @@ test("done requires full spec and design to be refreshed after validation", () =
     fs.writeFileSync(path.join(changeDir, file), body, "utf8");
     json(run(["--path", root, "accept", "--json"]));
   }
+  json(run(["--path", root, "accept", "--json"]));
+  fs.writeFileSync(path.join(changeDir, "review.md"), "# Review\n\nDecision: Approved\n\n## Conclusion\nReady.\n", "utf8");
+  json(run(["--path", root, "accept", "--json"]));
 
   let result = run(["--path", root, "done", change, "--json"]);
   assert.equal(result.status, 1);
@@ -532,6 +534,9 @@ test("archive enforces done finalization unless force is used", () => {
     fs.writeFileSync(path.join(changeDir, file), body, "utf8");
     json(run(["--path", root, "accept", "--json"]));
   }
+  json(run(["--path", root, "accept", "--json"]));
+  fs.writeFileSync(path.join(changeDir, "review.md"), "# Review\n\nDecision: Approved\n", "utf8");
+  json(run(["--path", root, "accept", "--json"]));
 
   let result = run(["--path", root, "archive", change, "--json"]);
   assert.equal(result.status, 1);
@@ -555,7 +560,7 @@ test("show reports a clear message when no generated run exists", () => {
   assert.match(payload.message, /matspec generate/);
 });
 
-test("generate creates a run with manifest, spec, and design stub artifacts", () => {
+test("generate creates a staged module-first run with fake runner artifacts", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
 
@@ -566,15 +571,14 @@ test("generate creates a run with manifest, spec, and design stub artifacts", ()
   const runDir = path.join(root, ".matspec-cli/runs", generated.runId);
   const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
   assert.equal(manifest.runId, generated.runId);
-  assert.equal(manifest.runner, "auto");
-  assert.equal(manifest.generationMode, "stub");
+  assert.equal(manifest.runner, "opencode");
+  assert.equal(manifest.provider, "fake");
+  assert.equal(manifest.generationMode, "react");
   assert.equal(manifest.artifacts.spec, "spec.md");
   assert.equal(manifest.artifacts.design, "design.md");
   const spec = fs.readFileSync(path.join(runDir, "spec.md"), "utf8");
   const design = fs.readFileSync(path.join(runDir, "design.md"), "utf8");
-  assert.match(spec, /generated by matspec stub/);
   assert.match(spec, /## 1\. 组件定位/);
-  assert.match(design, /generated by matspec stub/);
   assert.match(design, /## 1\. 设计概述/);
 });
 
@@ -620,13 +624,12 @@ test("generate scans repository and plans src modules", () => {
   assert.ok(scan.includedFiles.includes("src/build/index.js"));
   assert.ok(scan.includedFiles.includes("src/payment/pay.js"));
   assert.ok(scan.includedFiles.includes("README.md"));
-  assert.ok(scan.includedFiles.includes("docs/api.md"));
+  assert.equal(scan.includedFiles.includes("docs/api.md"), false);
   assert.equal(scan.includedFiles.includes("node_modules/ignored/index.js"), false);
   assert.equal(scan.includedFiles.includes("dist/bundle.js"), false);
   assert.equal(scan.includedFiles.includes("coverage/report.txt"), false);
   assert.equal(scan.includedFiles.includes(".matspec-cli/ignored.txt"), false);
-  assert.match(scan.fileTree, /^docs\/$/m);
-  assert.match(scan.fileTree, /^  api\.md$/m);
+  assert.doesNotMatch(scan.fileTree, /^docs\/$/m);
   assert.match(scan.fileTree, /^src\/$/m);
   assert.match(scan.fileTree, /^  auth\/$/m);
   assert.match(scan.fileTree, /^    login\.js$/m);
@@ -661,12 +664,19 @@ test("scanner returns source directory stats, core coverage, and line-numbered e
   writeProjectFile(root, "docs/deploy.md", "# Deploy\n\nUse the release job.\n");
   writeProjectFile(root, "src/auth/login.js", "export function login() {\n  return true;\n}\n");
   writeProjectFile(root, "src/auth/session.js", "export function session() {\n  return null;\n}\n");
+  writeProjectFile(root, "BUILD.gn", "group(\"demo\") {}\n");
+  writeProjectFile(root, "CMakeLists.txt", "cmake_minimum_required(VERSION 3.20)\n");
+  writeProjectFile(root, "etc/web_config.xml", "<config />\n");
   writeProjectFile(root, "tests/auth.test.js", "test('auth', () => {});\n");
 
   const scan = scanRepository(root);
 
+  assert.ok(scan.includedFiles.includes("BUILD.gn"));
+  assert.ok(scan.includedFiles.includes("CMakeLists.txt"));
+  assert.ok(scan.includedFiles.includes("etc/web_config.xml"));
   assert.match(scan.dirStats, /src\/auth\/\s+\(2 files, 6 lines\)/);
   assert.equal(scan.sourceFileStats.find((file) => file.path === "src/auth/login.js").lines, 3);
+  assert.equal(scan.sourceFileStats.some((file) => file.path === "CMakeLists.txt"), false);
   assert.deepEqual(scan.coreDirStats.find((dir) => dir.path === "src").files, 2);
   assert.match(scan.sourceExcerpts.find((item) => item.path === "src/auth/login.js").content, /1: export function login/);
   assert.match(scan.docsFiles.find((file) => file.path === "docs/deploy.md").content, /release job/);
@@ -845,6 +855,71 @@ test("planner discovers OpenHarmony components_ng pattern modules", () => {
   assert.ok(plan.modules.some((module) => module.path === "frameworks/core/components_ng/pattern/waterflow"));
 });
 
+test("planner discovers OpenHarmony WebView ohos_nweb module surfaces", () => {
+  const files = [
+    "ohos_nweb/BUILD.gn",
+    "ohos_nweb/src/nweb_helper.cpp",
+    "ohos_nweb/src/nweb_config_helper.cpp",
+    "ohos_nweb/src/nweb_surface_adapter.cpp",
+    "ohos_nweb/include/nweb_helper.h",
+    "ohos_interface/ohos_nweb_glue.cpp",
+    "interfaces/inner_api/nweb/webview_value.h",
+    "etc/web_config.xml",
+    "arkweb_utils/native_messaging/native_message_port.cpp"
+  ];
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: files,
+    sourceFileStats: files
+      .filter((file) => /\.(?:cpp|h)$/i.test(file))
+      .map((file, index) => ({ path: file, lines: 100 + index }))
+  };
+
+  const plan = planModules("C:/repo/web_webview", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.ok(paths.includes("ohos_nweb"));
+  assert.ok(paths.includes("ohos_interface"));
+  assert.ok(paths.includes("interfaces/inner_api"));
+  assert.equal(paths[0], "ohos_nweb");
+  assert.equal(paths.includes("."), false);
+  assert.equal(paths.includes("arkweb_utils/native_messaging"), false);
+  assert.doesNotMatch(plan.modules[0].description, /Fallback/);
+});
+
+test("planner does not apply WebView labels without ohos_nweb signal", () => {
+  const files = ["interfaces/inner_api/nweb/webview_value.h", "interfaces/kits/nweb/webview_controller.h"];
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: files,
+    sourceFileStats: files.map((file, index) => ({ path: file, lines: 100 + index }))
+  };
+
+  const plan = planModules("C:/repo/native_interfaces", scan);
+
+  assert.ok(plan.modules.some((module) => module.path === "interfaces/inner_api"));
+  assert.doesNotMatch(plan.modules[0].description, /WebView/);
+});
+
+test("planner does not apply WebView labels for third party ohos_nweb paths", () => {
+  const sourceFileStats = [
+    ...Array.from({ length: 320 }, (_, index) => ({ path: `engine/render/file_${index}.cpp`, lines: 20 })),
+    { path: "third_party/ohos_nweb/foo.cpp", lines: 40 },
+    { path: "interfaces/inner_api/nweb/webview_value.h", lines: 80 }
+  ];
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: sourceFileStats.map((file) => file.path),
+    sourceFileStats
+  };
+
+  const plan = planModules("C:/repo/large-native", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.ok(paths.includes("engine/render"));
+  assert.equal(paths.includes("interfaces/inner_api"), false);
+});
+
 test("planner discovers SDK training and custom operator modules", () => {
   const scan = {
     primaryExtension: ".py",
@@ -874,6 +949,201 @@ test("planner discovers SDK training and custom operator modules", () => {
   assert.ok(paths.includes("cust_op/tf_cpu_op"));
 });
 
+test("planner discovers RecSDK SDK and custom operator surfaces", () => {
+  const files = [
+    "training/tf_rec_v1/python/core/emb/emb_factory.py",
+    "training/tf_rec_v2/mxrec/core/train.py",
+    "training/torch_rec_v1/hybrid_torchrec/pipeline.py",
+    "training/torch_rec_v2/dynamic_emb/table.py",
+    "training/common/utils/config.py",
+    "mxrec/core/embedding.py",
+    "dynamic_emb/table.py",
+    "hybrid_torchrec/pipeline.py",
+    "cust_op/ascendc_op/src/kernel.cc",
+    "validators/check_config.py",
+    "setup.py",
+    "pyproject.toml",
+    "CMakeLists.txt",
+    "docs/zh/mxrec/api/embedding.md",
+    "docs/zh/release/package.md",
+    "release/notes.md",
+    "tests/cpp/test_kernel.cpp",
+    ...Array.from({ length: 14 }, (_, index) => `training/extra_${index}/core.py`),
+    ...Array.from({ length: 12 }, (_, index) => `cust_op/extra_${index}/src/kernel.cc`),
+    ...Array.from({ length: 10 }, (_, index) => `docs/zh/package_${index}/api/reference.md`),
+    ...Array.from({ length: 320 }, (_, index) => `training/zzzz_big/file_${index}.py`)
+  ];
+  const scan = {
+    primaryExtension: ".py",
+    includedFiles: files,
+    sourceFileStats: files
+      .filter((file) => /\.(?:py|cc|cpp)$/i.test(file) && !file.startsWith("tests/"))
+      .map((file, index) => ({ path: file, lines: file.includes("/extra_") ? 500 + index : 120 + index }))
+  };
+
+  const plan = planModules("C:/repo/RecSDK", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  for (const expected of [
+    "training/tf_rec_v1",
+    "training/tf_rec_v2",
+    "training/torch_rec_v1",
+    "training/torch_rec_v2",
+    "training/common",
+    "mxrec",
+    "dynamic_emb",
+    "hybrid_torchrec",
+    "cust_op/ascendc_op",
+    "validators",
+    "setup.py",
+    "pyproject.toml",
+    "CMakeLists.txt",
+    "docs/zh/mxrec/api",
+    "docs/zh/release",
+    "release",
+    "tests/cpp",
+    "training/zzzz_big"
+  ]) {
+    assert.ok(paths.includes(expected), expected);
+  }
+  assert.equal(paths.includes("."), false);
+});
+
+test("planner derives bounded source-heavy modules for large repositories without known patterns", () => {
+  const sourceFileStats = [
+    ...Array.from({ length: 180 }, (_, index) => ({ path: `engine/render/file_${index}.cpp`, lines: 20 })),
+    ...Array.from({ length: 120 }, (_, index) => ({ path: `engine/runtime/file_${index}.cpp`, lines: 30 })),
+    ...Array.from({ length: 90 }, (_, index) => ({ path: `platform/adapter/file_${index}.cpp`, lines: 25 }))
+  ];
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: sourceFileStats.map((file) => file.path),
+    sourceFileStats
+  };
+
+  const plan = planModules("C:/repo/large-native", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.equal(paths.includes("."), false);
+  assert.ok(paths.includes("engine/render"));
+  assert.ok(paths.includes("engine/runtime"));
+  assert.ok(paths.includes("platform/adapter"));
+  assert.ok(plan.modules.length <= 8);
+});
+
+test("planner does not let generic CMake files block large source-heavy fallback", () => {
+  const sourceFileStats = Array.from({ length: 320 }, (_, index) => ({ path: `engine/render/file_${index}.cpp`, lines: 20 }));
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: ["CMakeLists.txt", ...sourceFileStats.map((file) => file.path)],
+    sourceFileStats
+  };
+
+  const plan = planModules("C:/repo/large-native", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.ok(paths.includes("engine/render"));
+  assert.equal(paths.includes("CMakeLists.txt"), false);
+});
+
+test("planner does not let generic validators directories trigger SDK planning", () => {
+  const sourceFileStats = [
+    ...Array.from({ length: 320 }, (_, index) => ({ path: `engine/render/file_${index}.cpp`, lines: 20 })),
+    { path: "validators/schema/check.py", lines: 500 }
+  ];
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: sourceFileStats.map((file) => file.path),
+    sourceFileStats
+  };
+
+  const plan = planModules("C:/repo/large-native", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.ok(paths.includes("engine/render"));
+  assert.equal(paths.includes("validators"), false);
+});
+
+test("planner does not let generic training directories trigger SDK planning", () => {
+  const sourceFileStats = [
+    ...Array.from({ length: 320 }, (_, index) => ({ path: `engine/render/file_${index}.cpp`, lines: 20 })),
+    { path: "training/benchmarks/run.py", lines: 500 }
+  ];
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: sourceFileStats.map((file) => file.path),
+    sourceFileStats
+  };
+
+  const plan = planModules("C:/repo/large-native", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.ok(paths.includes("engine/render"));
+  assert.equal(paths.includes("training/benchmarks"), false);
+});
+
+test("planner does not let generic training common directories trigger SDK planning", () => {
+  const sourceFileStats = [
+    ...Array.from({ length: 320 }, (_, index) => ({ path: `engine/render/file_${index}.cpp`, lines: 20 })),
+    { path: "training/common/run.py", lines: 500 }
+  ];
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: sourceFileStats.map((file) => file.path),
+    sourceFileStats
+  };
+
+  const plan = planModules("C:/repo/large-native", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.ok(paths.includes("engine/render"));
+  assert.equal(paths.includes("training/common"), false);
+});
+
+test("planner does not let tiny SDK-looking surfaces hide large source-heavy fallback", () => {
+  for (const [sdkPath, count] of [
+    ["cust_op/foo", 10],
+    ["mxrec", 10],
+    ["dynamic_emb", 10],
+    ["hybrid_torchrec", 10],
+    ["cust_op/foo", 107]
+  ]) {
+    const extension = sdkPath === "cust_op/foo" ? "cpp" : "py";
+    const sourceFileStats = [
+      ...Array.from({ length: 320 }, (_, index) => ({ path: `engine/render/file_${index}.cpp`, lines: 20 })),
+      ...Array.from({ length: count }, (_, index) => ({ path: `${sdkPath}/file_${index}.${extension}`, lines: 50 }))
+    ];
+    const scan = {
+      primaryExtension: ".cpp",
+      includedFiles: sourceFileStats.map((file) => file.path),
+      sourceFileStats
+    };
+
+    const plan = planModules("C:/repo/large-native", scan);
+    const paths = plan.modules.map((module) => module.path);
+
+    assert.ok(paths.includes("engine/render"), sdkPath);
+  }
+});
+
+test("planner does not let tiny component-like tools hide large source-heavy fallback", () => {
+  const sourceFileStats = [
+    ...Array.from({ length: 320 }, (_, index) => ({ path: `engine/render/file_${index}.cpp`, lines: 20 })),
+    { path: "tools/release/build.sh", lines: 15 }
+  ];
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: sourceFileStats.map((file) => file.path),
+    sourceFileStats
+  };
+
+  const plan = planModules("C:/repo/large-native", scan);
+  const paths = plan.modules.map((module) => module.path);
+
+  assert.ok(paths.includes("engine/render"));
+  assert.equal(paths.includes("tools/release"), false);
+});
+
 test("planner does not label large fallback repositories as small projects", () => {
   const includedFiles = Array.from({ length: 1001 }, (_, index) => `flat/file-${index}.cpp`);
   const scan = {
@@ -887,7 +1157,7 @@ test("planner does not label large fallback repositories as small projects", () 
   assert.equal(plan.modules.length, 1);
   assert.equal(plan.modules[0].path, ".");
   assert.doesNotMatch(plan.modules[0].description, /small project/i);
-  assert.match(plan.modules[0].description, /no safe module boundaries/i);
+  assert.match(plan.modules[0].description, /large repository|no safe module boundaries/i);
 });
 
 test("planner keeps small project root fallback wording for tiny repositories", () => {
@@ -906,6 +1176,106 @@ test("planner keeps small project root fallback wording for tiny repositories", 
       description: "Fallback module for a small project without obvious source module directories."
     }
   ]);
+});
+
+test("planner validates explicit focused target is present", () => {
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: ["ohos_nweb/src/nweb_helper.cpp", "arkweb_utils/native_messaging/native_message_port.cpp"],
+    sourceFileStats: [
+      { path: "ohos_nweb/src/nweb_helper.cpp", lines: 120 },
+      { path: "arkweb_utils/native_messaging/native_message_port.cpp", lines: 120 }
+    ]
+  };
+
+  const plan = planModules("C:/repo/web_webview", scan, { focusedTarget: "ohos_nweb" });
+
+  assert.equal(plan.modules[0].path, "ohos_nweb");
+  assert.equal(plan.focusedTarget, "ohos_nweb");
+});
+
+test("planner reports focused target planning failure when target has no source boundary", () => {
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: ["arkweb_utils/native_messaging/native_message_port.cpp"],
+    sourceFileStats: [{ path: "arkweb_utils/native_messaging/native_message_port.cpp", lines: 120 }]
+  };
+
+  const plan = planModules("C:/repo/web_webview", scan, { focusedTarget: "ohos_nweb" });
+
+  assert.equal(plan.ok, false);
+  assert.equal(plan.code, "FOCUSED_TARGET_NOT_PLANNED");
+});
+
+test("planner focused target validation does not match partial path substrings", () => {
+  const scan = {
+    primaryExtension: ".cpp",
+    includedFiles: ["arkweb_utils/native_messaging/native_message_port.cpp"],
+    sourceFileStats: [{ path: "arkweb_utils/native_messaging/native_message_port.cpp", lines: 120 }]
+  };
+
+  const plan = planModules("C:/repo/web_webview", scan, { focusedTarget: "web" });
+
+  assert.equal(plan.ok, false);
+  assert.equal(plan.code, "FOCUSED_TARGET_NOT_PLANNED");
+});
+
+test("planner focused target injects exact target instead of accepting broad parent", () => {
+  const sourceFileStats = [
+    { path: "frameworks/core/components_v2/water_flow/water_flow_component.cpp", lines: 120 },
+    { path: "frameworks/core/components_v2/water_flow/render_water_flow.cpp", lines: 160 }
+  ];
+  const plan = planModules(
+    "C:/repo/arkui_ace_engine",
+    {
+      primaryExtension: ".cpp",
+      includedFiles: sourceFileStats.map((file) => file.path),
+      sourceFileStats
+    },
+    { focusedTarget: "frameworks/core/components_v2/water_flow" }
+  );
+
+  assert.equal(plan.ok, undefined);
+  assert.equal(plan.modules[0].path, "frameworks/core/components_v2/water_flow");
+});
+
+test("planner focused target injects requested parent instead of accepting descendant module", () => {
+  const sourceFileStats = [
+    { path: "src/auth/login.js", lines: 80 },
+    { path: "src/payments/pay.js", lines: 90 }
+  ];
+  const plan = planModules(
+    "C:/repo/app",
+    {
+      primaryExtension: ".js",
+      includedFiles: sourceFileStats.map((file) => file.path),
+      sourceFileStats
+    },
+    { focusedTarget: "src" }
+  );
+
+  assert.equal(plan.ok, undefined);
+  assert.equal(plan.modules[0].path, "src");
+  assert.equal(plan.modules[0].sourceFiles, 2);
+});
+
+test("planner reports ambiguous focused target instead of succeeding with project root", () => {
+  const sourceFileStats = [
+    { path: "src/auth/login.js", lines: 80 },
+    { path: "packages/auth/index.js", lines: 90 }
+  ];
+  const plan = planModules(
+    "C:/repo/ambiguous",
+    {
+      primaryExtension: ".js",
+      includedFiles: sourceFileStats.map((file) => file.path),
+      sourceFileStats
+    },
+    { focusedTarget: "auth" }
+  );
+
+  assert.equal(plan.ok, false);
+  assert.equal(plan.code, "FOCUSED_TARGET_AMBIGUOUS");
 });
 
 test("generate planning falls back to Project Root when no obvious module exists", () => {
@@ -1029,17 +1399,17 @@ test("generate returns JSON on stdout when project is not initialized", () => {
 test("help defaults to Chinese and advertises the minimal generate runner options", () => {
   const result = run(["help"]);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /matspec generate \[--runner auto\|codex\|claude\|opencode\]/);
-  assert.match(result.stdout, /常用流程/);
-  assert.match(result.stdout, /输出语言，默认 zh-CN/);
+  assert.match(result.stdout, /matspec generate \[module <path>\] \[--batch modules\.json\]/);
+  assert.match(result.stdout, /命令:/);
+  assert.match(result.stdout, /--runner opencode\|opencode-serve\|relay-serve\|relay-pool/);
   assert.doesNotMatch(result.stdout, /Common workflow/);
 });
 
 test("help supports English output through the language option", () => {
   const result = run(["--lang", "en", "help"]);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Common workflow/);
-  assert.match(result.stdout, /output language, default zh-CN/);
+  assert.match(result.stdout, /Commands:/);
+  assert.match(result.stdout, /Options:/);
   assert.doesNotMatch(result.stdout, /常用流程/);
 });
 
@@ -1075,7 +1445,7 @@ test("runner auto selects mock codex when available", () => {
   json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
   writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
 
-  const generated = json(run(["--path", root, "generate", "--json"], { env: mockRunnerEnv(binDir) }));
+  const generated = json(run(["--path", root, "generate", "--runner", "auto", "--json"], { env: mockRunnerEnv(binDir) }));
   const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "manifest.json"), "utf8"));
   assert.equal(manifest.runner, "codex");
   assert.equal(manifest.provider, "codex");
@@ -1091,7 +1461,7 @@ test("runner auto selects mock claude when codex is unavailable", () => {
   json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
   writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
 
-  const generated = json(run(["--path", root, "generate", "--json"], { env: mockRunnerEnv(binDir) }));
+  const generated = json(run(["--path", root, "generate", "--runner", "auto", "--json"], { env: mockRunnerEnv(binDir) }));
   const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "manifest.json"), "utf8"));
   assert.equal(manifest.runner, "claude");
   assert.equal(manifest.provider, "claude");
@@ -1222,7 +1592,7 @@ test("--mode react with mock codex writes module artifacts and react log", () =>
   writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
   writeProjectFile(root, "src/payment/pay.js", "export function pay() {}\n");
 
-  const generated = json(run(["--path", root, "generate", "--mode", "react", "--json"], { env: mockRunnerEnv(binDir) }));
+  const generated = json(run(["--path", root, "generate", "--runner", "codex", "--mode", "react", "--json"], { env: mockRunnerEnv(binDir) }));
   const runDir = path.join(root, ".matspec-cli/runs", generated.runId);
   const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
   assert.equal(manifest.runner, "codex");
@@ -1326,12 +1696,137 @@ test("generate module --mode react uses fake react module generation", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
   assert.equal(manifest.generationMode, "react");
   assert.equal(manifest.provider, "fake");
+  assert.equal(manifest.scope, "focused_module");
+  assert.equal(manifest.focusedModule, "src/auth");
   assert.equal(manifest.logs.react, "logs/react.json");
-  assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/modules/src-auth.md")));
+  assert.equal(manifest.artifacts.design, "design.md");
+  assert.equal(manifest.artifacts.spec, "spec.md");
+  assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/modules/src-auth.standard.md")));
   assert.match(fs.readFileSync(path.join(runDir, "modules/src-auth.md"), "utf8"), /generated by matspec fake react/);
+  assert.match(fs.readFileSync(path.join(runDir, "spec.md"), "utf8"), /Derived from design/);
 });
 
-test("generate module --mode direct uses module log instead of react log", () => {
+test("generate module creates focused design and spec artifacts", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+  writeProjectFile(root, "frameworks/core/components_v2/water_flow/water_flow_component.cpp", "void WaterFlowComponent() {}\n");
+  writeProjectFile(root, "frameworks/core/components_v2/grid/grid_component.cpp", "void GridComponent() {}\n");
+  writeProjectFile(root, "README.md", "# Demo\n\nGlobal grid_component notes should not enter focused synthesis.\n");
+  writeProjectFile(root, "docs/grid.md", "# Grid\n\ngrid_component docs should stay out of focused synthesis.\n");
+
+  const generated = json(
+    run(["--path", root, "generate", "module", "frameworks/core/components_v2/water_flow", "--json"], {
+      env: { MATSPEC_LLM_PROVIDER: "fake", MATSPEC_GENERATION_MODE: "react" }
+    })
+  );
+
+  const runDir = path.join(root, ".matspec-cli/runs", generated.runId);
+  const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
+  const plan = JSON.parse(fs.readFileSync(path.join(runDir, "plan.json"), "utf8"));
+
+  assert.equal(generated.ok, true);
+  assert.equal(manifest.scope, "focused_module");
+  assert.equal(manifest.focusedModule, "frameworks/core/components_v2/water_flow");
+  assert.equal(manifest.artifacts.design, "design.md");
+  assert.equal(manifest.artifacts.spec, "spec.md");
+  assert.deepEqual(plan.modules.map((module) => module.path), ["frameworks/core/components_v2/water_flow"]);
+  assert.ok(fs.existsSync(path.join(runDir, "design.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "spec.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "modules/frameworks-core-components_v2-water_flow.md")));
+  assert.match(fs.readFileSync(path.join(runDir, "design.md"), "utf8"), /Water Flow|water_flow/);
+  assert.doesNotMatch(fs.readFileSync(path.join(runDir, "design.md"), "utf8"), /grid_component/);
+  const designPrompt = fs.readFileSync(path.join(runDir, "logs/prompts/design.md"), "utf8");
+  assert.match(designPrompt, /water_flow_component/);
+  assert.doesNotMatch(designPrompt, /grid_component/);
+});
+
+test("generate module fails without full artifacts when focused module generation fails", () => {
+  const root = tempProject();
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  makeMockRunner(binDir, "codex", codexMockScript());
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
+
+  const result = run(["--path", root, "generate", "module", "src/auth", "--runner", "codex", "--mode", "react", "--json"], {
+    env: mockRunnerEnv(binDir, { MOCK_FAIL_SRC_AUTH_MODULE: "1" })
+  });
+  assert.equal(result.status, 1);
+  const failed = JSON.parse(result.stdout);
+
+  const runDir = path.join(root, ".matspec-cli/runs", failed.runId);
+  const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
+
+  assert.equal(failed.ok, false);
+  assert.equal(manifest.status, "failed");
+  assert.equal(manifest.scope, "focused_module");
+  assert.equal(manifest.focusedModule, "src/auth");
+  assert.equal(fs.existsSync(path.join(runDir, "design.md")), false);
+  assert.equal(fs.existsSync(path.join(runDir, "spec.md")), false);
+});
+
+test("generate module preserves diagnostics when focused synthesis fails after module succeeds", () => {
+  const root = tempProject();
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  makeMockRunner(binDir, "codex", codexMockScript());
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  const previous = json(run(["--path", root, "generate", "--json"]));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
+
+  const result = run(["--path", root, "generate", "module", "src/auth", "--runner", "codex", "--mode", "react", "--json"], {
+    env: mockRunnerEnv(binDir, { MOCK_FAIL_SPEC: "1" })
+  });
+  assert.equal(result.status, 1);
+  const failed = JSON.parse(result.stdout);
+
+  const runDir = path.join(root, ".matspec-cli/runs", failed.runId);
+  const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
+  const latest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs/latest.json"), "utf8"));
+
+  assert.equal(latest.runId, failed.runId);
+  assert.equal(manifest.status, "failed");
+  assert.equal(manifest.scope, "focused_module");
+  assert.equal(manifest.focusedModule, "src/auth");
+  assert.equal(manifest.artifacts.plan, "plan.json");
+  assert.equal(manifest.logs.scan, "logs/scan.json");
+  assert.equal(manifest.logs.react, "logs/react.json");
+  assert.deepEqual(manifest.artifacts.modules, ["modules/src-auth.md"]);
+  assert.ok(fs.existsSync(path.join(runDir, "modules/src-auth.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "logs/react.json")));
+  assert.equal(fs.existsSync(path.join(runDir, "design.md")), false);
+  assert.equal(fs.existsSync(path.join(runDir, "spec.md")), false);
+});
+
+test("generate module preserves diagnostics when workspace guard rejects focused run", () => {
+  const root = tempProject();
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
+  makeMockRunner(binDir, "codex", codexMockScript());
+  json(run(["init", root, "--integration", "none", "--json"], { env: mockRunnerEnv(binDir) }));
+  const previous = json(run(["--path", root, "generate", "--json"]));
+  writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
+
+  const result = run(["--path", root, "generate", "module", "src/auth", "--runner", "codex", "--mode", "react", "--json"], {
+    env: mockRunnerEnv(binDir, { MOCK_MODIFY_SOURCE: "1" })
+  });
+  assert.equal(result.status, 1);
+  const failed = JSON.parse(result.stdout);
+
+  const runDir = path.join(root, ".matspec-cli/runs", failed.runId);
+  const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
+  const latest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs/latest.json"), "utf8"));
+
+  assert.equal(latest.runId, failed.runId);
+  assert.equal(manifest.status, "failed");
+  assert.equal(manifest.error.code, "EXTERNAL_RUNNER_MODIFIED_WORKTREE");
+  assert.equal(manifest.artifacts.plan, "plan.json");
+  assert.equal(manifest.logs.scan, "logs/scan.json");
+  assert.equal(manifest.logs.react, "logs/react.json");
+  assert.deepEqual(manifest.artifacts.modules, ["modules/src-auth.md"]);
+  assert.ok(fs.existsSync(path.join(runDir, "modules/src-auth.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "logs/react.json")));
+  assert.ok(fs.existsSync(path.join(runDir, "logs/prompts/spec.md")));
+});
+
+test("generate module --mode direct still uses module-first focused generation", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
   writeProjectFile(root, "src/auth/login.js", "export function login() {}\n");
@@ -1343,11 +1838,19 @@ test("generate module --mode direct uses module log instead of react log", () =>
   );
   const runDir = path.join(root, ".matspec-cli/runs", module.runId);
   const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
-  assert.equal(manifest.generationMode, "direct");
-  assert.equal(manifest.logs.module, "logs/module.json");
-  assert.equal("react" in manifest.logs, false);
-  assert.ok(fs.existsSync(path.join(runDir, "logs/module.json")));
-  assert.equal(fs.existsSync(path.join(runDir, "logs/react.json")), false);
+  assert.equal(manifest.generationMode, "react");
+  assert.equal(manifest.generationReason, "focused_module_forces_module_first");
+  assert.equal(manifest.scope, "focused_module");
+  assert.equal(manifest.focusedModule, "src/auth");
+  assert.equal(manifest.logs.react, "logs/react.json");
+  assert.equal(manifest.artifacts.design, "design.md");
+  assert.equal(manifest.artifacts.spec, "spec.md");
+  assert.deepEqual(manifest.artifacts.modules, ["modules/src-auth.md"]);
+  assert.ok(fs.existsSync(path.join(runDir, "modules/src-auth.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "logs/react.json")));
+  assert.ok(fs.existsSync(path.join(runDir, "design.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "spec.md")));
+  assert.equal(module.artifact, path.join(".matspec-cli/runs", module.runId, "modules/src-auth.md").replaceAll(path.sep, "/"));
 });
 
 test("external runner auto mode uses module-first generation for large context", () => {
@@ -1359,7 +1862,7 @@ test("external runner auto mode uses module-first generation for large context",
     writeProjectFile(root, `src/feature-${index}/file-${index}.js`, `export const value${index} = ${index};\n`);
   }
 
-  const generated = json(run(["--path", root, "generate", "--json"], { env: mockRunnerEnv(binDir) }));
+  const generated = json(run(["--path", root, "generate", "--runner", "auto", "--json"], { env: mockRunnerEnv(binDir) }));
   const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "manifest.json"), "utf8"));
   assert.equal(manifest.runner, "codex");
   assert.equal(manifest.generationMode, "react");
@@ -1376,7 +1879,7 @@ test("show displays fake direct generation metadata", () => {
   const shown = run(["--path", root, "show"]);
   assert.equal(shown.status, 0, shown.stderr);
   assert.match(shown.stdout, /generation mode: whole-project-direct/);
-  assert.match(shown.stdout, /runner: auto/);
+  assert.match(shown.stdout, /runner: opencode/);
   assert.match(shown.stdout, /provider: fake/);
   assert.match(shown.stdout, /model: fake-matspec-model/);
 });
@@ -1469,7 +1972,7 @@ test("external claude runner parses JSON result output", () => {
   assert.match(fs.readFileSync(callsFile, "utf8"), /claude-sonnet-4-6/);
 });
 
-test("external runner failures are structured and do not update latest", () => {
+test("external runner failures are structured and update latest diagnostics", () => {
   const root = tempProject();
   const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "matspec-runner-"));
   makeMockRunner(binDir, "codex", codexMockScript());
@@ -1484,7 +1987,7 @@ test("external runner failures are structured and do not update latest", () => {
   assert.equal(payload.ok, false);
   assert.equal(payload.code, "EXTERNAL_RUNNER_FAILED");
   assert.ok(payload.next.some((item) => item.includes("logs/*stdout.log")));
-  assert.equal(fs.existsSync(path.join(root, ".matspec-cli/runs/latest.json")), false);
+  assert.equal(fs.existsSync(path.join(root, ".matspec-cli/runs/latest.json")), true);
 });
 
 test("external runner empty output fails", () => {
@@ -1645,19 +2148,28 @@ test("apply rejects runner environment chatter in generated artifacts", () => {
   assert.ok(payload.findings.some((finding) => finding.code === "RUNNER_ENVIRONMENT_TEXT"));
 });
 
-test("generate module writes a module stub into the current run", () => {
+test("generate module writes a focused run with full artifacts", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
   const generated = json(run(["--path", root, "generate", "--json"]));
 
   const module = json(run(["--path", root, "generate", "module", "src/auth", "--json"]));
   assert.equal(module.ok, true);
-  assert.equal(module.runId, generated.runId);
+  assert.notEqual(module.runId, generated.runId);
   assert.equal(module.module, "src/auth");
 
-  const moduleFile = path.join(root, ".matspec-cli/runs", generated.runId, "modules/src-auth.md");
-  assert.match(fs.readFileSync(moduleFile, "utf8"), /generated by matspec stub/);
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", generated.runId, "manifest.json"), "utf8"));
+  const runDir = path.join(root, ".matspec-cli/runs", module.runId);
+  const moduleFile = path.join(runDir, "modules/src-auth.md");
+  assert.match(fs.readFileSync(moduleFile, "utf8"), /模块|Module/);
+  assert.ok(fs.existsSync(path.join(runDir, "design.md")));
+  assert.ok(fs.existsSync(path.join(runDir, "spec.md")));
+  assert.match(fs.readFileSync(path.join(runDir, "design.md"), "utf8"), /src\/auth/);
+  assert.doesNotMatch(fs.readFileSync(path.join(runDir, "spec.md"), "utf8"), /src\/auth/);
+  const manifest = JSON.parse(fs.readFileSync(path.join(runDir, "manifest.json"), "utf8"));
+  assert.equal(manifest.scope, "focused_module");
+  assert.equal(manifest.focusedModule, "src/auth");
+  assert.equal(manifest.artifacts.design, "design.md");
+  assert.equal(manifest.artifacts.spec, "spec.md");
   assert.deepEqual(manifest.artifacts.modules, ["modules/src-auth.md"]);
 });
 
@@ -1676,19 +2188,32 @@ test("generate module records warning when module path is missing", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
 
-  const module = json(run(["--path", root, "generate", "module", "missing/module", "--json"]));
+  const module = json(
+    run(["--path", root, "generate", "module", "missing/module", "--mode", "react", "--json"], {
+      env: { MATSPEC_LLM_PROVIDER: "fake" }
+    })
+  );
   const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", module.runId, "manifest.json"), "utf8"));
   assert.ok(manifest.warnings.includes("module path not found: missing/module"));
 });
 
-test("show guides module-only runs back to generate instead of apply", () => {
+test("generate module preserves warning when module path is missing", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+
+  const module = json(run(["--path", root, "generate", "module", "missing/module", "--json"]));
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, ".matspec-cli/runs", module.runId, "manifest.json"), "utf8"));
+  assert.ok(manifest.warnings.includes("module path not found: missing/module"));
+  assert.ok(manifest.warnings.some((warning) => /fake focused react/.test(warning)));
+});
+
+test("show treats focused module runs as applyable full artifacts", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
   json(run(["--path", root, "generate", "module", "src/auth", "--json"]));
 
   const shown = run(["--path", root, "show"]);
   assert.equal(shown.status, 0, shown.stderr);
-  assert.match(shown.stdout, /module-only run/);
-  assert.match(shown.stdout, /matspec generate/);
-  assert.doesNotMatch(shown.stdout, /\n  matspec apply\n/);
+  assert.doesNotMatch(shown.stdout, /module-only run/);
+  assert.match(shown.stdout, /matspec apply/);
 });
