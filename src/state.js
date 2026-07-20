@@ -1,51 +1,69 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { STAGES } from "./constants.js";
-import { nowStamp, readJson, rel, sha256, slugify, today, writeJson } from "./util.js";
+import YAML from "yaml";
+import { FINALIZATION_FILES } from "./constants.js";
 import { projectPaths } from "./project.js";
 import { isZh, tr } from "./i18n.js";
+import { assertNoLocalPackOverride, loadWorkflow, resolveStageTemplate, snapshotWorkflow, workflowDrift } from "./workflow.js";
+import { loadTemplateForAgent } from "./customization.js";
+import { nowStamp, readJson, rel, sha256, slugify, today, writeJson } from "./util.js";
 
 export function normalizeChangeName(input) {
   const raw = String(input || "").trim();
-  if (!raw) throw new Error("Missing change name.");
+  if (!raw) throw codedError("Missing change name.", "CHANGE_NAME_REQUIRED");
   const slug = slugify(raw);
-  if (/^[a-z]{2,}\d{6,}/i.test(raw)) {
-    return slug.replace(/^([a-z]+)(\d+)/, (_, prefix, digits) => `${prefix.toUpperCase()}${digits}`);
-  }
-  return `REQ${nowStamp()}-${slug}`;
+  if (!slug) throw codedError("Invalid change name.", "CHANGE_NAME_INVALID");
+  const name = /^[a-z]{2,}\d{6,}/i.test(raw)
+    ? slug.replace(/^([a-z]+)(\d+)/, (_, prefix, digits) => `${prefix.toUpperCase()}${digits}`)
+    : `AR${nowStamp()}-${slug}`;
+  if (name.length > 200) throw codedError("Change name exceeds 200 characters.", "CHANGE_NAME_TOO_LONG");
+  return name;
 }
 
 export function startChange(input, options = {}) {
   const paths = projectPaths(options);
+  assertNoLocalPackOverride(paths.root);
+  const workflow = loadWorkflow(paths.root);
   const change = normalizeChangeName(input);
   const dir = path.join(paths.changes, change);
-  if (fs.existsSync(dir)) throw new Error(tr(options, `Change already exists: ${change}`, `变更已存在：${change}`));
+  if (fs.existsSync(dir)) throw codedError(tr(options, `Change already exists: ${change}`, `变更已存在：${change}`), "CHANGE_ALREADY_EXISTS");
   fs.mkdirSync(dir, { recursive: true });
-  const state = initialState(change);
+  const state = initialState(change, workflow);
   writeJson(stateFile(paths.root, change), state);
+  fs.writeFileSync(path.join(dir, "workflow.yaml"), YAML.stringify(workflowForFile(state.workflow)), "utf8");
   return {
     ok: true,
     change,
-    path: path.relative(paths.root, dir).replaceAll(path.sep, "/"),
+    flowId: state.flowId,
+    path: rel(paths.root, dir),
     message: tr(options, `Created MatSpec change: ${change}`, `已创建 matspec 变更：${change}`),
-    next: [tr(options, "Run /matspec in your coding agent", "在 opencode 中执行 /matspec")]
+    next: ["matspec go --json", tr(options, "Run /matspec in your coding agent", "在 Coding Agent 中执行 /matspec")]
   };
 }
 
-export function initialState(change) {
+export function initialState(change, workflow = loadWorkflow(process.cwd())) {
+  const frozen = snapshotWorkflow(process.cwd(), workflow);
+  const stages = {};
+  frozen.stages.forEach((stage, index) => {
+    stages[stage.key] = {
+      status: index === 0 ? "clarifying" : "pending",
+      clarified: false,
+      confirmed: false,
+      ...(stage.file ? { file: stage.file } : {}),
+      required: Boolean(stage.required_for_done)
+    };
+  });
   return {
     version: 1,
     change,
-    currentStage: "proposal",
-    stages: {
-      proposal: {
-        status: "clarifying",
-        clarified: false,
-        confirmed: false,
-        file: "proposal.md"
-      }
-    },
-    history: [{ action: "create-change", stage: "proposal", timestamp: new Date().toISOString() }]
+    flowId: crypto.randomBytes(4).toString("hex"),
+    currentStage: frozen.stages[0]?.key || "completed",
+    workflow: frozen,
+    stages,
+    deprecatedStages: {},
+    subagentSession: null,
+    history: [{ action: "create-change", stage: frozen.stages[0]?.key || null, timestamp: new Date().toISOString() }]
   };
 }
 
@@ -56,8 +74,7 @@ export function stateFile(root, change) {
 export function listChanges(options = {}) {
   const paths = projectPaths(options);
   if (!fs.existsSync(paths.changes)) return [];
-  return fs
-    .readdirSync(paths.changes, { withFileTypes: true })
+  return fs.readdirSync(paths.changes, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name !== "archives")
     .map((entry) => entry.name)
     .sort();
@@ -66,18 +83,24 @@ export function listChanges(options = {}) {
 export function resolveChange(options = {}, explicit) {
   if (explicit) return explicit;
   if (options.change) return options.change;
+  const root = projectPaths(options).root;
   const changes = listChanges(options);
-  if (changes.length === 0) return null;
-  if (changes.length > 1) throw new Error(`Multiple active changes found. Use --change to select one: ${changes.join(", ")}`);
-  return changes[0];
+  const withState = changes.filter((change) => fs.existsSync(stateFile(root, change)));
+  return withState.at(-1) || changes.at(-1) || null;
 }
 
 export function loadState(root, change) {
-  return readJson(stateFile(root, change), initialState(change));
+  const file = stateFile(root, change);
+  if (!fs.existsSync(file)) return null;
+  return readJson(file);
 }
 
 export function saveState(root, change, state) {
   writeJson(stateFile(root, change), state);
+}
+
+export function stagesOf(state) {
+  return state?.workflow?.stages || [];
 }
 
 export function ensureStageRecord(state, stage) {
@@ -85,7 +108,8 @@ export function ensureStageRecord(state, stage) {
     status: "pending",
     clarified: false,
     confirmed: false,
-    file: stage.file
+    ...(stage.file ? { file: stage.file } : {}),
+    required: Boolean(stage.required_for_done)
   };
   return state.stages[stage.key];
 }
@@ -93,23 +117,20 @@ export function ensureStageRecord(state, stage) {
 export function stageStatus(root, change, state, stage) {
   const record = ensureStageRecord(state, stage);
   if (record.confirmed) return "confirmed";
-  const previous = STAGES.slice(0, stage.index - 1);
-  if (previous.some((item) => !ensureStageRecord(state, item).confirmed)) return "blocked";
+  if (stage.noFile) return record.status === "in_progress" || record.status === "subagent-running" ? record.status : "pending";
   const file = path.join(root, "matspec/changes", change, stage.file);
-  if (!fs.existsSync(file)) return record.status === "clarifying" ? "clarifying" : "pending";
-  const content = fs.readFileSync(file, "utf8");
-  if (isTemplateContent(content, stage.file)) return "template";
-  return "draft";
-}
-
-export function isTemplateContent(content, fileName = "") {
-  const text = content.trim();
-  if (!text) return true;
-  if (text === `# ${fileName}`) return true;
-  return (
-    /\[[^\]\n]*(?:占位符|需求编号|功能名|组件|服务|字段|名称|描述|来源|目标|系统|角色|规则|接口|流程|对象|算法|路径|类型|优先级)[^\]\n]*]/.test(text) ||
-    /F-01\s*\|\s*\[功能名]|US-01/.test(text)
-  );
+  if (fs.existsSync(file)) {
+    const content = fs.readFileSync(file, "utf8");
+    return templateMarker(content, stage.file)?.strong ? "template" : "draft";
+  }
+  const stages = stagesOf(state);
+  const index = stages.findIndex((item) => item.key === stage.key);
+  if (index <= 0) return "pending";
+  const previous = stages[index - 1];
+  if (previous.noFile) return "pending";
+  const previousFile = path.join(root, "matspec/changes", change, previous.file);
+  if (fs.existsSync(previousFile) && !templateMarker(fs.readFileSync(previousFile, "utf8"), previous.file)?.strong) return "pending";
+  return "blocked";
 }
 
 export function getStatus(options = {}, explicit) {
@@ -117,156 +138,258 @@ export function getStatus(options = {}, explicit) {
   const change = resolveChange(options, explicit);
   if (!change) return { ok: false, code: "NO_ACTIVE_CHANGE", message: tr(options, "No active MatSpec change found.", "未发现活动的 matspec 变更。") };
   const state = loadState(paths.root, change);
-  const stages = STAGES.map((stage) => ({
+  if (!state) return { ok: false, code: "CHANGE_STATE_MISSING", change, message: `缺少状态文件：matspec/changes/${change}/.matspec-state.json` };
+  const drift = workflowDrift(paths.root, state.workflow);
+  const stages = stagesOf(state).map((stage, index) => ({
     ...stage,
+    index: index + 1,
+    total: stagesOf(state).length,
     status: stageStatus(paths.root, change, state, stage),
-    filePath: `matspec/changes/${change}/${stage.file}`
+    ...(stage.file ? { filePath: `matspec/changes/${change}/${stage.file}` } : {})
   }));
-  return { ok: true, change, currentStage: state.currentStage, stages };
+  return { ok: true, changes: listChanges(options), change, flowId: state.flowId, currentStage: state.currentStage, workflow: state.workflow, drift, stages };
 }
 
 export function acceptStage(options = {}, explicitChange, explicitStage) {
   const paths = projectPaths(options);
   const change = resolveChange(options, explicitChange);
-  if (!change) throw new Error(tr(options, "No active MatSpec change found.", "未发现活动的 matspec 变更。"));
+  if (!change) throw codedError(tr(options, "No active MatSpec change found.", "未发现活动的 matspec 变更。"), "NO_ACTIVE_CHANGE");
   const state = loadState(paths.root, change);
-  const stage = STAGES.find((item) => item.key === (explicitStage || state.currentStage));
-  if (!stage) throw new Error(tr(options, `Unknown stage: ${explicitStage}`, `未知阶段：${explicitStage}`));
-  const status = stageStatus(paths.root, change, state, stage);
-  if (status === "blocked") throw new Error(tr(options, `Previous stages are incomplete; cannot accept ${stage.key}.`, `前序阶段未完成，不能确认 ${stage.key}。`));
-  if (status === "pending" || status === "clarifying") throw new Error(tr(options, `Missing stage file: ${stage.file}`, `缺少阶段文件：${stage.file}`));
-  if (status === "template") throw new Error(tr(options, `Stage file still looks like a template; cannot accept: ${stage.file}`, `阶段文件仍像模板，不能确认：${stage.file}`));
-  const record = ensureStageRecord(state, stage);
-  record.status = "confirmed";
-  record.clarified = true;
-  record.confirmed = true;
-  record.confirmedAt = new Date().toISOString();
-  state.history.push({ action: "confirm-stage", stage: stage.key, timestamp: record.confirmedAt });
-  const next = STAGES[stage.index];
-  if (next) {
-    state.currentStage = next.key;
-    const nextRecord = ensureStageRecord(state, next);
-    if (nextRecord.status === "pending") nextRecord.status = "clarifying";
-  } else {
-    state.currentStage = "completed";
-    state.implementationBaseline = captureFullDocumentBaseline(paths.root);
-    state.history.push({ action: "capture-implementation-baseline", stage: stage.key, timestamp: record.confirmedAt, documents: state.implementationBaseline.documents });
+  if (!state) throw codedError(`Missing state for change: ${change}`, "CHANGE_STATE_MISSING");
+  const drift = workflowDrift(paths.root, state.workflow);
+  if (drift.length) return { ok: false, code: "WORKFLOW_PACK_DRIFT", change, findings: drift, message: "冻结工作流引用已漂移，不能确认阶段。" };
+  const stage = stagesOf(state).find((item) => item.key === (explicitStage || state.currentStage));
+  if (!stage) throw codedError(`Unknown stage: ${explicitStage || state.currentStage}`, "UNKNOWN_STAGE");
+  for (const previous of stagesOf(state).slice(0, stagesOf(state).indexOf(stage))) {
+    if (!ensureStageRecord(state, previous).confirmed) {
+      throw codedError(tr(options, `Previous stage is unconfirmed: ${previous.key}`, `前序阶段未确认：${previous.key}`), "PREVIOUS_STAGE_UNCONFIRMED");
+    }
+  }
+  if (!stage.noFile) {
+    const file = path.join(paths.root, "matspec/changes", change, stage.file);
+    if (!fs.existsSync(file)) throw codedError(tr(options, `Missing stage file: ${stage.file}`, `缺少阶段文件：${stage.file}`), "STAGE_FILE_MISSING");
+    const marker = templateMarker(fs.readFileSync(file, "utf8"), stage.file);
+    if (marker?.strong) {
+      throw codedError(tr(options, `Stage file still looks like a template: ${stage.file}`, `阶段文件仍像模板：${stage.file}`), "STAGE_FILE_LOOKS_TEMPLATE", marker);
+    }
+  }
+  confirmStageInState(state, stage);
+  if (shouldCaptureBaseline(state, stage)) {
+    state.implementationBaseline = captureFullDocumentBaseline(paths.root, state.workflow.finalization?.require_updated);
+    state.history.push({ action: "capture-implementation-baseline", stage: stage.key, timestamp: new Date().toISOString(), documents: state.implementationBaseline.documents });
   }
   saveState(paths.root, change, state);
+  const next = stagesOf(state).find((item) => item.key === state.currentStage) || null;
   return {
     ok: true,
     change,
+    flowId: state.flowId,
     acceptedStage: stage.key,
-    acceptedLabel: stage.name,
-    nextStage: next ?? null,
-    completed: !next,
-    readyForImplementation: !next,
+    acceptedLabel: stage.label || stage.name,
+    nextStage: next,
+    completed: state.currentStage === "completed",
+    waitForImplementation: next?.key === "implementation",
     message: next
-      ? tr(options, `Accepted ${stage.key}; moving to ${next.name}.`, `已确认 ${stage.key}，进入 ${next.name}。`)
-      : tr(options, `Accepted ${stage.key}; the document chain is validated and implementation may start.`, `已确认 ${stage.key}，文档链已验证，可进入实现。`),
-    next: next
-      ? [tr(options, "Continue with /matspec in your coding agent", "继续在 opencode 中执行 /matspec")]
-      : isZh(options) ? ["执行实现任务", "运行必要验证", "done finalization 更新 full spec/design 后执行 matspec done"] : ["Implement the tasks", "Run required verification", "Run matspec done after done finalization updates full spec/design"]
+      ? tr(options, `Accepted ${stage.key}; moving to ${next.label || next.name}.`, `已确认 ${stage.key}，进入 ${next.label || next.name}。`)
+      : tr(options, `Accepted ${stage.key}; run matspec done after finalization.`, `已确认 ${stage.key}；完成全量文档最终化后执行 matspec done。`),
+    next: next ? ["matspec go --json"] : ["更新全量 spec/design", "matspec done"]
   };
+}
+
+export function enterReview(options = {}, explicitChange) {
+  const paths = projectPaths(options);
+  const change = resolveChange(options, explicitChange);
+  if (!change) return { ok: false, code: "NO_ACTIVE_CHANGE", message: "未发现活动变更。" };
+  const state = loadState(paths.root, change);
+  const review = stagesOf(state).find((stage) => stage.key === "review");
+  if (!review) return { ok: false, code: "REVIEW_STAGE_NOT_FOUND", message: "当前 workflow 没有 review 阶段。" };
+  if (!state.stages.validation?.confirmed) return { ok: false, code: "VALIDATION_NOT_CONFIRMED", message: "validation 尚未确认。" };
+  if (!state.stages.implementation?.confirmed) {
+    const tasksFile = path.join(paths.changes, change, "tasks.md");
+    const tasks = fs.existsSync(tasksFile) ? fs.readFileSync(tasksFile, "utf8") : "";
+    if (!tasksAreTerminal(tasks)) {
+      return { ok: false, code: "IMPLEMENTATION_NOT_COMPLETED", message: "implementation 任务尚未全部完成或阻塞。" };
+    }
+    return { ok: false, code: "IMPLEMENTATION_PENDING_CONFIRM", message: "implementation 尚未由用户确认。", next: ["matspec accept"] };
+  }
+  state.currentStage = "review";
+  const record = ensureStageRecord(state, review);
+  if (record.status === "pending") record.status = "clarifying";
+  state.history.push({ action: "enter-review-stage", stage: "review", timestamp: new Date().toISOString() });
+  saveState(paths.root, change, state);
+  return { ok: true, change, stage: review, next: ["matspec go --json"] };
 }
 
 export function validateFullDocumentUpdatesForDone(options = {}, explicitChange) {
   const paths = projectPaths(options);
   const change = resolveChange(options, explicitChange);
-  if (!change) {
-    return {
-      ok: false,
-      code: "NO_ACTIVE_CHANGE",
-      message: tr(options, "No active MatSpec change found.", "未发现活动的 matspec 变更。")
-    };
-  }
+  if (!change) return { ok: false, code: "NO_ACTIVE_CHANGE", message: "未发现活动变更。" };
   const state = loadState(paths.root, change);
-  const baseline = state.implementationBaseline;
+  const baseline = state?.implementationBaseline;
   if (!baseline?.documents) {
-    return {
-      ok: false,
-      code: "BASELINE_UPDATE_SNAPSHOT_MISSING",
-      message: tr(options, "Missing implementation baseline snapshot. Confirm validation.md again or use matspec archive --force only for manual recovery.", "缺少实现前 baseline 快照。请重新确认 validation.md，或仅在手工恢复时使用 matspec archive --force。")
-    };
+    return { ok: false, code: "BASELINE_UPDATE_SNAPSHOT_MISSING", message: "缺少实现前 baseline 快照。" };
   }
-
-  const current = captureFullDocumentBaseline(paths.root);
-  const required = ["matspec/specs/spec.md", "matspec/specs/design.md"];
+  const current = captureFullDocumentBaseline(paths.root, Object.keys(baseline.documents));
   const notUpdated = [];
-  for (const filePath of required) {
-    const before = baseline.documents[filePath];
+  for (const [filePath, before] of Object.entries(baseline.documents)) {
+    if (!before.exists) continue;
     const after = current.documents[filePath];
-    if (!before?.exists) {
-      notUpdated.push({ path: filePath, reason: "missing-before-implementation" });
-      continue;
-    }
-    if (!after?.exists) {
-      notUpdated.push({ path: filePath, reason: "missing-now" });
-      continue;
-    }
-    if (before.sha256 === after.sha256) {
-      notUpdated.push({ path: filePath, reason: "unchanged-since-validation" });
-    }
+    if (!after?.exists) notUpdated.push({ path: filePath, reason: "missing-now" });
+    else if (before.sha256 === after.sha256) notUpdated.push({ path: filePath, reason: "unchanged-since-baseline" });
   }
-
   if (notUpdated.length) {
-    return {
-      ok: false,
-      code: "FULL_DOCS_NOT_UPDATED",
-      message: tr(options, "Done finalization evidence is incomplete. matspec/specs/spec.md and matspec/specs/design.md must both be updated after validation before archive/done.", "done finalization 证据不完整。archive/done 前，matspec/specs/spec.md 和 matspec/specs/design.md 都必须在 validation 后更新。"),
-      notUpdated,
-      notMerged: notUpdated,
-      next: isZh(options)
-        ? ["done finalization: 更新 matspec/specs/spec.md", "done finalization: 更新 matspec/specs/design.md", "确认测试结果后再执行 matspec done"]
-        : ["Done finalization: update matspec/specs/spec.md", "Done finalization: update matspec/specs/design.md", "Confirm verification, then run matspec done"]
-    };
+    return { ok: false, code: "FULL_DOCS_NOT_UPDATED", message: "最终化证据不完整；baseline 后的全量文档必须更新。", notUpdated, notMerged: notUpdated };
   }
-
   return { ok: true, change };
-}
-
-function captureFullDocumentBaseline(root) {
-  const documents = {};
-  for (const filePath of ["matspec/specs/spec.md", "matspec/specs/design.md"]) {
-    const absolute = path.join(root, filePath);
-    documents[filePath] = fs.existsSync(absolute)
-      ? { exists: true, sha256: sha256(absolute), path: rel(root, absolute) }
-      : { exists: false, sha256: null, path: filePath };
-  }
-  return {
-    capturedAt: new Date().toISOString(),
-    documents
-  };
 }
 
 export function archiveChange(options = {}, explicitChange) {
   const paths = projectPaths(options);
   const change = resolveChange(options, explicitChange);
-  if (!change) throw new Error(tr(options, "No active MatSpec change found.", "未发现活动的 matspec 变更。"));
+  if (!change) throw codedError("No active MatSpec change found.", "NO_ACTIVE_CHANGE");
   const source = path.join(paths.changes, change);
-  if (!fs.existsSync(source)) throw new Error(tr(options, `Change directory does not exist: ${change}`, `变更目录不存在：${change}`));
+  if (!fs.existsSync(source)) throw codedError(`Change directory does not exist: ${change}`, "CHANGE_NOT_FOUND");
   const state = loadState(paths.root, change);
+  const drift = workflowDrift(paths.root, state?.workflow);
+  if (drift.length) return { ok: false, code: "WORKFLOW_PACK_DRIFT", findings: drift, message: "冻结工作流引用已漂移，不能归档。" };
   if (!options.force) {
-    for (const stage of STAGES) {
-      if (stageStatus(paths.root, change, state, stage) !== "confirmed") {
-        throw new Error(tr(options, `Change is not complete; cannot archive: ${stage.key}`, `变更尚未完成，不能归档：${stage.key}`));
-      }
-      if (!fs.existsSync(path.join(source, stage.file))) {
-        throw new Error(tr(options, `Missing stage file; cannot archive: ${stage.file}`, `缺少阶段文件，不能归档：${stage.file}`));
-      }
+    for (const stage of stagesOf(state).filter((item) => item.required_for_done)) {
+      if (!ensureStageRecord(state, stage).confirmed) throw codedError(`Change is not complete: ${stage.key}`, "STAGE_NOT_CONFIRMED");
+      if (!stage.noFile && !fs.existsSync(path.join(source, stage.file))) throw codedError(`Missing stage file: ${stage.file}`, "STAGE_FILE_MISSING");
     }
     const fullDocs = validateFullDocumentUpdatesForDone(options, change);
     if (!fullDocs.ok) return fullDocs;
   }
   fs.mkdirSync(paths.archives, { recursive: true });
   const target = path.join(paths.archives, `${today()}-${change}`);
-  if (fs.existsSync(target)) throw new Error(tr(options, `Archive directory already exists: ${path.relative(paths.root, target)}`, `归档目录已存在：${path.relative(paths.root, target)}`));
+  if (fs.existsSync(target)) throw codedError(`Archive directory already exists: ${rel(paths.root, target)}`, "ARCHIVE_EXISTS");
   fs.renameSync(source, target);
+  return { ok: true, change, archive: rel(paths.root, target), message: tr(options, `Archived change: ${change}`, `已归档变更：${change}`) };
+}
+
+export function templateMarker(content, fileName = "") {
+  const text = String(content || "").trim();
+  if (!text || text === `# ${fileName}`) return { strong: true, marker: text || "(empty)", line: 1, excerpt: text };
+  const patterns = [
+    /\[(?:待填|待定|占位|TODO|FIXME|TBD|待做|待实现|placeholder)[^\]\n]*]/i,
+    /\[(?:EntityName|ServiceName|ControllerName|RepositoryName|TableName|FieldName)]/i,
+    /\[(?:AR编号|REQ ID)]|F-01\s*\|\s*\[功能名]|US-01|方案A（采纳）/i,
+    /\/api\/v1\/entities\b|src\/(?:domain|entities)\/Entity(?:Name)?\./i
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const line = text.slice(0, match.index).split(/\r?\n/).length;
+    return { strong: true, marker: match[0], line, excerpt: text.split(/\r?\n/)[line - 1] };
+  }
+  const weak = /\[[^\]\n]*(?:功能名|字段名|组件|服务|名称|描述|来源|目标|系统|角色|规则|接口|流程|对象|算法|路径|类型|优先级)[^\]\n]*]/i.exec(text);
+  return weak ? { strong: false, marker: weak[0] } : null;
+}
+
+export function currentStagePayload(root, change, state, stage) {
+  const index = stagesOf(state).findIndex((item) => item.key === stage.key);
+  const template = loadTemplateForAgent(root, stage.key) || resolveStageTemplate(root, stage);
   return {
-    ok: true,
-    change,
-    archive: path.relative(paths.root, target).replaceAll(path.sep, "/"),
-    message: tr(options, `Archived change: ${change}`, `已归档变更：${change}`),
-    next: isZh(options) ? ["变更已归档", "继续下一个 matspec change"] : ["Change archived", "Continue with the next MatSpec change"]
+    index: index + 1,
+    total: stagesOf(state).length,
+    key: stage.key,
+    name: stage.label || stage.name,
+    status: stageStatus(root, change, state, stage),
+    ...(stage.file ? {
+      file: `matspec/changes/${change}/${stage.file}`,
+      absoluteFile: path.join(root, "matspec/changes", change, stage.file).replaceAll(path.sep, "/"),
+      filePath: `matspec/changes/${change}/${stage.file}`,
+      allowedWritePath: `matspec/changes/${change}/${stage.file}`
+    } : {}),
+    command: stage.command,
+    agentCommand: stage.agentCommand || `/${stage.command}`,
+    entryCommand: "/matspec",
+    template: stage.template,
+    ...(template ? { templateContent: { source: template.source, path: template.path.replaceAll(path.sep, "/"), content: template.content } } : {}),
+    objective: stage.objective,
+    delegate: stage.delegate,
+    noFile: stage.noFile,
+    requiresFullSpec: Boolean(stage.requiresFullSpec),
+    requiresFullDesign: Boolean(stage.requiresFullDesign),
+    requiresUserGenerationApproval: true,
+    inputs: (stage.inputs || []).map((input) => {
+      const inputPath = input.endsWith(".md") && !input.startsWith("matspec/")
+        ? `matspec/changes/${change}/${input}`
+        : input;
+      return {
+        path: inputPath,
+        required: inputPath === "matspec/specs/spec.md"
+          ? Boolean(stage.requiresFullSpec)
+          : inputPath === "matspec/specs/design.md"
+            ? Boolean(stage.requiresFullDesign)
+            : inputPath !== "matspec/service-context.md",
+        exists: fs.existsSync(path.join(root, inputPath))
+      };
+    })
   };
+}
+
+function confirmStageInState(state, stage) {
+  const record = ensureStageRecord(state, stage);
+  const timestamp = new Date().toISOString();
+  Object.assign(record, { status: "confirmed", clarified: true, confirmed: true, confirmedAt: timestamp });
+  state.history.push({ action: "confirm-stage", stage: stage.key, timestamp });
+  const stages = stagesOf(state);
+  let index = stages.indexOf(stage) + 1;
+  while (index < stages.length && stages[index].noFile && !stages[index].delegate) {
+    const auto = ensureStageRecord(state, stages[index]);
+    Object.assign(auto, { status: "confirmed", clarified: true, confirmed: true, confirmedAt: timestamp });
+    state.history.push({ action: "auto-confirm-stage", stage: stages[index].key, timestamp });
+    index += 1;
+  }
+  if (index < stages.length) {
+    state.currentStage = stages[index].key;
+    const next = ensureStageRecord(state, stages[index]);
+    if (next.status === "pending") next.status = "clarifying";
+  } else {
+    state.currentStage = "completed";
+  }
+}
+
+function shouldCaptureBaseline(state, confirmedStage) {
+  if (state.implementationBaseline) return false;
+  const stages = stagesOf(state);
+  const after = stages.slice(stages.indexOf(confirmedStage) + 1);
+  return confirmedStage.required_for_done && !after.some((stage) => stage.required_for_done);
+}
+
+function captureFullDocumentBaseline(root, files = FINALIZATION_FILES) {
+  const documents = {};
+  for (const filePath of files || []) {
+    const absolute = path.join(root, filePath);
+    documents[filePath] = fs.existsSync(absolute)
+      ? { exists: true, sha256: sha256(absolute), path: rel(root, absolute) }
+      : { exists: false, sha256: null, path: filePath };
+  }
+  return { capturedAt: new Date().toISOString(), documents };
+}
+
+function workflowForFile(workflow) {
+  return {
+    version: workflow.version,
+    ...(workflow.extends ? { extends: workflow.extends } : {}),
+    stages: workflow.stages.map(({ templateRef, commandRef, ...stage }) => ({ ...stage, templateRef, commandRef })),
+    finalization: workflow.finalization
+  };
+}
+
+function tasksAreTerminal(content) {
+  if (/(^|\n)### Task \d+[：:]/.test(content)) {
+    const blocks = content.split(/(?=^### Task \d+[：:])/m).filter((block) => /^### Task \d+[：:]/.test(block));
+    return blocks.length > 0 && blocks.every((block) => {
+      const markers = [...block.matchAll(/^- \[([ →✓⚠xX])]\s*$/gm)];
+      return ["✓", "⚠", "x", "X"].includes(markers.at(-1)?.[1]);
+    });
+  }
+  const markers = [...content.matchAll(/^- \[([ →✓⚠xX])]\s+.+$/gm)];
+  return markers.length > 0 && markers.every((match) => ["✓", "⚠", "x", "X"].includes(match[1]));
+}
+
+function codedError(message, code, fields = {}) {
+  return Object.assign(new Error(message), { code, ...fields });
 }

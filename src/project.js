@@ -1,12 +1,15 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import YAML from "yaml";
 import { CONFIG_YAML, DOC_DIRS, RUNTIME_DIRS } from "./constants.js";
 import { ensureDir, rel, resolveRoot, writeFileIfNeeded } from "./util.js";
 import { installIntegration } from "./integrations.js";
 import { tr } from "./i18n.js";
 
-const GITIGNORE_LINES = [".matspec-cli/runs/", ".matspec-cli/cache/", ".matspec-cli/tmp/"];
+const GITIGNORE_LINES = [".matspec-cli/runs/", ".matspec-cli/cache/", ".matspec-cli/tmp/", ".matspec-cli/report-queue/"];
 
 export function initProject(targetPath, options = {}) {
   const root = path.resolve(targetPath || options.path || process.cwd());
@@ -17,20 +20,14 @@ export function initProject(targetPath, options = {}) {
     ensureDir(path.join(root, dir), created, root);
   }
 
-  writeFileIfNeeded(path.join(root, ".matspec-cli/config.yaml"), CONFIG_YAML, {
-    force: Boolean(options.force),
-    created,
-    skipped,
-    root
-  });
+  writeConfig(root, options, created, skipped);
 
   const externalAgents = detectExternalAgents();
-  mergeGenerationConfig(root, externalAgents, options);
-
   updateGitignore(root, created, skipped);
+  const templateSync = options.no_template_update ? { created: [], skipped: [] } : syncGlobalTemplates(options);
 
   let integrationResult = null;
-  const integration = options.integration ?? "all";
+  const integration = options.integration ?? "nga";
   if (integration !== "none") {
     integrationResult = installIntegration(root, integration, options);
   }
@@ -53,6 +50,7 @@ export function initProject(targetPath, options = {}) {
       externalAgents
     },
     integration: integrationResult,
+    templateSync,
     summary: {
       project: root,
       "default runner": resolveDefaultRunner(options),
@@ -76,8 +74,58 @@ export function initProject(targetPath, options = {}) {
       ...existingDocs.map((item) => tr(options, `Existing full doc. Use matspec apply --force to overwrite: ${item}`, `已存在真实全量文档，如需覆盖请执行 matspec apply --force：${item}`))
     ],
     message: tr(options, `Checked MatSpec project: ${root}`, `已检查 matspec 项目：${root}`),
-    next: ["matspec generate", "matspec show", "matspec apply"]
+    next: existingDocs.length
+      ? ["matspec start AR-feature-name"]
+      : ["matspec generate", "matspec show", "matspec apply", ...(!options.no_codewiki ? ["matspec sync"] : [])]
   };
+}
+
+function writeConfig(root, options, created, skipped) {
+  const file = path.join(root, ".matspec-cli/config.yaml");
+  if (fs.existsSync(file) && !options.force) {
+    skipped.push(rel(root, file));
+    return;
+  }
+  let content = CONFIG_YAML;
+  if (fs.existsSync(file) && options.force) {
+    try {
+      const existing = YAML.parse(fs.readFileSync(file, "utf8")) || {};
+      const next = YAML.parse(CONFIG_YAML);
+      next.extensions = existing.extensions || {};
+      content = YAML.stringify(next);
+    } catch {
+      content = CONFIG_YAML;
+    }
+  }
+  writeFileIfNeeded(file, content, { force: true, created, skipped, root });
+}
+
+function syncGlobalTemplates(options = {}) {
+  const source = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../templates");
+  const target = path.join(os.homedir(), ".matspec/templates");
+  const result = { created: [], skipped: [] };
+  for (const relative of [
+    "delta/proposal.md",
+    "delta/delta-spec.md",
+    "delta/delta-design.md",
+    "delta/tasks.md",
+    "delta/validation.md",
+    "delta/review.md",
+    "full/SPEC.md",
+    "full/DESIGN.md"
+  ]) {
+    const from = path.join(source, relative);
+    const to = path.join(target, relative.replace(/^delta\//, ""));
+    if (!fs.existsSync(from)) continue;
+    if (fs.existsSync(to) && !options.force) {
+      result.skipped.push(to.replaceAll(path.sep, "/"));
+      continue;
+    }
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(from, to);
+    result.created.push(to.replaceAll(path.sep, "/"));
+  }
+  return result;
 }
 
 function updateGitignore(root, created, skipped) {
@@ -113,15 +161,11 @@ export function projectPaths(options = {}) {
 
 export function detectExternalAgents(env = process.env) {
   return {
-    codex: agentInfo("codex", {
-      env,
-      recommendedModel: "gpt-5.5"
-    }),
-    claude: agentInfo("claude", {
-      env,
-      recommendedModel: "claude-sonnet-4-6"
-    }),
-    opencode: agentInfo("opencode", { env })
+    opencode: agentInfo("opencode", { env }),
+    nga: agentInfo("nga", { env }),
+    codegenie: agentInfo("codegenie", { env }),
+    codeagent: agentInfo("codeagent", { env }),
+    chrys: agentInfo("chrys", { env })
   };
 }
 
@@ -255,7 +299,7 @@ ${Object.entries(externalAgents)
 }
 
 function resolveDefaultRunner(options) {
-  return options.default_runner || "auto";
+  return options.runner || options.default_runner || "opencode";
 }
 
 function probeModelsYaml(options) {

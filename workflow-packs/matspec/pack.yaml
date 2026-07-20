@@ -1,0 +1,10 @@
+key: matspec
+name: MatSpec Default Workflow Pack
+description: Official MatSpec SDD workflow pack.
+workflow: workflow.yaml
+templatesRoot: templates
+commandsRoot: commands
+utilityCommands:
+  - matspec.audit
+  - matspec.back
+  - matspec.implement

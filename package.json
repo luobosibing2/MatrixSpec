@@ -1,23 +1,49 @@
 {
   "name": "matspec-community",
-  "version": "0.1.0",
+  "version": "0.4.1-beta.3",
   "type": "module",
-  "description": "MatSpec methodology, templates, and CLI workflow tools.",
+  "description": "MatSpec specification-driven development CLI.",
   "bin": {
-    "matspec": "./bin/matspec.js"
+    "matspec": "bin/matspec.js"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=18.0.0"
   },
   "scripts": {
-    "test": "node --test"
+    "matspec": "node ./bin/matspec.js",
+    "web": "node ./scripts/serve-web.js",
+    "test": "node --test",
+    "prepare": "node ./scripts/fix-bin-perms.js",
+    "postinstall": "node ./scripts/fix-bin-perms.js"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.8.4",
+    "iconv-lite": "^0.7.0",
+    "ignore": "^7.0.5",
+    "ws": "^8.18.3",
+    "yaml": "^2.8.1"
   },
   "files": [
     "bin",
     "src",
     "templates",
-    "docs",
+    "workflow-packs",
+    "docs/full-spec.md",
+    "docs/full-design.md",
+    "packages",
     "scripts"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git@gitcode.com:OpenMatrix/MatrixSpec.git"
+  },
+  "keywords": [],
+  "author": ""
 }
