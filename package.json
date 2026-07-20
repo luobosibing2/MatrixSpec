@@ -13,6 +13,7 @@
     "matspec": "node ./bin/matspec.js",
     "web": "node ./scripts/serve-web.js",
     "test": "node --test",
+    "test:e2e": "pwsh -NoLogo -NoProfile -File ./scripts/psmux-workflow-e2e.ps1",
     "prepare": "node ./scripts/fix-bin-perms.js",
     "postinstall": "node ./scripts/fix-bin-perms.js"
   },
