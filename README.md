@@ -46,7 +46,7 @@ matspec review
 matspec done
 ```
 
-Coding Agent 的统一入口是 `/matspec`。非交互初始化默认安装 `nga` 集成，也可显式选择 `opencode`、`codegenie`、`codeagent`、`chrys`、`claude-code` 或 `none`。
+Coding Agent 的统一入口是 `/matspec`。`matspec init` 默认安装项目级 `codex` 集成；支持的项目集成包括 `opencode`、`codex`、`chrys`、`claude-code` 或 `none`。
 
 Standard/Full 的 `validation.md` 和所有 profile 的 `review.md` 使用 YAML front matter 给出机器可判定的 verdict。`revise` / `changes-required` 不会推进状态；CLI 会返回 blocker 与修复目标，随后可用带审计原因的 `matspec back` 回到目标阶段。全量文档状态在进入 implementation 前捕获：已有文档必须在 finalization 中更新；Light 无基线模式则必须创建缺失文档。
 
@@ -90,8 +90,8 @@ matspec/
 默认 runner 是 `opencode`，支持：
 
 ```text
-opencode  opencode-serve  relay-serve  relay-pool
-nga       codegenie       codeagent    chrys
+opencode  codex           claude      chrys
+opencode-serve            relay-serve relay-pool
 ```
 
 模块分析默认并发 2、最多 10，默认重试 3 次。支持聚焦模块、batch、多路径模块、知识文件、显式 full 模板和领域扩展：

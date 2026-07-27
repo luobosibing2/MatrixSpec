@@ -572,17 +572,17 @@ test("integration install supports Claude Code and Codex repository commands", (
   const list = json(run(["--path", root, "integration", "list", "--json"]));
   assert.deepEqual(
     list.integrations.map((integration) => integration.name),
-    ["opencode", "nga", "codegenie", "codeagent", "chrys", "claude-code", "codex"]
+    ["opencode", "codex", "chrys", "claude-code", "nga", "codeagent", "codegenie"]
   );
 });
 
-test("init installs nga integration by default in non-interactive mode", () => {
+test("init installs codex integration by default in non-interactive mode", () => {
   const root = tempProject();
   const result = json(run(["init", root, "--json"]));
-  assert.equal(result.integration.integration, "nga");
-  assert.ok(fs.existsSync(path.join(root, ".opencode/command/matspec.md")));
-  assert.ok(fs.existsSync(path.join(root, ".opencode/agents/stage-generator.md")));
-  assert.ok(fs.existsSync(path.join(root, ".opencode/agents/task-executor.md")));
+  assert.equal(result.integration.integration, "codex");
+  assert.ok(fs.existsSync(path.join(root, ".agents/skills/matspec/SKILL.md")));
+  assert.ok(fs.existsSync(path.join(root, ".agents/skills/matspec-proposal/SKILL.md")));
+  assert.ok(fs.existsSync(path.join(root, ".agents/skills/matspec-review/SKILL.md")));
 });
 
 test("validate reports required structure errors", () => {

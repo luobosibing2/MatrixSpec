@@ -461,7 +461,7 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 2. 创建配置；`--force` 重写配置但保留扩展记录。
 3. 幂等更新 `.gitignore`。
 4. 同步六个 delta 模板到 `~/.codespec/templates/`；`--no-template-update` 跳过，`--force` 覆盖。
-5. 交互环境提示选择 Agent 集成；显式 `--integration` 直接使用；非 TTY 或 JSON 模式默认 `nga`。
+5. 交互环境提示选择 Agent 集成；显式 `--integration` 直接使用；未选择时默认 `codex`。
 6. 安装选中的集成，且不覆盖用户已存在文件。
 7. 不创建任何业务阶段文档或全量文档。
 8. 默认 Light 缺少全量文档时直接提示 `start`；Standard/Full 或用户主动恢复 baseline 时提示本地 `generate → show → apply`。

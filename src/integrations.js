@@ -10,17 +10,9 @@ const INTEGRATIONS = {
     path: ".opencode/command",
     description: "opencode repository commands"
   },
-  nga: {
-    path: ".opencode/command",
-    description: "NGA repository commands and subagents"
-  },
-  codegenie: {
-    path: ".codegenie/command",
-    description: "CodeGenie repository commands and subagents"
-  },
-  codeagent: {
-    path: "~/.cac/command",
-    description: "CodeAgent global commands and skill"
+  codex: {
+    path: ".agents/skills",
+    description: "Codex repository skills"
   },
   chrys: {
     path: ".agents/skills/matspec",
@@ -30,9 +22,17 @@ const INTEGRATIONS = {
     path: ".claude/commands + .claude/skills",
     description: "Claude Code project slash commands and skills"
   },
-  codex: {
-    path: ".agents/skills",
-    description: "Codex repository skills"
+  nga: {
+    path: ".opencode/command",
+    description: "NGA repository commands and subagents"
+  },
+  codeagent: {
+    path: "~/.cac/command",
+    description: "CodeAgent global commands and skill"
+  },
+  codegenie: {
+    path: ".codegenie/command",
+    description: "CodeGenie repository commands and subagents"
   }
 };
 

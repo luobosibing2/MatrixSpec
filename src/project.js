@@ -27,7 +27,7 @@ export function initProject(targetPath, options = {}) {
   const templateSync = options.no_template_update ? { created: [], skipped: [] } : syncGlobalTemplates(options);
 
   let integrationResult = null;
-  const integration = options.integration ?? "nga";
+  const integration = options.integration ?? "codex";
   if (integration !== "none") {
     integrationResult = installIntegration(root, integration, options);
   }

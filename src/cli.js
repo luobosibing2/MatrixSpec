@@ -128,7 +128,7 @@ export async function main(argv = []) {
 }
 
 async function initCommand(targetPath, options) {
-  if (!options.integration) options.integration = shouldPrompt(options) ? await promptIntegration() : "nga";
+  if (!options.integration) options.integration = shouldPrompt(options) ? await promptIntegration() : "codex";
   return initProject(targetPath, options);
 }
 
@@ -137,13 +137,13 @@ function shouldPrompt(options) {
 }
 
 async function promptIntegration() {
-  const choices = ["nga", "opencode", "codegenie", "codeagent", "chrys", "claude-code", "none"];
+  const choices = ["opencode", "codex", "chrys", "claude-code", "nga", "codeagent", "codegenie", "none"];
   console.log(style("matspec init", "title"));
   console.log("Choose the Coding Agent integration.");
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const answer = (await rl.question(`\nIntegration [${choices.join("/")}] (nga): `)).trim().toLowerCase();
-    return choices.includes(answer) ? answer : "nga";
+    const answer = (await rl.question(`\nIntegration [${choices.join("/")}] (codex): `)).trim().toLowerCase();
+    return choices.includes(answer) ? answer : "codex";
   } finally {
     rl.close();
   }
@@ -298,7 +298,7 @@ function doneCommand(options, explicit) {
 
 function integrationCommand(options, args) {
   const action = args[0] || "list";
-  const name = args[1] || "nga";
+  const name = args[1] || "codex";
   const root = projectPaths(options).root;
   if (action === "list") {
     const integrations = listIntegrations();
