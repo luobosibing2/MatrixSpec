@@ -90,8 +90,8 @@ matspec/
 默认 runner 是 `opencode`，支持：
 
 ```text
-opencode  codex           claude      chrys
-opencode-serve            relay-serve relay-pool
+opencode  codex  claude  chrys
+opencode-serve
 ```
 
 模块分析默认并发 2、最多 10，默认重试 3 次。支持聚焦模块、batch、多路径模块、知识文件、显式 full 模板和领域扩展：

@@ -1,5 +1,3 @@
-import WebSocket from "ws";
-
 const argv = process.argv.slice(2);
 const option = (name, fallback = null) => argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback;
 const runner = option("--runner");
@@ -8,9 +6,8 @@ const model = option("--model");
 const prompt = await readStdin();
 
 try {
-  const content = runner === "opencode-serve"
-    ? await runOpenCode(url, prompt, model)
-    : await runRelay(url, prompt, model, runner === "relay-pool");
+  if (runner !== "opencode-serve") throw new Error(`Unsupported bridge runner: ${runner}`);
+  const content = await runOpenCode(url, prompt, model);
   process.stdout.write(`${JSON.stringify({ content })}\n`);
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
@@ -37,36 +34,6 @@ async function runOpenCode(base, text, selectedModel) {
   if (!response.ok) throw new Error(`opencode-serve task HTTP ${response.status}`);
   const body = await response.json();
   return extract(body);
-}
-
-function runRelay(target, text, selectedModel, pool) {
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket(target);
-    const timeout = setTimeout(() => {
-      socket.terminate();
-      reject(new Error("relay task timeout"));
-    }, 30 * 60 * 1000);
-    socket.on("open", () => socket.send(JSON.stringify({ type: "task", client: "matspec", pool, prompt: text, model: selectedModel })));
-    socket.on("message", (data) => {
-      let body;
-      try { body = JSON.parse(String(data)); } catch { body = { content: String(data) }; }
-      if (body.type === "error" || body.error) {
-        clearTimeout(timeout);
-        socket.close();
-        reject(new Error(body.message || body.error));
-        return;
-      }
-      const content = extract(body);
-      if (!content) return;
-      clearTimeout(timeout);
-      socket.close();
-      resolve(content);
-    });
-    socket.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-  });
 }
 
 function extract(value) {

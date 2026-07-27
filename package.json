@@ -23,7 +23,6 @@
     "@inquirer/prompts": "^7.8.4",
     "iconv-lite": "^0.7.0",
     "ignore": "^7.0.5",
-    "ws": "^8.18.3",
     "yaml": "^2.8.1"
   },
   "files": [

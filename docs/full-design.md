@@ -8,7 +8,7 @@
 
 ### 1.1 架构风格
 
-系统采用单进程 Node.js CLI + 文件系统持久化 + 外部 Agent/HTTP/WebSocket 适配器。不存在数据库、常驻核心服务或插件运行时。
+系统采用单进程 Node.js CLI + 文件系统持久化 + 外部 Agent/HTTP 适配器。不存在数据库、常驻核心服务或插件运行时。
 
 ```text
 用户 / 主 Agent / CI
@@ -104,7 +104,7 @@ workflow pack + project override
 | `src/generator/knowledge-loader.js` | 领域知识加载/复制 |
 | `src/generator/module-loader.js` | batch JSON 和模块过滤 |
 | `src/generator/utils/*` | 并发、重试、语言、中心性、定义、PlantUML |
-| `src/generator/{runner}.js` | 各 Agent 进程/API/WebSocket 适配 |
+| `src/generator/{runner}.js` | 各 Agent 进程/API 适配 |
 
 ### 2.5 外部集成层
 
@@ -632,10 +632,8 @@ type RunTask = (args: {
 | chrys | `chrys run -t PROMPT -a AGENT -C ROOT --json` |
 | nga | `nga run generate [-f PROMPT] [--model] [--agent plan]` |
 | opencode-serve | `@opencode-ai/sdk` 连接默认 `http://127.0.0.1:4096`，复用 client |
-| relay-serve | WebSocket 默认 `ws://localhost:8080/ws/codespec-client`，每任务会话 |
-| relay-pool | WebSocket 默认 `ws://localhost:8080/ws/codespec-pool`，持久连接/切 session |
 
-本地 CLI runner 长任务超时 60 分钟，file-selection/planning 快速任务 10 分钟。Serve/Relay 全局 30 分钟、单任务约 15 分钟、session 初始化 10 秒。
+本地 CLI runner 长任务超时 60 分钟，file-selection/planning 快速任务 10 分钟。opencode-serve 全局 30 分钟、单任务约 15 分钟、session 初始化 10 秒。
 
 输出解析策略：
 

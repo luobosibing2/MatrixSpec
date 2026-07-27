@@ -210,6 +210,9 @@ test("init records supported local coding agent detection", () => {
   assert.match(config, /generation:/);
   assert.match(config, /runner: opencode/);
   assert.match(config, /supported_runners:/);
+  assert.match(config, /- codex/);
+  assert.match(config, /- claude/);
+  assert.doesNotMatch(config, /relay-(?:serve|pool)/);
 });
 
 test("generate honors an explicit runner", () => {
@@ -1694,8 +1697,24 @@ test("help defaults to Chinese and advertises the minimal generate runner option
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /matspec generate \[module <path>\] \[--batch modules\.json\]/);
   assert.match(result.stdout, /命令:/);
-  assert.match(result.stdout, /--runner opencode\|opencode-serve\|relay-serve\|relay-pool/);
+  assert.match(result.stdout, /--runner opencode\|opencode-serve\|codex\|claude/);
+  assert.doesNotMatch(result.stdout, /relay-(?:serve|pool)/);
   assert.doesNotMatch(result.stdout, /Common workflow/);
+});
+
+test("generate rejects removed relay runners", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+
+  for (const runner of ["relay-serve", "relay-pool"]) {
+    const result = run(["--path", root, "generate", "--runner", runner, "--json"]);
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr, "");
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.code, "RUNNER_NOT_IMPLEMENTED");
+    assert.equal(payload.runner, runner);
+  }
 });
 
 test("help supports English output through the language option", () => {

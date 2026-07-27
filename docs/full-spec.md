@@ -102,7 +102,6 @@ CodeSpec CLI 不负责：
 - `iconv-lite`：CodeAgent stderr 的 GBK 解码。
 - `ignore`：`.gitignore` 规则处理。
 - `js-yaml` 和 `yaml`：YAML 解析/序列化。
-- `ws`：Relay WebSocket runner。
 - Node 标准库：文件、路径、进程、加密、HTTP(S)、readline、child process。
 
 ### 3.3 入口行为
@@ -237,12 +236,12 @@ generation:
   supported_runners:
     - opencode
     - opencode-serve
-    - relay-serve
-    - relay-pool
+    - codex
+    - claude
     - chrys
-    - codegenie
-    - codeagent
     - nga
+    - codeagent
+    - codegenie
   mode: module-first
   apply_requires_force_on_existing: true
 extensions: {}
@@ -857,7 +856,7 @@ finalization:
 
 ### 12.1 支持的 runner
 
-`opencode`、`opencode-serve`、`relay-serve`、`relay-pool`、`nga`、`codegenie`、`codeagent`、`chrys`。
+`opencode`、`opencode-serve`、`codex`、`claude`、`chrys`、`nga`、`codeagent`、`codegenie`。
 
 默认 concurrency 为 2，重试 3 次。runner 不可用必须在生成前返回明确错误。
 
@@ -1032,7 +1031,6 @@ GET  /dashboard/spec-stats
 
 - 仓库扫描单次遍历，忽略大文件和非目标目录。
 - 模块分析并发受全局 `1..10` 控制。
-- Relay pool 可复用 WebSocket。
 - 模板同步用 hash 和 CLI 版本缓存减少重复扫描。
 
 ### 15.4 兼容性

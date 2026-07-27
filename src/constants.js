@@ -138,12 +138,12 @@ generation:
   supported_runners:
     - opencode
     - opencode-serve
-    - relay-serve
-    - relay-pool
+    - codex
+    - claude
     - chrys
-    - codegenie
-    - codeagent
     - nga
+    - codeagent
+    - codegenie
   mode: module-first
   apply_requires_force_on_existing: true
 extensions: {}

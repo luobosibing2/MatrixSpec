@@ -16,7 +16,7 @@ export function resolveGenerationStrategy(paths, options = {}, env = process.env
     };
   }
 
-  if (!["auto", "opencode", "opencode-serve", "relay-serve", "relay-pool", "nga", "codegenie", "codeagent", "chrys", "codex", "claude"].includes(runner)) {
+  if (!["auto", "opencode", "opencode-serve", "nga", "codegenie", "codeagent", "chrys", "codex", "claude"].includes(runner)) {
     return {
       ok: false,
       code: "RUNNER_NOT_IMPLEMENTED",
@@ -96,7 +96,7 @@ function selectRunner(requestedRunner, env) {
       next: ["Install and authenticate opencode, nga, codegenie, codeagent, or chrys"]
     };
   }
-  if (["opencode-serve", "relay-serve", "relay-pool"].includes(requestedRunner)) {
+  if (requestedRunner === "opencode-serve") {
     return { ok: true, runner: requestedRunner, executable: process.execPath };
   }
   const executable = findExecutable(requestedRunner, env);

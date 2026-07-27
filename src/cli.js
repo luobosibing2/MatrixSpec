@@ -370,7 +370,7 @@ ${commandLabel}:
   matspec version
 
 ${optionLabel}:
-  --runner opencode|opencode-serve|relay-serve|relay-pool|nga|codegenie|codeagent|chrys
+  --runner opencode|opencode-serve|codex|claude|chrys|nga|codeagent|codegenie
   --concurrency 1..10
   --retries N
   --design-template path

@@ -157,11 +157,11 @@ function buildArgs({ paths, strategy, outputFile }) {
   if (strategy.runner === "codex") {
     return ["exec", "-C", paths.root, "--model", strategy.model, "--sandbox", "read-only", "--output-last-message", outputFile, "-"];
   }
-  if (["opencode-serve", "relay-serve", "relay-pool"].includes(strategy.runner)) {
+  if (strategy.runner === "opencode-serve") {
     return [
       path.join(packageRoot, "scripts/runner-bridge.js"),
       "--runner", strategy.runner,
-      "--url", strategy.serveUrl || defaultServeUrl(strategy.runner),
+      "--url", strategy.serveUrl || defaultServeUrl(),
       ...(strategy.model ? ["--model", strategy.model] : [])
     ];
   }
@@ -216,7 +216,7 @@ function spawnRunner(executable, args, cwd, prompt, runner) {
       ? process.env.ComSpec || path.join(process.env.SystemRoot || "C:\\Windows", "System32", "cmd.exe")
       : false,
     windowsHide: true,
-    timeout: ["opencode-serve", "relay-serve", "relay-pool"].includes(runner) ? 30 * 60 * 1000 : 60 * 60 * 1000
+    timeout: runner === "opencode-serve" ? 30 * 60 * 1000 : 60 * 60 * 1000
   });
   if (!codeagent) return result;
   return {
@@ -226,10 +226,8 @@ function spawnRunner(executable, args, cwd, prompt, runner) {
   };
 }
 
-function defaultServeUrl(runner) {
-  if (runner === "opencode-serve") return "http://127.0.0.1:4096";
-  if (runner === "relay-pool") return "ws://localhost:8080/ws/matspec-pool";
-  return "ws://localhost:8080/ws/matspec-client";
+function defaultServeUrl() {
+  return "http://127.0.0.1:4096";
 }
 
 function parseOutput({ strategy, task, stdout, outputFile }) {
