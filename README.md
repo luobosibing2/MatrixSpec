@@ -40,21 +40,20 @@ npm link
 matspec version
 ```
 
-然后进入你真正要开发的项目：
+然后进入你真正要开发的项目，并选择使用 Codex 或 OpenCode。
+
+### 使用 Codex，默认
 
 ```bash
 cd /path/to/your-project
 
-# 初始化 MatSpec，默认安装项目级 Codex 集成
-matspec init
+# 初始化 MatSpec 并安装项目级 Codex 技能
+matspec init --integration codex
 
 # 为本次需求创建一个变更
 matspec start REQ-user-login
-```
 
-接下来打开 Codex：
-
-```bash
+# 打开 Codex
 codex
 ```
 
@@ -68,6 +67,27 @@ $matspec 推进当前 REQ-user-login：增加邮箱密码登录，并保持现�
 
 ```text
 使用 MatSpec 推进当前需求
+```
+
+### 使用 OpenCode
+
+```bash
+cd /path/to/your-project
+
+# 初始化 MatSpec 并安装项目级 OpenCode 命令
+matspec init --integration opencode
+
+# 为本次需求创建一个变更
+matspec start REQ-user-login
+
+# 打开 OpenCode
+opencode
+```
+
+在 OpenCode 中输入：
+
+```text
+/matspec 推进当前 REQ-user-login：增加邮箱密码登录，并保持现有手机号登录兼容。
 ```
 
 `matspec start` 只创建本次变更的工作空间，详细需求在 Coding Agent 的对话中说明。从这里开始，Agent 会读取当前状态并推进正确阶段。`go`、`accept`、`implement`、`review`、`done` 等命令由 Agent 调用，普通用户不需要手工执行。
@@ -143,14 +163,14 @@ full:         proposal → delta-spec → delta-design → tasks → validation 
 - 完成前必须更新全量 `spec.md` / `design.md`，并通过项目验证。
 - 每次变更最终归档到仓库，保留需求、实现和审查链路。
 
-## 其他 Coding Agent
+## 切换或增加 Coding Agent
 
-`matspec init` 默认安装 Codex 项目技能。也可以显式选择其他集成：
+`matspec init` 默认选择 Codex。项目初始化后，也可以安装其他 Coding Agent 的命令或技能：
 
 ```bash
-matspec init --integration opencode
-matspec init --integration claude-code
-matspec init --integration chrys
+matspec integration install opencode
+matspec integration install claude-code
+matspec integration install chrys
 ```
 
 常用入口：
