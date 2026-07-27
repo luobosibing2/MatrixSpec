@@ -35,8 +35,7 @@ MatSpec 不替你决定业务需求。它负责让 Agent 在正确的阶段做�
 ```bash
 git clone https://gitcode.com/OpenMatrix/MatrixSpec.git
 cd MatrixSpec
-npm install
-npm link
+npm install -g .
 matspec version
 ```
 
