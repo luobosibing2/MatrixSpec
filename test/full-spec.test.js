@@ -119,7 +119,7 @@ test("argument parser preserves documented repeatable and strict-unknown behavio
 test("CLI exposes offline generation without remote sync or authentication", () => {
   const root = project();
   const initialized = json(run(root, ["init", "--integration", "none", "--no-template-update"]));
-  assert.deepEqual(initialized.next, ["matspec start AR-feature-name"]);
+  assert.deepEqual(initialized.next, ["matspec start REQ-feature-name"]);
   const config = fs.readFileSync(path.join(root, ".matspec-cli/config.yaml"), "utf8");
   assert.doesNotMatch(config, /codewiki|auth:|provider:\s*none/i);
 

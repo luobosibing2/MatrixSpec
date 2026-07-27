@@ -182,7 +182,7 @@ test("init is idempotent and does not copy business templates", () => {
   const root = tempProject();
   const first = json(run(["init", root, "--integration", "none", "--json"]));
   assert.equal(first.ok, true);
-  assert.deepEqual(first.next, ["matspec start AR-feature-name"]);
+  assert.deepEqual(first.next, ["matspec start REQ-feature-name"]);
   assert.ok(fs.existsSync(path.join(root, "matspec/specs")));
   assert.ok(fs.existsSync(path.join(root, ".matspec-cli/config.yaml")));
   assert.equal(fs.existsSync(path.join(root, "matspec/specs/spec.md")), false);

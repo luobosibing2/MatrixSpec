@@ -4,8 +4,6 @@
 
 MatSpec 为 Codex、OpenCode、Claude Code 等 Coding Agent 提供一套可确认、可回退、可审查的开发流程。你只需要提出需求、回答澄清问题并确认关键决策，Agent 会负责整理规格、拆解任务、实现代码、执行审查和归档证据。
 
-你不需要先学习 SDD，也不需要手工操作 MatSpec 的内部状态机。
-
 ## 为什么需要 MatSpec
 
 普通 AI Coding 很容易从一句模糊需求直接进入实现。需求理解、设计选择和修复过程留在聊天记录里，一旦会话变长、换人或返工，Agent 就可能丢失约束。
@@ -51,7 +49,7 @@ cd /path/to/your-project
 matspec init
 
 # 为本次需求创建一个变更
-matspec start AR-user-login
+matspec start REQ-user-login
 ```
 
 接下来打开 Codex：
@@ -63,7 +61,7 @@ codex
 在 Codex 中输入：
 
 ```text
-$matspec 推进当前 AR-user-login：增加邮箱密码登录，并保持现有手机号登录兼容。
+$matspec 推进当前 REQ-user-login：增加邮箱密码登录，并保持现有手机号登录兼容。
 ```
 
 也可以直接说：
@@ -122,9 +120,9 @@ Agent：需求已确认，接下来会继续拆解任务、实现和验证。
 | Full | 架构变化、安全、数据迁移、跨系统改动 | 增加独立设计阶段和实现前验证 |
 
 ```bash
-matspec start AR-normal-change
-matspec start AR-validated-change --profile standard
-matspec start AR-high-risk-change --profile full
+matspec start REQ-normal-change
+matspec start REQ-validated-change --profile standard
+matspec start REQ-high-risk-change --profile full
 ```
 
 三个 profile 的内部流程如下。它们主要供 Agent 和高级用户理解，普通用户不需要逐阶段操作：
