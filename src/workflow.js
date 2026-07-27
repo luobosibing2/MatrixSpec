@@ -32,7 +32,8 @@ const DEFAULT_CHECKS = {
     ["CS308", "must_match_regex", "依赖关系图|dependency graph", "tasks.md 缺少依赖关系图。"],
     ["CS309", "must_match_regex", "DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED|DONE", "tasks.md 缺少任务报告状态。"],
     ["CS310", "must_match_regex", "输入物[\\s\\S]*输出物|inputs?[\\s\\S]*outputs?", "Context 缺少输入物和输出物。"],
-    ["CS311", "must_match_regex", "规格合规[\\s\\S]*串连验证|spec compliance[\\s\\S]*integration", "Verify 缺少规格合规和串连验证。"]
+    ["CS311", "must_match_regex", "规格合规[\\s\\S]*串连验证|spec compliance[\\s\\S]*integration", "Verify 缺少规格合规和串连验证。"],
+    ["CS312", "must_match_regex", "实现方案|implementation approach", "tasks.md 缺少文件级实现方案。"]
   ],
   validation: [
     ["CS401", "must_match_regex", "允许进入实现|可进入实现|总体结论|验证结论|implementation may start", "validation.md 缺少进入实现结论。"]
@@ -42,20 +43,21 @@ const DEFAULT_CHECKS = {
   ]
 };
 
-export function builtinWorkflow() {
-  return loadPack("matspec");
+export function builtinWorkflow(profile = "light") {
+  return loadPack("matspec", profile);
 }
 
-export function loadPack(packKey = "matspec") {
+export function loadPack(packKey = "matspec", requestedProfile) {
   if (!KEY.test(packKey)) throw workflowError(`Invalid workflow pack key: ${packKey}`);
   const packRoot = safePackagePath(`workflow-packs/${packKey}`);
   const manifestFile = path.join(packRoot, "pack.yaml");
   if (!fs.existsSync(manifestFile)) throw workflowError(`Workflow pack not found: ${packKey}`);
   const manifest = YAML.parse(fs.readFileSync(manifestFile, "utf8")) || {};
-  if (manifest.key !== packKey || !manifest.workflow || !manifest.templatesRoot || !manifest.commandsRoot) {
+  if (manifest.key !== packKey || (!manifest.workflow && !manifest.profiles) || !manifest.templatesRoot || !manifest.commandsRoot) {
     throw workflowError(`Invalid workflow pack manifest: ${packKey}`);
   }
-  const workflowFile = safePackPath(packRoot, manifest.workflow);
+  const profile = selectProfile(manifest, requestedProfile);
+  const workflowFile = safePackPath(packRoot, profile.workflow);
   const templatesRoot = safePackPath(packRoot, manifest.templatesRoot);
   const commandsRoot = safePackPath(packRoot, manifest.commandsRoot);
   if (!fs.statSync(workflowFile).isFile() || !fs.statSync(templatesRoot).isDirectory() || !fs.statSync(commandsRoot).isDirectory()) {
@@ -89,6 +91,7 @@ export function loadPack(packKey = "matspec") {
   const workflow = {
     version: parsed.version || 1,
     source: "builtin",
+    profile: profile.key,
     pack: { key: manifest.key, name: manifest.name, description: manifest.description, utilityCommands: [...utilities] },
     extends: null,
     stages,
@@ -98,18 +101,20 @@ export function loadPack(packKey = "matspec") {
   return workflow;
 }
 
-export function loadWorkflow(root) {
+export function loadWorkflow(root, requestedProfile) {
   const projectFile = path.join(root, ".matspec-cli/workflows/project.yaml");
   const migrated = migrateLegacyWorkflow(root, projectFile);
   if (!fs.existsSync(projectFile)) {
     const config = readProjectConfig(root);
-    if (config.workflowPack) return attachRefs(root, loadPack(config.workflowPack));
+    const profile = requestedProfile || config.workflowProfile;
+    if (config.workflowPack) return attachRefs(root, loadPack(config.workflowPack, profile));
     const legacyDefault = path.join(root, ".matspec-cli/workflows/default.yaml");
     if (fs.existsSync(legacyDefault)) {
       const parsed = YAML.parse(fs.readFileSync(legacyDefault, "utf8")) || {};
       const workflow = {
         version: parsed.version || 1,
         source: "project",
+        profile: "custom",
         pack: null,
         extends: null,
         stages: (parsed.stages || []).map(normalizeStage),
@@ -118,10 +123,11 @@ export function loadWorkflow(root) {
       validateWorkflow(workflow, root);
       return attachRefs(root, workflow);
     }
-    return attachRefs(root, builtinWorkflow());
+    return attachRefs(root, builtinWorkflow(profile));
   }
   const parsed = YAML.parse(fs.readFileSync(projectFile, "utf8")) || {};
-  const base = parsed.extends ? loadPack(parsed.extends) : { version: 1, stages: [], finalization: { require_updated: [] } };
+  const profile = requestedProfile || parsed.profile || readProjectConfig(root).workflowProfile;
+  const base = parsed.extends ? loadPack(parsed.extends, profile) : { version: 1, profile: "custom", stages: [], finalization: { require_updated: [] } };
   const stages = [...base.stages];
   for (const raw of parsed.stages || []) {
     const stage = normalizeStage(raw);
@@ -135,6 +141,7 @@ export function loadWorkflow(root) {
   const workflow = {
     version: parsed.version || 1,
     source: migrated ? "project-migrated" : parsed.extends ? "pack-extended" : "project",
+    profile: parsed.extends ? base.profile : "custom",
     pack: parsed.extends ? base.pack : null,
     extends: parsed.extends || null,
     stages,
@@ -224,6 +231,10 @@ export function validateWorkflow(workflow, root = process.cwd()) {
     }
   }
   for (const target of workflow.finalization?.require_updated || []) safeProjectPath(root, target);
+  for (const rule of workflow.finalization?.coverage || []) {
+    safeProjectPath(root, rule.delta);
+    safeProjectPath(root, rule.full);
+  }
   return workflow;
 }
 
@@ -389,6 +400,21 @@ function readProjectConfig(root) {
   }
 }
 
-function workflowError(message) {
-  return Object.assign(new Error(message), { code: "INVALID_WORKFLOW" });
+function selectProfile(manifest, requestedProfile) {
+  if (!manifest.profiles) {
+    if (requestedProfile && requestedProfile !== "default") {
+      throw workflowError(`Workflow pack ${manifest.key} does not define profile: ${requestedProfile}`, "WORKFLOW_PROFILE_INVALID");
+    }
+    return { key: "default", workflow: manifest.workflow };
+  }
+  const key = requestedProfile || manifest.defaultProfile || "light";
+  const workflow = manifest.profiles[key];
+  if (!workflow) {
+    throw workflowError(`Unknown workflow profile: ${key}. Available: ${Object.keys(manifest.profiles).join(", ")}`, "WORKFLOW_PROFILE_INVALID");
+  }
+  return { key, workflow };
+}
+
+function workflowError(message, code = "INVALID_WORKFLOW") {
+  return Object.assign(new Error(message), { code });
 }

@@ -3,14 +3,15 @@ const VALUE_OPTIONS = new Set([
   "--runner", "--serve-url", "--model", "--agent", "--concurrency",
   "--retries", "--batch", "--design-template", "--spec-template", "--knowledge", "--template",
   "--complete", "--block", "--file", "--label", "--delegate",
-  "--objective", "--after", "--lang", "--default-runner", "--mode"
+  "--objective", "--after", "--lang", "--default-runner", "--mode", "--to", "--reason", "--profile",
+  "--component", "--turns", "--tool-calls", "--input-tokens", "--cached-input-tokens", "--output-tokens", "--cost", "--duration-ms", "--label"
 ]);
 
 const REPEATABLE_OPTIONS = new Set(["--module-path"]);
 
 const BOOLEAN_OPTIONS = new Set([
   "--help", "-h", "--json", "--force", "--no-template-update", "--run", "--resume",
-  "--mock", "--no-update-check", "--required", "--clean", "--no-color", "--probe-models"
+  "--mock", "--no-update-check", "--required", "--clean", "--no-color", "--probe-models", "--verbose", "--with-template"
 ]);
 
 export function parseArgs(argv) {

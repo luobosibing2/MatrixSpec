@@ -112,6 +112,7 @@ export const CONFIG_YAML = `version: 1
 profile: industrial
 structure: matspec-dir
 workflowPack: matspec
+workflowProfile: light
 paths:
   docs: matspec
   specs: matspec/specs

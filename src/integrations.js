@@ -45,9 +45,9 @@ function opencodeFiles(options = {}) {
   "matspec.tasks.md": opencodeCommand("matspec.tasks", "MatSpec Task Breakdown", stageCommandBody(stageDefinitions.tasks, options)),
   "matspec.validation.md": opencodeCommand("matspec.validation", "MatSpec Consistency Validation", stageCommandBody(stageDefinitions.validation, options))
   ,"matspec.implement.md": opencodeCommand("matspec.implement", "MatSpec Implementation", "Run `matspec implement --run --json`, execute one returned task at a time, and report DONE, DONE_WITH_CONCERNS, BLOCKED, or NEEDS_CONTEXT."),
-  "matspec.review.md": opencodeCommand("matspec.review", "MatSpec Review", "Run `matspec review --json`, then `matspec go --json`; independently review implementation evidence and write only review.md."),
+  "matspec.review.md": opencodeCommand("matspec.review", "MatSpec Review", reviewCommandBody()),
   "matspec.audit.md": opencodeCommand("matspec.audit", "MatSpec Audit", "Run `matspec validate --json` and report findings without changing files."),
-  "matspec.back.md": opencodeCommand("matspec.back", "MatSpec Back", "Inspect the active workflow history and explain the last confirmed stage without changing state.")
+  "matspec.back.md": opencodeCommand("matspec.back", "MatSpec Back", backCommandBody())
   };
 }
 
@@ -99,7 +99,7 @@ function commands(options = {}) {
     id: "matspec-review",
     title: "MatSpec Review",
     description: "Review a completed MatSpec implementation.",
-    body: "Run `matspec review --json`, then follow `matspec go --json` and write only review.md."
+    body: reviewCommandBody()
   },
   {
     id: "matspec-audit",
@@ -110,8 +110,8 @@ function commands(options = {}) {
   {
     id: "matspec-back",
     title: "MatSpec Back",
-    description: "Explain the previous workflow stage.",
-    body: "Inspect status and history without mutating workflow state."
+    description: "Move the workflow back to an earlier stage with an audited reason.",
+    body: backCommandBody()
   }
   ];
 }
@@ -143,8 +143,8 @@ const stageDefinitions = {
     objective: "Convert proposal.md into verifiable business-rule deltas.",
     inputs: ["full matspec/specs/spec.md", "proposal.md", "existing delta-spec.md if present"],
     nextName: "Design delta",
-    artifactRule: "Write only business rules. Use the exact top-level headings `## ADDED Requirements`, `## MODIFIED Requirements`, and `## REMOVED Requirements` even when a section says `None`. Every rule must have decidable acceptance criteria.",
-    contextRule: "If the full spec.md is missing, do not invent it. Ask the user to run matspec generate && matspec apply, or import a real spec.md.",
+    artifactRule: "Write only business rules. Use the exact top-level headings `## ADDED Requirements`, `## MODIFIED Requirements`, and `## REMOVED Requirements` even when a section says `None`. Give every added or modified requirement a stable unique `REQ-*` ID and decidable acceptance criteria.",
+    contextRule: "Read the profile returned by matspec go. In light profile, a missing full spec is an accepted no-baseline mode: derive current behavior from repository evidence, record that evidence and the missing-baseline risk, and continue without creating full docs yet. In standard/full, a missing required full spec blocks the stage until the user generates or imports it.",
     clarificationFocus: "business rules, acceptance criteria, state transitions, permissions, data constraints, exception paths, and DFX constraints",
     generationFocus: "the business-rule deltas to generate",
     completionFocus: "ADDED/MODIFIED/REMOVED coverage, acceptance criteria, and conflicts with the full spec.md"
@@ -172,11 +172,11 @@ const stageDefinitions = {
     name: "Task breakdown",
     file: "tasks.md",
     command: "/matspec.tasks",
-    objective: "Break the design into executable and verifiable development tasks.",
-    inputs: ["full spec.md", "full design.md", "delta-spec.md", "delta-design.md", "existing tasks.md if present"],
+    objective: "Turn the confirmed rules into an executable file-level implementation plan and tasks.",
+    inputs: ["full spec.md", "full design.md", "delta-spec.md", "optional delta-design.md in full profile", "existing tasks.md if present"],
     nextName: "Consistency validation",
-    artifactRule: "Tasks must be executable by a developer or coding agent, split by module/file/responsibility boundary, and include tests plus explicit done-finalization tasks: refresh matspec/specs/spec.md from delta-spec.md and refresh matspec/specs/design.md from delta-design.md. Do not use matspec generate/apply for accepted-change evolution.",
-    contextRule: "If full spec.md or design.md is missing, block task breakdown or mark it as high risk. Do not invent context.",
+    artifactRule: "Include an Implementation Approach covering file boundaries, architecture reuse, data flow, risks, and verification. Split executable tasks by file/responsibility and include tests plus finalization of full spec/design. In light and standard profiles tasks.md owns the necessary file-level design; in full profile carry delta-design decisions forward.",
+    contextRule: "Read stage.inputs.required. In light profile, missing optional full docs are the normal no-baseline path: inspect the repository, distinguish code facts from decisions, record the risk, and continue. In standard/full, block on missing required full docs. Never invent context.",
     clarificationFocus: "task boundaries, file scope, dependency order, parallelism, test strategy, and acceptance method",
     generationFocus: "the task scope to break down",
     completionFocus: "task size, dependencies, test coverage, and documentation updates"
@@ -188,10 +188,10 @@ const stageDefinitions = {
     name: "Consistency validation",
     file: "validation.md",
     command: "/matspec.validation",
-    objective: "Check coverage and conflicts across proposal, delta-spec, delta-design, tasks, and the full baseline docs.",
-    inputs: ["full spec.md", "full design.md", "proposal.md", "delta-spec.md", "delta-design.md", "tasks.md"],
+    objective: "Check coverage and conflicts across proposal, delta-spec, tasks, optional delta-design, and the full baseline docs.",
+    inputs: ["full spec.md", "full design.md", "proposal.md", "delta-spec.md", "optional delta-design.md in full profile", "tasks.md"],
     nextName: "Implementation",
-    artifactRule: "Check document-chain coverage, conflicts, missing scenarios, DFX constraints, and test tasks. End with a conclusion on whether implementation may start.",
+    artifactRule: "Check document-chain coverage, conflicts, missing scenarios, DFX constraints, and test tasks. Begin with YAML front matter containing matspec.stage=validation, matspec.verdict=allow|revise, blockers, repairTarget, and reviseStages. Use allow only when implementation may start; otherwise use revise, list blockers, and route repair.",
     contextRule: "If full spec.md or design.md is missing, block validation or mark it as high risk. Do not invent context.",
     clarificationFocus: "coverage, conflict criteria, missing scenarios, verification standard, and whether implementation may start",
     generationFocus: "the validation checks and expected conclusion standard",
@@ -208,95 +208,43 @@ ${body}
 `;
 }
 
+function reviewCommandBody() {
+  return "Run `matspec review --json`, then `matspec go --json`; independently review implementation evidence and write only review.md. Preserve YAML front matter. In light no-baseline mode, review against confirmed change documents, repository behavior, and executed tests; missing optional full docs are not a blocker. Set `matspec.verdict` to `approved` only when acceptable; otherwise use `changes-required`, list blockers, and set `repairTarget` to implementation or the earliest document stage that must change.";
+}
+
+function backCommandBody() {
+  return "Run `matspec status --json`, explain which confirmed stages will be invalidated, obtain the user's reason, then run `matspec back --to <stage> --reason \"<reason>\" --json`. Never edit `.matspec-state.json` directly.";
+}
+
 function mainFlowBody(options = {}) {
-  return `You are working in a repository that uses MatSpec. /matspec is the user's main entry point; do not make the user bounce between terminal and agent.
+  return `Use MatSpec as the workflow authority.
 
 ${languagePolicy(options)}
 
-Workflow:
-1. First call \`matspec go --json\` and read change, stage, artifact path, nextAction, stage.inputs, and stage.allowedWritePath.
-2. If nextAction is \`implementation\`, show the implementation card, read \`tasks.md\`, \`delta-spec.md\`, \`delta-design.md\`, and \`validation.md\`, then implement and test. Do not generate new stage documents and do not call \`matspec done\` until done finalization refreshes the full baseline docs.
-3. Render stage status from the JSON. Show the full MatSpec SDD panel on first entry, stage switches, user status questions, or CLI errors; use a compact status bar during normal conversation.
-4. Work according to the current stage: requirement clarification, spec delta, design delta, task breakdown, or consistency validation.
-5. Before writing an artifact for a newly entered stage, complete at least one user-facing clarification or generation-approval turn. If information is insufficient, ask questions. If information is sufficient, list the proposed output points and ask the user to reply "generate".
-6. After writing a stage artifact, ask the user to confirm it. Keep editing the current stage until the user confirms.
-7. When the user explicitly replies "confirm", "next", or equivalent, immediately call \`matspec accept --json\`; do not ask the user to run the command in a terminal.
-8. If \`matspec accept --json\` returns nextStage, immediately enter that stage: show a stage-switch card, read context, then ask clarification questions or request generation approval.
-9. If all document stages are confirmed, do not rush to \`matspec done --json\`. First implement according to \`tasks.md\` and run verification. When implementation is complete, perform done finalization: refresh \`matspec/specs/spec.md\` from \`delta-spec.md\` and refresh \`matspec/specs/design.md\` from \`delta-design.md\`. Only after implementation, done finalization, and verification pass should you ask whether to archive and call \`matspec done --json\`.
+1. Call \`matspec go --json\` first. Obey its frozen profile, current stage, inputs, nextAction, and allowedWritePath. Show the returned \`items\` verbatim when status is useful; the CLI owns fixed UI.
+2. For a document stage, read required inputs. Fetch the template only when needed with stage.templateCommand. Ask up to three questions that can change scope, behavior, data, compatibility, failure handling, or acceptance. If no blocker remains, list confirmed versus inferred decisions and request explicit "generate" authorization.
+3. Write only allowedWritePath, remove placeholders, and do not edit implementation code or .matspec-state.json. Explicit "confirm/next" accepts only the displayed artifact; then call \`matspec accept --json\`.
+4. A validation \`revise\` or review \`changes-required\` verdict must route repair with \`matspec back --to ... --reason ... --json\`. Never bypass a structured blocker.
+5. At implementation, follow tasks.md, change code/tests, run verification, and confirm implementation before review. At review, independently test observable behavior and use the required structured verdict.
+6. Before \`matspec done\`, update both full spec/design, creating them from repository facts, confirmed change artifacts, and final code when light mode started without them. Preserve every delta \`REQ-*\` ID in the full spec. Archive only after verification and explicit user authorization.
 
-Progression rules:
-- "confirm/next" for a stage only confirms the current artifact and advances the document workflow. Confirming validation means the document chain may enter implementation; it does not mean implementation is complete or ready to archive.
-- Before first writing a stage artifact, there must be explicit user authorization in the current stage conversation, such as "generate", "confirm generation", or "generate this".
-- Stop only when waiting for clarification, waiting for artifact confirmation, waiting for archive authorization, or blocked by a decision only the user can make.
-
-${sharedClarificationGate()}
-
-${sharedDisplayRules()}
-
-${sharedPathRules()}
-
-Missing full-document handling:
-- proposal: clarification may continue, but proposal.md must record missing-baseline risk.
-- delta-spec: if full spec.md is missing, ask the user to run \`matspec generate && matspec apply\` or import a real spec.md.
-- delta-design: if full design.md is missing, ask the user to run \`matspec generate && matspec apply\` or import a real design.md.
-- tasks / validation: if full spec.md or design.md is missing, block or clearly mark high risk. Do not invent context.
-
-Constraints:
-1. Do not modify implementation code during document stages.
-2. Do not edit \`.matspec-state.json\` directly.
-3. Only the CLI may advance stage state.
-4. Preserve user-written content unless the user explicitly asks for a rewrite.
-5. Stage artifacts must not keep template placeholders.
-6. Do not write empty template documents under \`matspec/\`.
-7. Do not create new \`matspec/changes/*\` directories; change directories must be created only by \`matspec start\`.
-`;
+Do not invent missing baseline facts or create change directories manually. Missing inputs block only when \`stage.inputs[].required\` is true; light profile intentionally treats absent full docs as optional until done finalization. Stop only for clarification, artifact confirmation, archive authorization, or a decision only the user can make.`;
 }
 
 function stageCommandBody(stage, options = {}) {
-  return `Current stage: ${stage.index}/${stage.total} ${stage.key} / ${stage.name}
+  return `Execute only the MatSpec \`${stage.key}\` stage.
 
 ${languagePolicy(options)}
 
-Required flow:
-1. First call \`matspec go --json\` and read the active change, stage.key, stage.file, stage.allowedWritePath, and stage.inputs.
-2. If the current stage is not \`${stage.key}\`, stop and tell the user to return to the \`/matspec\` main flow.
-3. Write only to stage.allowedWritePath returned by \`matspec go --json\`; do not infer or create \`matspec/changes/{change}\`.
-4. Show the stage panel first.
-5. Before writing, complete at least one user interaction for this stage. Even if context looks sufficient, list ${stage.generationFocus} and ask the user to reply "generate".
-6. A previous-stage "confirm/next" only enters this stage; it does not authorize generating \`${stage.file}\`.
-7. Do not generate the document before the user explicitly replies "generate", "confirm generation", "generate this", or equivalent.
-8. After writing \`${stage.file}\`, state the relative path and give a clear confirmation instruction.
-9. After user confirmation, call \`matspec accept --json\`; do not ask the user to run the command in a terminal.
-10. If confirming \`validation.md\` returns completed/readyForImplementation, do not call \`matspec done\`; say the document chain may enter implementation and return to the \`/matspec\` main flow for implementation.
+1. Call \`matspec go --json\`. If stage.key is not \`${stage.key}\`, stop. Obey stage.inputs and stage.allowedWritePath; never infer a change directory.
+2. Read required inputs and call stage.templateCommand only when ready to draft. Ask up to three high-value clarification questions. Otherwise list confirmed and inferred decisions and require a fresh explicit "generate" reply; entering this stage is not generation approval.
+3. Objective: ${stage.objective}
+4. Artifact rule: ${stage.artifactRule}
+5. Baseline rule: ${stage.contextRule}
+6. Write only the allowed artifact, with no placeholders. Do not change code or .matspec-state.json. Report the path and ask for review.
+7. On explicit confirmation call \`matspec accept --json\`. Never bypass a validation blocker or call done from a document stage.
 
-Stage objective:
-${stage.objective}
-
-Stage inputs:
-${stage.inputs.map((input) => `- ${input}`).join("\n")}
-
-Artifact:
-- ${stage.file}
-
-Execution rules:
-1. ${stage.artifactRule}
-2. ${stage.contextRule}
-3. Clarification questions must affect ${stage.clarificationFocus}. If there are no high-value questions, use generation approval instead.
-4. Ask at most 3 clarification questions per turn, and explain why each affects the current artifact.
-5. After the user replies, explain how the answer changes \`${stage.file}\`.
-6. Do not modify implementation code.
-7. Do not edit \`.matspec-state.json\` directly.
-8. Do not write empty template documents.
-
-${sharedClarificationGate(stage)}
-
-After completion, ask the user to review:
-- ${stage.completionFocus}
-
-${sharedDisplayRules()}
-
-${sharedPathRules()}
-`;
+Focus clarification on ${stage.clarificationFocus}. Completion review covers ${stage.completionFocus}.`;
 }
 
 function sharedClarificationGate(stage = null) {
@@ -305,7 +253,7 @@ function sharedClarificationGate(stage = null) {
     stageSpecific = `\nProposal-specific rules:\n1. Treat surface requests such as add a field, add a button, support search, optimize, improve, or make faster as proposed solutions until the user confirms the workflow problem, affected actor, success signal, scope boundary, and non-goals.\n2. Do not write implementation choices in proposal.md. Proposal owns why, what, boundaries, confirmation status, and impact preview only.\n3. The user can confirm proposal.md only when the real problem, boundaries, non-goals, and assumptions/open questions are explicit.`;
   }
   if (stage?.key === "validation") {
-    stageSpecific = `\nValidation-specific rules:\n1. Check proposal, delta-spec, delta-design, and tasks for unconfirmed decisions, agent-inferred decisions, or pending questions.\n2. If any unconfirmed decision affects scope, business rules, data model, migration, compatibility, or test executability, the conclusion must be "needs revision before implementation", not "implementation may start".\n3. Check whether the current worktree has unrelated dirty files. If it does, record it as a pre-implementation risk and state whether it blocks implementation.`;
+    stageSpecific = `\nValidation-specific rules:\n1. Check proposal, delta-spec, delta-design, and tasks for unconfirmed decisions, agent-inferred decisions, or pending questions.\n2. Begin validation.md with a matspec YAML object containing stage: validation, verdict: allow|revise, blockers, repairTarget, and reviseStages. Set verdict to allow only when implementation may start. Otherwise use revise, list concrete blockers, and route to the earliest stages that must change.\n3. If any unconfirmed decision affects scope, business rules, data model, migration, compatibility, or test executability, the conclusion must be "needs revision before implementation", not "implementation may start".\n4. Check whether the current worktree has unrelated dirty files. If it does, record it as a pre-implementation risk and state whether it blocks implementation.`;
   }
 
   return `Clarification guardrails:

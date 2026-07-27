@@ -4,7 +4,7 @@ import { createInterface } from "node:readline/promises";
 import { parseArgs } from "./args.js";
 import { VERSION } from "./constants.js";
 import { detectExternalAgents, initProject, projectPaths } from "./project.js";
-import { acceptStage, archiveChange, currentStagePayload, enterReview, getStatus, listChanges, loadState, resolveChange, stagesOf, startChange } from "./state.js";
+import { acceptStage, archiveChange, backStage, currentStagePayload, enterReview, getStatus, listChanges, loadState, resolveChange, stagesOf, startChange } from "./state.js";
 import { doctor, validateProject } from "./validation.js";
 import { hasError } from "./util.js";
 import { installIntegration, listIntegrations, removeIntegration } from "./integrations.js";
@@ -17,6 +17,7 @@ import { extensionCommand, stagesCommand, templateCommand } from "./customizatio
 import { reportUsage } from "./reporter.js";
 import { checkForUpdates } from "./version-check.js";
 import { generateBatch } from "./batch-generation.js";
+import { metricsCommand, recordLocalUsage } from "./metrics.js";
 
 export async function main(argv = []) {
   const startedAt = Date.now();
@@ -73,6 +74,9 @@ export async function main(argv = []) {
     case "review":
       result = enterReview(options, args[0]);
       break;
+    case "back":
+      result = backStage(options, args[0]);
+      break;
     case "archive":
       result = archiveChange(options, args[0]);
       break;
@@ -81,6 +85,9 @@ export async function main(argv = []) {
       break;
     case "workflow":
       result = workflowCommand(options, args);
+      break;
+    case "metrics":
+      result = metricsCommand(options, args);
       break;
     case "stages":
       result = stagesCommand(options, args);
@@ -115,6 +122,8 @@ export async function main(argv = []) {
   printResult(result, options);
   if (result.findings && hasError(result.findings)) process.exitCode = 1;
   if (result.ok === false && result.code !== "NO_ACTIVE_CHANGE") process.exitCode = 1;
+  const usageOptions = command === "init" && args[0] ? { ...options, path: args[0] } : options;
+  recordLocalUsage(command, usageOptions, result, Date.now() - startedAt);
   void reportUsage(command, options, result, Date.now() - startedAt);
 }
 
@@ -212,7 +221,7 @@ function goCommand(options, explicit) {
       next: ["matspec review"]
     };
   }
-  const stage = currentStagePayload(paths.root, change, state, current);
+  const stage = currentStagePayload(paths.root, change, state, current, options);
   let nextAction;
   if (current.delegate) nextAction = "delegate-subagent";
   else nextAction = stage.status === "draft" ? "await_user_accept" : stage.status === "blocked" ? "complete_previous_stage" : "open_agent_stage";
@@ -220,9 +229,16 @@ function goCommand(options, explicit) {
     ok: true,
     change,
     flowId: state.flowId,
+    profile: state.profile || state.workflow?.profile || "custom",
     stage,
     ...(current.delegate ? { delegate: current.delegate, delegateInputs: stage.inputs } : {}),
     nextAction,
+    message: tr(options, `MatSpec ${change}: ${stage.index}/${stage.total} ${stage.key} (${stage.status})`, `MatSpec ${change}：${stage.index}/${stage.total} ${stage.key}（${stage.status}）`),
+    items: [
+      `matspec [${stage.index}/${stage.total} ${stage.key} · ${stage.status}]`,
+      ...(stage.allowedWritePath ? [`artifact: ${stage.allowedWritePath}`] : []),
+      `action: ${nextAction}`
+    ],
     next: nextAction === "await_user_accept"
       ? [tr(options, "Run matspec accept after user confirmation", "确认后执行 matspec accept")]
       : nextAction === "delegate-subagent"
@@ -335,10 +351,11 @@ function helpText(commandLabel, optionLabel) {
 
 ${commandLabel}:
   matspec init [path]
-  matspec start|new <change>
+  matspec start|new <change> [--profile light|standard|full]
   matspec list|status|go|next|accept|confirm
   matspec implement [--run|--task N|--complete N|--block N]
   matspec review [change]
+  matspec back [change] --to stage --reason text
   matspec validate [change]
   matspec doctor
   matspec done|archive [change]
@@ -346,6 +363,7 @@ ${commandLabel}:
   matspec show|apply
   matspec integration list|install|remove
   matspec workflow refresh-snapshot
+  matspec metrics show|record
   matspec stages init|list|add|remove|validate|cleanup
   matspec template list|show|copy|sync
   matspec extension list|install|remove
@@ -358,6 +376,8 @@ ${optionLabel}:
   --design-template path
   --spec-template path
   --knowledge path
+  --profile light|standard|full (start only; default light)
+  --with-template (include the active template in go JSON)
   --json
   --force
   --path path

@@ -1,7 +1,11 @@
 key: matspec
 name: MatSpec Default Workflow Pack
 description: Official MatSpec SDD workflow pack.
-workflow: workflow.yaml
+defaultProfile: light
+profiles:
+  light: workflow.light.yaml
+  standard: workflow.standard.yaml
+  full: workflow.yaml
 templatesRoot: templates
 commandsRoot: commands
 utilityCommands:

@@ -134,6 +134,16 @@ pwsh -File .\scripts\psmux-codex-history-e2e.ps1 `
 运行依赖 `node`、`codex`、`psmux`、`git`、`go`，会调用真实 Codex 并消耗 token，
 因此不进入默认 CI。
 
+阶段一的真实 revision E2E 使用同一个历史 oracle，但额外注入一个明确的 validation blocker，验证 `阻断 -> back -> Codex 修订 -> 再验证 -> implementation -> review -> finalization`。它固定使用真实 `gpt-5.6-terra`、high reasoning，保留完整 prompt、事件、token usage 和工作区证据，不使用 fake provider。由于 Windows Codex `workspace-write` 无法向系统临时工作区新增阶段文件，该 npm 命令只对脚本刚创建的隔离历史仓使用 `danger-full-access`；脚本仍通过 allowedWritePath、历史 oracle 和 diff 断言限制结果：
+
+```powershell
+npm run test:e2e:codex-revision
+```
+
+2026-07-25 的首次完整运行、修复回路、时间与 token 证据汇总见 [stage1-e2e-2026-07-25.md](stage1-e2e-2026-07-25.md)。
+
+阶段二、阶段三使用当时默认的 standard profile、紧凑 go/skill 和本地分组件 metrics 的第二次真实运行，以及与阶段一的时间/token/tool-call 对比，见 [stage2-stage3-e2e-2026-07-25.md](stage2-stage3-e2e-2026-07-25.md)。当前默认值以 README 为准。
+
 ## 6. Apply
 
 确认最近 run 内容可接受后执行：

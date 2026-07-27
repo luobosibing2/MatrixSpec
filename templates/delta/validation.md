@@ -1,3 +1,14 @@
+---
+matspec:
+  stage: validation
+  verdict: revise
+  blockers:
+    - REPLACE_WITH_A_CONCRETE_BLOCKER_OR_EMPTY_THE_LIST
+  repairTarget: delta-spec
+  reviseStages:
+    - delta-spec
+---
+
 # [AR编号] 一致性验证
 
 > 本文档在实现前检查 proposal、delta-spec、delta-design、tasks 与全量文档之间的覆盖和冲突。
@@ -98,5 +109,6 @@
 
 - **是否允许进入实现**：[是/否]
 - **阻塞问题**：[无/列出]
+- **修复目标阶段**：[无，或 proposal/delta-spec/delta-design/tasks]
 - **验证角色**：[姓名或角色]
 - **验证日期**：[YYYY-MM-DD]

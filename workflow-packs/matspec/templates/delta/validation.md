@@ -1,6 +1,17 @@
+---
+matspec:
+  stage: validation
+  verdict: revise
+  blockers:
+    - REPLACE_WITH_A_CONCRETE_BLOCKER_OR_EMPTY_THE_LIST
+  repairTarget: delta-spec
+  reviseStages:
+    - delta-spec
+---
+
 # [AR编号] 一致性验证
 
-> 本文档在实现前检查 proposal、delta-spec、delta-design、tasks 与全量文档之间的覆盖和冲突。
+> 本文档在实现前检查 proposal、delta-spec、tasks、可选的 delta-design 与全量文档之间的覆盖和冲突。
 
 ## 1. 验证摘要
 
@@ -22,7 +33,7 @@
 |------|------------|------------|----------|------|
 | proposal.md | [数量/无] | [数量/无] | [是/否] | [备注] |
 | delta-spec.md | [数量/无] | [数量/无] | [是/否] | [备注] |
-| delta-design.md | [数量/无] | [数量/无] | [是/否] | [备注] |
+| delta-design.md（仅 full profile） | [数量/无] | [数量/无] | [是/否/不适用] | [备注] |
 | tasks.md | [数量/无] | [数量/无] | [是/否] | [备注] |
 
 > 如果未确认决策影响范围、业务规则、数据模型、迁移、兼容性、可测试性或验收标准，结论必须是“实现前需修订”。
@@ -98,5 +109,6 @@
 
 - **是否允许进入实现**：[是/否]
 - **阻塞问题**：[无/列出]
+- **修复目标阶段**：[无，或 proposal/delta-spec/delta-design/tasks]
 - **验证角色**：[姓名或角色]
 - **验证日期**：[YYYY-MM-DD]

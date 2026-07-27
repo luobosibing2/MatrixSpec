@@ -11,7 +11,11 @@ export function implementCommand(options = {}, explicitChange) {
   if (!change) return fail("NO_ACTIVE_CHANGE", "未发现活动变更。");
   const state = loadState(paths.root, change);
   if (!state) return fail("CHANGE_STATE_MISSING", "缺少 change 状态文件。");
-  if (!state.stages?.validation?.confirmed) return fail("VALIDATION_NOT_CONFIRMED", "validation 尚未确认。");
+  const prerequisite = unconfirmedImplementationPrerequisite(state);
+  if (prerequisite) {
+    const code = `${prerequisite.key.replace(/-/g, "_").toUpperCase()}_NOT_CONFIRMED`;
+    return fail(code, `${prerequisite.key} 尚未确认。`);
+  }
   const tasksFile = path.join(paths.changes, change, "tasks.md");
   if (!fs.existsSync(tasksFile)) return fail("TASKS_FILE_MISSING", "缺少 tasks.md。");
   const content = fs.readFileSync(tasksFile, "utf8");
@@ -208,6 +212,16 @@ function summarize(tasks) {
 function changeDocuments(change) {
   const base = `matspec/changes/${change}`;
   return ["proposal.md", "delta-spec.md", "delta-design.md", "tasks.md", "validation.md", "review.md"].map((file) => `${base}/${file}`);
+}
+
+function unconfirmedImplementationPrerequisite(state) {
+  const stages = stagesOf(state);
+  const implementationIndex = stages.findIndex((stage) => stage.key === "implementation");
+  if (implementationIndex < 0) return null;
+  const validation = stages.slice(0, implementationIndex).find((stage) => stage.key === "validation");
+  if (validation) return state.stages?.validation?.confirmed ? null : validation;
+  const previous = stages[implementationIndex - 1];
+  return previous && !state.stages?.[previous.key]?.confirmed ? previous : null;
 }
 
 function taskPrompt(change, task) {

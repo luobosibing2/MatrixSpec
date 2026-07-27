@@ -211,6 +211,7 @@ version: 1
 profile: industrial
 structure: codespec-dir
 workflowPack: codespec
+workflowProfile: light
 paths:
   docs: codespec
   specs: codespec/specs
@@ -270,17 +271,19 @@ utilityCommands:
 
 包路径必须完全位于包根目录内，不允许绝对路径或 `..`。每个模板和命令引用都要计算 SHA-256 并存入 change 的 workflow 快照。
 
-### 5.2 默认阶段
+### 5.2 默认 profile 与阶段
+
+未指定 profile 时使用 `light`，并在 `start` 时连同 workflow 一起冻结；后续配置变化不得改变在途 change。Light 默认允许全量 spec/design 不存在，以代码库事实、用户确认和 change 文档作为实现前证据，不设置独立 validation。
 
 | 顺序 | key | 文件 | 命令 | 执行者 | done 必需 |
 |---:|---|---|---|---|---|
 | 1 | `proposal` | `proposal.md` | `codespec.proposal` | 主 Agent | 是 |
 | 2 | `delta-spec` | `delta-spec.md` | `codespec.delta-spec` | 主 Agent | 是 |
-| 3 | `delta-design` | `delta-design.md` | `codespec.delta-design` | 主 Agent | 是 |
-| 4 | `tasks` | `tasks.md` | `codespec.tasks` | 主 Agent | 是 |
-| 5 | `validation` | `validation.md` | `codespec.validation` | `stage-generator` | 是 |
-| 6 | `implementation` | 无文件 | `codespec.implement` | `task-executor` | 是 |
-| 7 | `review` | `review.md` | `codespec.review` | `stage-generator` | 是 |
+| 3 | `tasks` | `tasks.md` | `codespec.tasks` | 主 Agent | 是 |
+| 4 | `implementation` | 无文件 | `codespec.implement` | `task-executor` | 是 |
+| 5 | `review` | `review.md` | `codespec.review` | `stage-generator` | 是 |
+
+`standard` 通过 `start --profile standard` 显式选择，在 tasks 后增加独立 validation。`full` 通过 `start --profile full` 显式选择，并进一步在 `delta-spec` 与 `tasks` 之间增加必需的 `delta-design`。迁移、持久化、权限、并发、一致性或跨系统改造应使用 standard/full。
 
 最终化要求：
 
@@ -321,6 +324,7 @@ finalization:
 - `CS309`：包含任务状态 `DONE/DONE_WITH_CONCERNS/BLOCKED/NEEDS_CONTEXT`。
 - `CS310`：Context 包含输入物和输出物。
 - `CS311`：Verify 包含规格合规和串连验证。
+- `CS312`：包含文件级实现方案。
 
 `validation`：
 
@@ -389,10 +393,11 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 3. 对有文件阶段验证文件存在。
 4. 阻止明显模板内容。
 5. 验证所有前序阶段已确认。
-6. 写 `status=confirmed`、`clarified=true`、`confirmed=true`、`confirmedAt`。
-7. 追加 `confirm-stage` history。
-8. 推进至下一阶段；有 delegate 的 no-file 阶段不得自动跳过。
-9. 在最后一个必需阶段确认时，捕获 finalization 文件的实现前 SHA-256 baseline。
+6. 对 validation/review 解析机器可判定 verdict；缺失、冲突、非法或阻断 verdict 不得推进。
+7. 写 `status=confirmed`、`clarified=true`、`confirmed=true`、`confirmedAt`，并保存 verdict 元数据。
+8. 追加 `confirm-stage` history。
+9. 推进至下一阶段；有 delegate 的 no-file 阶段不得自动跳过。
+10. 任一 profile 的最后文档阶段放行且下一阶段为 implementation 时，捕获 finalization 文件的实现前存在状态和 SHA-256；Light 无基线时记录 `exists=false`。
 
 ## 6. 命令行语法
 
@@ -408,6 +413,7 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 --run --complete --block --resume --mock --task
 --no-update-check
 --file --label --delegate --objective --after --required --clean
+--to --reason
 --no-color
 ```
 
@@ -426,6 +432,7 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 | `confirm <stage> [change]` | 确认指定阶段 |
 | `implement [change]` | 展示/进入实现、获取 Task、标记状态 |
 | `review [change]` | 进入审查阶段 |
+| `back [change] --to <stage> --reason <text>` | 审计式回退并失效目标及下游阶段 |
 | `done [change]` | 校验、最终化并归档 |
 | `archive [change]` | 直接归档，支持恢复用途的 `--force` |
 | `validate [change]` | 校验项目和文档链 |
@@ -457,7 +464,7 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 5. 交互环境提示选择 Agent 集成；显式 `--integration` 直接使用；非 TTY 或 JSON 模式默认 `nga`。
 6. 安装选中的集成，且不覆盖用户已存在文件。
 7. 不创建任何业务阶段文档或全量文档。
-8. 缺少全量文档时只提示本地 `generate → show → apply`。
+8. 默认 Light 缺少全量文档时直接提示 `start`；Standard/Full 或用户主动恢复 baseline 时提示本地 `generate → show → apply`。
 
 ### 7.2 `codespec start/new <change>`
 
@@ -474,12 +481,12 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 
 1. `start` 前检查全局模板/Agent 命令同步；同 CLI 版本已检查可跳过。
 2. 拒绝业务仓中的本地 workflow pack 覆盖目录。
-3. 加载当前有效 workflow。
+3. 加载当前有效 workflow；缺省 profile 为 `light`，`--profile standard|full` 显式选择更强门禁。
 4. 创建 change 目录，但不复制 `proposal.md`。
 5. 总是写入新的 `.codespec-state.json`。
 6. 写只读语义的 `workflow.yaml` 快照。
 7. 冻结每个阶段的配置、模板/命令路径和 SHA-256。
-8. 返回 `flowId` 和进入 `/codespec` 的提示。
+8. 将 profile 写入 state 与 workflow 快照，并返回 `flowId`、profile 和进入 `/codespec` 的提示。
 
 ### 7.3 `list/status/go/next`
 
@@ -507,7 +514,7 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 ```json
 {
   "index": 1,
-  "total": 7,
+  "total": 6,
   "key": "proposal",
   "name": "需求澄清",
   "status": "pending",
@@ -516,14 +523,12 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
   "agentCommand": "/codespec.proposal",
   "entryCommand": "/codespec",
   "template": "templates/delta/proposal.md",
-  "templateContent": {
-    "source": "global",
-    "path": "...",
-    "content": "..."
-  },
+  "templateCommand": "matspec go {change} --with-template --json",
   "objective": "..."
 }
 ```
+
+默认 `go --json` 不嵌入模板正文，UTF-8 payload 预算为 3KB；`--with-template` 或 `--verbose` 才返回 `templateContent`。固定状态 UI 由 CLI 的 `message/items` 生成，skill 不再复制展示模板。
 
 ### 7.4 `accept/confirm`
 
@@ -539,11 +544,28 @@ Change 状态文件为 `codespec/changes/{change}/.codespec-state.json`。初始
 
 `[功能名]`、`[字段名]` 等弱模式当前只警告，不阻断。
 
+validation/review 的新模板必须在文档开头写 YAML front matter：
+
+```yaml
+---
+matspec:
+  stage: validation                  # 推荐；若提供则必须与当前阶段一致
+  verdict: allow                     # validation: allow|revise；review: approved|changes-required
+  blockers: []                       # 阻断时至少一项；可为字符串或 {id, description}
+  repairTarget: null                 # 阻断时必填
+  reviseStages: []
+---
+```
+
+阻断 verdict 返回 `STAGE_VERDICT_BLOCKED`，包含 `blockers`、`repairTarget`、`reviseStages` 和可执行的下一步，但不确认阶段、不捕获 baseline、不推进 `currentStage`。当前状态已经提供阶段上下文，因此 `stage` 可省略；若提供则必须匹配。为兼容已有 change，CLI 仍识别明确的旧式最终结论；新产物必须使用上述结构。
+
+`back` 必须同时提供 `--to` 和非空 `--reason`。目标必须是当前阶段之前的有效阶段。成功后目标阶段变为 `clarifying`，其后所有阶段变为 `pending` 且清除确认/verdict 元数据，保留阶段文档作为待复核草稿，并追加 `backtrack` history。回退到 implementation 保留最初的实现前 baseline；回退到 implementation 之前的文档阶段则清除 baseline，等待 implementation 前的最后文档阶段再次放行时重建。
+
 ### 7.5 `implement`
 
 无选项时：
 
-- 必须已有已确认的 validation。
+- 必须已有已确认的 implementation 前置文档阶段（Light 为 tasks，Standard/Full 为 validation）。
 - 必须存在 `tasks.md`。
 - 解析 plan 或 legacy 任务，返回任务数、分组、文档路径和执行指导。
 
@@ -632,11 +654,12 @@ SubAgent 报告状态必须为：
 
 finalization 算法：
 
-- 确认最后一个必需阶段时记录目标文件是否存在及其 SHA-256。
-- baseline 时不存在的文件，done 时不强制比较。
+- implementation 前的最后文档阶段放行时记录目标文件是否存在及其 SHA-256。
+- baseline 时不存在的文件，done 时必须已经创建；仍不存在返回 `FULL_DOCS_NOT_UPDATED`，reason 为 `not-created-since-baseline`。
 - baseline 时存在的文件，done 时必须仍存在且 SHA-256 已变化。
 - 缺 baseline 返回 `BASELINE_UPDATE_SNAPSHOT_MISSING`。
 - 未变化返回 `FULL_DOCS_NOT_UPDATED`。
+- delta-spec 中每条新增/修改需求必须有稳定 `REQ-*` 标识；全量 spec 缺任一标识返回 `DELTA_COVERAGE_MISSING`，delta 无标识返回 `DELTA_COVERAGE_IDS_MISSING`。
 
 成功归档使用：
 

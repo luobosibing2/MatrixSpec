@@ -1,3 +1,14 @@
+---
+matspec:
+  stage: validation
+  verdict: revise
+  blockers:
+    - REPLACE_WITH_A_CONCRETE_BLOCKER_OR_EMPTY_THE_LIST
+  repairTarget: delta-spec
+  reviseStages:
+    - delta-spec
+---
+
 # [REQ ID] Consistency Validation
 
 > This document checks coverage and conflicts across proposal, delta-spec, delta-design, tasks, and the full documents before implementation.
@@ -98,5 +109,6 @@
 
 - **Implementation may start**: [yes/no]
 - **Blocking issues**: [none/list]
+- **Repair target stage**: [none, or proposal/delta-spec/delta-design/tasks]
 - **Validator role**: [name or role]
 - **Validation date**: [YYYY-MM-DD]

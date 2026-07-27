@@ -1,1 +1,1 @@
-Show the active change and explain the last confirmed stage. Do not mutate state automatically.
+Run `matspec status --json`, explain which confirmed stages will be invalidated, obtain the user's reason, then run `matspec back --to <stage> --reason "<reason>" --json`. Never edit `.matspec-state.json` directly.

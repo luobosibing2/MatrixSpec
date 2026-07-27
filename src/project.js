@@ -35,6 +35,7 @@ export function initProject(targetPath, options = {}) {
   const existingDocs = ["matspec/specs/spec.md", "matspec/specs/design.md"].filter((file) =>
     fs.existsSync(path.join(root, file))
   );
+  const workflowProfile = configuredWorkflowProfile(root);
 
   return {
     ok: true,
@@ -74,10 +75,19 @@ export function initProject(targetPath, options = {}) {
       ...existingDocs.map((item) => tr(options, `Existing full doc. Use matspec apply --force to overwrite: ${item}`, `已存在真实全量文档，如需覆盖请执行 matspec apply --force：${item}`))
     ],
     message: tr(options, `Checked MatSpec project: ${root}`, `已检查 matspec 项目：${root}`),
-    next: existingDocs.length
+    next: existingDocs.length || workflowProfile === "light"
       ? ["matspec start AR-feature-name"]
       : ["matspec generate", "matspec show", "matspec apply"]
   };
+}
+
+function configuredWorkflowProfile(root) {
+  try {
+    const config = YAML.parse(fs.readFileSync(path.join(root, ".matspec-cli/config.yaml"), "utf8")) || {};
+    return String(config.workflowProfile || "light");
+  } catch {
+    return "light";
+  }
 }
 
 function writeConfig(root, options, created, skipped) {

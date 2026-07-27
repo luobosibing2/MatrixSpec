@@ -1,9 +1,11 @@
 # MatSpec
 
-MatSpec 是 Markdown-first 的规格驱动开发 CLI。它从已有代码恢复全量 `spec.md` / `design.md`，再用可冻结、可审计的七阶段工作流管理每次变更。
+MatSpec 是 Markdown-first 的规格驱动开发 CLI。它用可冻结、可审计的工作流管理每次变更，也可以从已有代码恢复全量 `spec.md` / `design.md`。默认采用 **Light + 无预置基线**：直接从需求、代码库事实和澄清结果开始，不要求先生成全量文档。
 
 ```text
-proposal → delta-spec → delta-design → tasks → validation → implementation → review → finalization/archive
+light（默认）: proposal → delta-spec → tasks → implementation → review → finalization/archive
+standard:     proposal → delta-spec → tasks → validation → implementation → review → finalization/archive
+full:         proposal → delta-spec → delta-design → tasks → validation → implementation → review → finalization/archive
 ```
 
 ## 快速开始
@@ -13,23 +15,42 @@ proposal → delta-spec → delta-design → tasks → validation → implementa
 ```bash
 npm install
 matspec init
+matspec start AR-feature-name
+matspec go --json
+```
+
+默认 Light 流程允许 `matspec/specs/spec.md` 和 `design.md` 不存在。Agent 会从仓库代码和已确认的 change 文档推进；实现与 review 完成后，在 `done` finalization 中首次创建或更新全量文档。
+
+需要实现前一致性验证时显式选择 Standard；高风险变更需要独立设计阶段时选择 Full：
+
+```bash
+matspec start AR-validated-change --profile standard
+matspec start AR-high-risk-change --profile full
+```
+
+如果项目希望先恢复全量基线，仍可在开始变更前显式执行：
+
+```bash
 matspec generate
 matspec show
 matspec apply
 ```
 
-开始一次变更：
+通用阶段命令：
 
 ```bash
-matspec start AR-feature-name
-matspec go --json
 matspec accept
+matspec back --to delta-spec --reason "validation blocker"
 matspec implement --run --json
 matspec review
 matspec done
 ```
 
 Coding Agent 的统一入口是 `/matspec`。非交互初始化默认安装 `nga` 集成，也可显式选择 `opencode`、`codegenie`、`codeagent`、`chrys`、`claude-code` 或 `none`。
+
+Standard/Full 的 `validation.md` 和所有 profile 的 `review.md` 使用 YAML front matter 给出机器可判定的 verdict。`revise` / `changes-required` 不会推进状态；CLI 会返回 blocker 与修复目标，随后可用带审计原因的 `matspec back` 回到目标阶段。全量文档状态在进入 implementation 前捕获：已有文档必须在 finalization 中更新；Light 无基线模式则必须创建缺失文档。
+
+`go --json` 默认返回小于 3KB 的紧凑阶段上下文；需要模板时执行返回的 `templateCommand`（即带 `--with-template` 的 go），这样读取的是 change 已冻结的模板引用。本地 `.matspec-cli/metrics.jsonl` 自动记录 CLI 时长和回退，也可用 `matspec metrics record` 写入 agent turns、tool calls、token 与成本，`matspec metrics show` 按 candidate / validation / review / operator 汇总。
 
 ## 核心目录
 
@@ -59,9 +80,10 @@ matspec/
   manifests/
   runs/
   report-queue/
+  metrics.jsonl
 ```
 
-`generate` 只在 `.matspec-cli/runs/` 写候选文档；`apply` 才会发布到 `matspec/specs/`，已有文件必须用 `--force` 才能覆盖。
+`generate` 只在 `.matspec-cli/runs/` 写候选文档；`apply` 才会发布到 `matspec/specs/`，已有文件必须用 `--force` 才能覆盖。它们是可选的 baseline recovery 工具，不是默认 Light 工作流的前置步骤。
 
 ## 离线生成
 
@@ -108,6 +130,7 @@ matspec workflow refresh-snapshot <change> --confirm-compatible "已审查模板
 ```bash
 npm test
 npm pack --dry-run
+npm run test:e2e:codex-revision
 npm run web
 ```
 

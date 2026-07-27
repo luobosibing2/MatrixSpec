@@ -492,7 +492,7 @@ function forbiddenGeneratedOutput(text, file, options = {}) {
   }
   const forbidden = [
     { pattern: /\b(?:this|the)\s+sandbox\b|\bsandbox\s+environment\b|\bread-?only\s+sandbox\b/i, code: "RUNNER_ENVIRONMENT_TEXT", label: "sandbox environment" },
-    { pattern: /\bread-?only\s+filesystem\b|\bfilesystem\s+access\b/i, code: "RUNNER_ENVIRONMENT_TEXT", label: "filesystem access" },
+    { pattern: /\b(?:i|we)\s+(?:cannot|could not|can't|couldn't|was unable to|were unable to)\s+(?:write|modify|create|access)\b[^\n]{0,80}\b(?:file|filesystem|repository|repo)\b/i, code: "RUNNER_ENVIRONMENT_TEXT", label: "filesystem access failure" },
     { pattern: /\bread-?only\s+(?:mode|environment|access)\b/i, code: "RUNNER_ENVIRONMENT_TEXT", label: "read-only environment" },
     { pattern: /cannot write files|could not write files|can't write files/i, code: "RUNNER_ENVIRONMENT_TEXT", label: "cannot write files" },
     { pattern: /copy (?:this|the following|into|to your repo)/i, code: "RUNNER_ENVIRONMENT_TEXT", label: "copy into repo" },

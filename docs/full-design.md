@@ -218,12 +218,12 @@ resolveProject(target) = path.resolve(process.cwd(), target)
 
 ### 5.1 Pack loader
 
-`loadPack(packKey)`：
+`loadPack(packKey, profile)`：
 
 1. key 匹配安全正则。
 2. root 默认 `{packageRoot}/workflow-packs/{key}`。
 3. 读取 `pack.yaml`。
-4. 验证 key、workflow、templatesRoot、commandsRoot。
+4. 验证 key、profiles/defaultProfile（或兼容的 workflow）、templatesRoot、commandsRoot。
 5. 所有路径用 `path.resolve` 后验证仍在 pack root 内。
 6. 解析 workflow，并以 canonical command 模式验证。
 7. 对每个有文件 stage 解析 template；对全部 stage 解析 command。
@@ -240,19 +240,17 @@ resolveProject(target) = path.resolve(process.cwd(), target)
 
 10. utility command 也必须唯一、安全并实际存在。
 
-当前内置 pack 的线性阶段必须固定为：
+当前内置 pack 默认使用 `light`，并允许没有预置 full baseline：
 
 | 顺序 | key | file | command | delegate | 必需 |
 |---:|---|---|---|---|---|
 | 1 | `proposal` | `proposal.md` | `codespec.proposal` | 无 | 是 |
 | 2 | `delta-spec` | `delta-spec.md` | `codespec.delta-spec` | 无 | 是 |
-| 3 | `delta-design` | `delta-design.md` | `codespec.delta-design` | 无 | 是 |
-| 4 | `tasks` | `tasks.md` | `codespec.tasks` | 无 | 是 |
-| 5 | `validation` | `validation.md` | `codespec.validation` | `stage-generator` | 是 |
-| 6 | `implementation` | 无 | `codespec.implement` | `task-executor` | 是 |
-| 7 | `review` | `review.md` | `codespec.review` | `stage-generator` | 是 |
+| 3 | `tasks` | `tasks.md` | `codespec.tasks` | 无 | 是 |
+| 4 | `implementation` | 无 | `codespec.implement` | `task-executor` | 是 |
+| 5 | `review` | `review.md` | `codespec.review` | `stage-generator` | 是 |
 
-最终化默认比较 `codespec/specs/spec.md` 和 `codespec/specs/design.md`。内置 checks 的稳定代码为 proposal `CS111..CS116`、delta-spec `CS201`、tasks `CS301..CS311`、validation `CS401`、review `CS501`；检查失败形成 warning finding。
+`standard` 在 tasks 后增加独立 validation；`full` 再在 delta-spec 与 tasks 之间增加独立 delta-design。profile 在 change 创建时冻结。Light 中缺失的全量文档是可选输入，但最终化必须首次创建；已有文档则必须更新。最终再用 delta 中的稳定 `REQ-*` 集合验证全量 spec 覆盖。内置 tasks checks 扩展到 `CS301..CS312`。
 
 ### 5.2 Workflow loader
 
@@ -261,11 +259,12 @@ resolveProject(target) = path.resolve(process.cwd(), target)
 ```ts
 type Workflow = {
   version: number
+  profile: "light" | "standard" | "full" | "custom"
   source?: "project" | "pack-extended" | "project-migrated" | "builtin"
   pack?: { key: string; name?: string; description?: string } | null
   extends?: string | null
   stages: Stage[]
-  finalization: { require_updated: string[] }
+  finalization: { require_updated: string[], coverage?: { delta: string, full: string }[] }
 }
 ```
 
@@ -322,7 +321,7 @@ finalization = override.finalization ?? base.finalization
 
 ### 6.1 创建
 
-`createInitialState(change, workflow)` 对每个 stage 建立状态；首阶段 `clarifying`，其他 `pending`。workflow 对象完整嵌入状态，形成快照。
+`createInitialState(change, workflow)` 对每个 stage 建立状态；首阶段 `clarifying`，其他 `pending`。profile 与 workflow 对象完整嵌入状态，形成不可中途切换的快照。
 
 `createChange` 的关键顺序：
 
@@ -382,9 +381,15 @@ else:
 
 有 delegate 的 noFile implementation 必须停留。
 
-### 6.5 Baseline
+### 6.5 Verdict 与回退
 
-确认某阶段后，如果其后不存在任何必需阶段且 state 尚无 baseline：
+`acceptStage` 在确认 validation/review 前解析文档开头的 `matspec` YAML front matter。结构化 verdict 是状态机输入而不是展示文本：`revise` 和 `changes-required` 返回阻断结果，携带 blockers 与 repairTarget，但不调用 `confirmStageInState`。
+
+`backStage` 只接受早于当前阶段的目标和非空审计原因。它保留 Markdown 草稿，清除目标及下游阶段的确认/verdict 字段，重设 `currentStage`，并写入包含 `from/to/reason/invalidated` 的 `backtrack` history。文档阶段回退会清除 baseline；review 回退到 implementation 时保留原始实现前 baseline。
+
+### 6.6 Baseline
+
+任一 profile 的最后文档阶段确认且下一阶段是 implementation、同时 state 尚无 baseline 时：
 
 ```js
 implementationBaseline = {
@@ -399,9 +404,9 @@ implementationBaseline = {
 }
 ```
 
-这意味着默认 pack 实际会在最后一个必需阶段 review 确认时捕获 baseline；如果通过兼容流程更早触发，则以当时状态为准。
+这保证 baseline 代表产品实现开始前的全量文档状态，而不是 review 后的状态。Light 无基线记录 `exists=false`，finalization 必须创建对应文档；已有文档记录 hash 并要求更新。阻断 validation 不捕获 baseline；回退到 implementation 之前的文档阶段后，下一次放行会重新捕获。
 
-### 6.6 漂移
+### 6.7 漂移
 
 对快照每个 `templateRef/commandRef`：
 
@@ -447,7 +452,11 @@ blocked          → complete_previous_stage
 
 ### 7.3 Done
 
-`done` 组合 `validateProject + archiveChange`。它不单独合并 delta；Agent/用户必须先更新全量 Markdown。工具只用 baseline hash 提供“发生过更新”的证据，不理解语义是否正确。
+`done` 组合 `validateProject + archiveChange`。它不单独合并 delta；Agent/用户必须先更新全量 Markdown。工具先用实现前 baseline hash 提供“发生过更新”的证据，再提取 delta-spec 的 `REQ-*` 集合并要求全量 spec 全覆盖；它不尝试做开放式语义判定。
+
+### 7.4 本地指标
+
+每个 CLI 调用追加到 `.matspec-cli/metrics.jsonl`，记录 command、component、成功状态、时长和 backtrack。runner 可用 `metrics record` 追加 turns、toolCalls、input/cached/output tokens、costUsd 与 durationMs；`metrics show` 输出总量及 candidate / validation / review / operator 分组。无法从 provider 观察到的成本必须留空，不得推算成真实账单。
 
 ## 8. 阶段模板设计
 
@@ -903,6 +912,8 @@ TEMPLATE_CONFLICT
 BASE_TEMPLATE_NOT_FOUND
 GLOBAL_TEMPLATE_EXTENDS_GLOBAL
 ```
+
+默认 payload 只含路径、存在性、目标和按需模板命令，不含模板正文；`--with-template/--verbose` 才解析正文。CLI 生成固定 `message/items`，所有 stage skill 只保留阶段差异规则。生成预算为：全部 Codex skills 小于 20KB，单个 stage skill 不超过 2.5KB，默认 `go --json` 不超过 3KB。
 
 Runner 错误使用 `{RUNNER}_NOT_FOUND/FAILED/EMPTY_OUTPUT`。
 

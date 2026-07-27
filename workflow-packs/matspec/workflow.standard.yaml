@@ -12,23 +12,31 @@ stages:
     command: matspec.delta-spec
     template: templates/delta/delta-spec.md
     required_for_done: true
-  - key: delta-design
-    file: delta-design.md
-    label: 设计增量
-    command: matspec.delta-design
-    template: templates/delta/delta-design.md
-    required_for_done: true
   - key: tasks
     file: tasks.md
     label: 任务拆解
     command: matspec.tasks
     template: templates/delta/tasks.md
+    inputs:
+      - matspec/specs/spec.md
+      - matspec/specs/design.md
+      - delta-spec.md
+    requiresFullSpec: true
+    requiresFullDesign: true
     required_for_done: true
   - key: validation
     file: validation.md
     label: 一致性验证
     command: matspec.validation
     template: templates/delta/validation.md
+    inputs:
+      - matspec/specs/spec.md
+      - matspec/specs/design.md
+      - proposal.md
+      - delta-spec.md
+      - tasks.md
+    requiresFullSpec: true
+    requiresFullDesign: true
     delegate: stage-generator
     required_for_done: true
   - key: implementation
@@ -42,6 +50,13 @@ stages:
     label: 实现审查
     command: matspec.review
     template: templates/delta/review.md
+    inputs:
+      - proposal.md
+      - delta-spec.md
+      - tasks.md
+      - validation.md
+    requiresFullSpec: true
+    requiresFullDesign: true
     delegate: stage-generator
     required_for_done: true
 finalization:

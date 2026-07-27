@@ -7,6 +7,7 @@ import { projectPaths } from "./project.js";
 import { isZh, tr } from "./i18n.js";
 import { assertNoLocalPackOverride, loadWorkflow, resolveStageTemplate, snapshotWorkflow, workflowDrift } from "./workflow.js";
 import { loadTemplateForAgent } from "./customization.js";
+import { parseStageVerdict } from "./stage-verdict.js";
 import { nowStamp, readJson, rel, sha256, slugify, today, writeJson } from "./util.js";
 
 export function normalizeChangeName(input) {
@@ -24,7 +25,7 @@ export function normalizeChangeName(input) {
 export function startChange(input, options = {}) {
   const paths = projectPaths(options);
   assertNoLocalPackOverride(paths.root);
-  const workflow = loadWorkflow(paths.root);
+  const workflow = loadWorkflow(paths.root, options.profile);
   const change = normalizeChangeName(input);
   const dir = path.join(paths.changes, change);
   if (fs.existsSync(dir)) throw codedError(tr(options, `Change already exists: ${change}`, `变更已存在：${change}`), "CHANGE_ALREADY_EXISTS");
@@ -36,6 +37,7 @@ export function startChange(input, options = {}) {
     ok: true,
     change,
     flowId: state.flowId,
+    profile: state.profile,
     path: rel(paths.root, dir),
     message: tr(options, `Created MatSpec change: ${change}`, `已创建 matspec 变更：${change}`),
     next: ["matspec go --json", tr(options, "Run /matspec in your coding agent", "在 Coding Agent 中执行 /matspec")]
@@ -58,6 +60,7 @@ export function initialState(change, workflow = loadWorkflow(process.cwd())) {
     version: 1,
     change,
     flowId: crypto.randomBytes(4).toString("hex"),
+    profile: frozen.profile || "custom",
     currentStage: frozen.stages[0]?.key || "completed",
     workflow: frozen,
     stages,
@@ -147,7 +150,7 @@ export function getStatus(options = {}, explicit) {
     status: stageStatus(paths.root, change, state, stage),
     ...(stage.file ? { filePath: `matspec/changes/${change}/${stage.file}` } : {})
   }));
-  return { ok: true, changes: listChanges(options), change, flowId: state.flowId, currentStage: state.currentStage, workflow: state.workflow, drift, stages };
+  return { ok: true, changes: listChanges(options), change, flowId: state.flowId, profile: state.profile || state.workflow?.profile || "custom", currentStage: state.currentStage, workflow: state.workflow, drift, stages };
 }
 
 export function acceptStage(options = {}, explicitChange, explicitStage) {
@@ -168,12 +171,37 @@ export function acceptStage(options = {}, explicitChange, explicitStage) {
   if (!stage.noFile) {
     const file = path.join(paths.root, "matspec/changes", change, stage.file);
     if (!fs.existsSync(file)) throw codedError(tr(options, `Missing stage file: ${stage.file}`, `缺少阶段文件：${stage.file}`), "STAGE_FILE_MISSING");
-    const marker = templateMarker(fs.readFileSync(file, "utf8"), stage.file);
+    const content = fs.readFileSync(file, "utf8");
+    const marker = templateMarker(content, stage.file);
     if (marker?.strong) {
       throw codedError(tr(options, `Stage file still looks like a template: ${stage.file}`, `阶段文件仍像模板：${stage.file}`), "STAGE_FILE_LOOKS_TEMPLATE", marker);
     }
+    const verdict = parseStageVerdict(stage.key, content);
+    if (!verdict.ok) return { ...verdict, change, stage: stage.key };
+    if (verdict.required && verdict.blocked) {
+      const target = verdict.repairTarget;
+      const stageIndex = stagesOf(state).indexOf(stage);
+      const targetIndex = stagesOf(state).findIndex((item) => item.key === target);
+      const canBack = targetIndex >= 0 && targetIndex < stageIndex;
+      return {
+        ok: false,
+        code: "STAGE_VERDICT_BLOCKED",
+        change,
+        stage: stage.key,
+        verdict: verdict.verdict,
+        blockers: verdict.blockers,
+        repairTarget: target,
+        reviseStages: verdict.reviseStages,
+        message: tr(options, `${stage.key} blocks progression until ${target} is repaired.`, `${stage.key} 阻止继续推进，必须先修订 ${target}。`),
+        next: canBack
+          ? [`matspec back --to ${target} --reason \"${stage.key} verdict requires revision\"`]
+          : [tr(options, `Revise ${stage.file} and run matspec accept again.`, `修订 ${stage.file} 后再次执行 matspec accept。`)]
+      };
+    }
+    confirmStageInState(state, stage, verdict.required ? verdict : null);
+  } else {
+    confirmStageInState(state, stage);
   }
-  confirmStageInState(state, stage);
   if (shouldCaptureBaseline(state, stage)) {
     state.implementationBaseline = captureFullDocumentBaseline(paths.root, state.workflow.finalization?.require_updated);
     state.history.push({ action: "capture-implementation-baseline", stage: stage.key, timestamp: new Date().toISOString(), documents: state.implementationBaseline.documents });
@@ -196,6 +224,65 @@ export function acceptStage(options = {}, explicitChange, explicitStage) {
   };
 }
 
+export function backStage(options = {}, explicitChange) {
+  const paths = projectPaths(options);
+  const change = resolveChange(options, explicitChange);
+  if (!change) return { ok: false, code: "NO_ACTIVE_CHANGE", message: tr(options, "No active MatSpec change found.", "未发现活动的 matspec 变更。") };
+  const state = loadState(paths.root, change);
+  if (!state) return { ok: false, code: "CHANGE_STATE_MISSING", change, message: `缺少状态文件：matspec/changes/${change}/.matspec-state.json` };
+  const reason = String(options.reason || "").trim();
+  if (!reason) return { ok: false, code: "BACK_REASON_REQUIRED", change, message: "matspec back requires --reason for the audit history." };
+  const targetKey = String(options.to || "").trim();
+  if (!targetKey) return { ok: false, code: "BACK_TARGET_REQUIRED", change, message: "matspec back requires --to <stage>." };
+
+  const stages = stagesOf(state);
+  const targetIndex = stages.findIndex((stage) => stage.key === targetKey);
+  if (targetIndex < 0) return { ok: false, code: "BACK_TARGET_INVALID", change, target: targetKey, message: `Unknown back target: ${targetKey}` };
+  const currentIndex = state.currentStage === "completed"
+    ? stages.length
+    : stages.findIndex((stage) => stage.key === state.currentStage);
+  if (currentIndex < 0) return { ok: false, code: "UNKNOWN_STAGE", change, stage: state.currentStage, message: `Unknown current stage: ${state.currentStage}` };
+  if (targetIndex >= currentIndex) {
+    return { ok: false, code: "BACK_TARGET_NOT_EARLIER", change, target: targetKey, currentStage: state.currentStage, message: "Back target must be earlier than the current stage." };
+  }
+
+  const invalidated = [];
+  for (let index = targetIndex; index < stages.length; index += 1) {
+    const stage = stages[index];
+    const record = ensureStageRecord(state, stage);
+    for (const field of ["confirmedAt", "verdict", "verdictSource", "blockers", "repairTarget", "reviseStages"]) delete record[field];
+    Object.assign(record, {
+      status: index === targetIndex ? "clarifying" : "pending",
+      clarified: false,
+      confirmed: false
+    });
+    invalidated.push(stage.key);
+  }
+  state.currentStage = targetKey;
+  const implementationIndex = stages.findIndex((stage) => stage.key === "implementation");
+  if (targetIndex < implementationIndex) delete state.implementationBaseline;
+  const timestamp = new Date().toISOString();
+  state.history.push({
+    action: "backtrack",
+    from: stages[currentIndex]?.key || "completed",
+    to: targetKey,
+    reason,
+    invalidated,
+    timestamp
+  });
+  saveState(paths.root, change, state);
+  return {
+    ok: true,
+    change,
+    from: stages[currentIndex]?.key || "completed",
+    currentStage: targetKey,
+    reason,
+    invalidated,
+    message: tr(options, `Moved workflow back to ${targetKey}.`, `工作流已回退到 ${targetKey}。`),
+    next: ["matspec go --json"]
+  };
+}
+
 export function enterReview(options = {}, explicitChange) {
   const paths = projectPaths(options);
   const change = resolveChange(options, explicitChange);
@@ -203,7 +290,6 @@ export function enterReview(options = {}, explicitChange) {
   const state = loadState(paths.root, change);
   const review = stagesOf(state).find((stage) => stage.key === "review");
   if (!review) return { ok: false, code: "REVIEW_STAGE_NOT_FOUND", message: "当前 workflow 没有 review 阶段。" };
-  if (!state.stages.validation?.confirmed) return { ok: false, code: "VALIDATION_NOT_CONFIRMED", message: "validation 尚未确认。" };
   if (!state.stages.implementation?.confirmed) {
     const tasksFile = path.join(paths.changes, change, "tasks.md");
     const tasks = fs.existsSync(tasksFile) ? fs.readFileSync(tasksFile, "utf8") : "";
@@ -232,14 +318,16 @@ export function validateFullDocumentUpdatesForDone(options = {}, explicitChange)
   const current = captureFullDocumentBaseline(paths.root, Object.keys(baseline.documents));
   const notUpdated = [];
   for (const [filePath, before] of Object.entries(baseline.documents)) {
-    if (!before.exists) continue;
     const after = current.documents[filePath];
-    if (!after?.exists) notUpdated.push({ path: filePath, reason: "missing-now" });
+    if (!after?.exists) notUpdated.push({ path: filePath, reason: before.exists ? "missing-now" : "not-created-since-baseline" });
+    else if (!before.exists) continue;
     else if (before.sha256 === after.sha256) notUpdated.push({ path: filePath, reason: "unchanged-since-baseline" });
   }
   if (notUpdated.length) {
     return { ok: false, code: "FULL_DOCS_NOT_UPDATED", message: "最终化证据不完整；baseline 后的全量文档必须更新。", notUpdated, notMerged: notUpdated };
   }
+  const coverage = validateDeltaCoverage(paths.root, change, state.workflow.finalization?.coverage || []);
+  if (!coverage.ok) return { ...coverage, change };
   return { ok: true, change };
 }
 
@@ -286,9 +374,11 @@ export function templateMarker(content, fileName = "") {
   return weak ? { strong: false, marker: weak[0] } : null;
 }
 
-export function currentStagePayload(root, change, state, stage) {
+export function currentStagePayload(root, change, state, stage, options = {}) {
   const index = stagesOf(state).findIndex((item) => item.key === stage.key);
-  const template = loadTemplateForAgent(root, stage.key) || resolveStageTemplate(root, stage);
+  const includeTemplate = Boolean(options.with_template || options.verbose);
+  const template = includeTemplate ? (resolveStageTemplate(root, stage) || loadTemplateForAgent(root, stage.key)) : null;
+  const filePath = stage.file ? `matspec/changes/${change}/${stage.file}` : null;
   return {
     index: index + 1,
     total: stagesOf(state).length,
@@ -296,22 +386,22 @@ export function currentStagePayload(root, change, state, stage) {
     name: stage.label || stage.name,
     status: stageStatus(root, change, state, stage),
     ...(stage.file ? {
-      file: `matspec/changes/${change}/${stage.file}`,
-      absoluteFile: path.join(root, "matspec/changes", change, stage.file).replaceAll(path.sep, "/"),
-      filePath: `matspec/changes/${change}/${stage.file}`,
-      allowedWritePath: `matspec/changes/${change}/${stage.file}`
+      file: filePath,
+      filePath,
+      allowedWritePath: filePath
     } : {}),
     command: stage.command,
     agentCommand: stage.agentCommand || `/${stage.command}`,
     entryCommand: "/matspec",
     template: stage.template,
+    ...(!stage.noFile ? { templateCommand: `matspec go ${change} --with-template --json` } : {}),
     ...(template ? { templateContent: { source: template.source, path: template.path.replaceAll(path.sep, "/"), content: template.content } } : {}),
     objective: stage.objective,
     delegate: stage.delegate,
     noFile: stage.noFile,
     requiresFullSpec: Boolean(stage.requiresFullSpec),
     requiresFullDesign: Boolean(stage.requiresFullDesign),
-    requiresUserGenerationApproval: true,
+    requiresUserGenerationApproval: !stage.noFile,
     inputs: (stage.inputs || []).map((input) => {
       const inputPath = input.endsWith(".md") && !input.startsWith("matspec/")
         ? `matspec/changes/${change}/${input}`
@@ -329,10 +419,19 @@ export function currentStagePayload(root, change, state, stage) {
   };
 }
 
-function confirmStageInState(state, stage) {
+function confirmStageInState(state, stage, verdict = null) {
   const record = ensureStageRecord(state, stage);
   const timestamp = new Date().toISOString();
   Object.assign(record, { status: "confirmed", clarified: true, confirmed: true, confirmedAt: timestamp });
+  if (verdict) {
+    Object.assign(record, {
+      verdict: verdict.verdict,
+      verdictSource: verdict.source,
+      blockers: verdict.blockers,
+      repairTarget: verdict.repairTarget,
+      reviseStages: verdict.reviseStages
+    });
+  }
   state.history.push({ action: "confirm-stage", stage: stage.key, timestamp });
   const stages = stagesOf(state);
   let index = stages.indexOf(stage) + 1;
@@ -354,8 +453,8 @@ function confirmStageInState(state, stage) {
 function shouldCaptureBaseline(state, confirmedStage) {
   if (state.implementationBaseline) return false;
   const stages = stagesOf(state);
-  const after = stages.slice(stages.indexOf(confirmedStage) + 1);
-  return confirmedStage.required_for_done && !after.some((stage) => stage.required_for_done);
+  const next = stages[stages.indexOf(confirmedStage) + 1];
+  return next?.key === "implementation";
 }
 
 function captureFullDocumentBaseline(root, files = FINALIZATION_FILES) {
@@ -369,9 +468,34 @@ function captureFullDocumentBaseline(root, files = FINALIZATION_FILES) {
   return { capturedAt: new Date().toISOString(), documents };
 }
 
+function validateDeltaCoverage(root, change, rules) {
+  for (const rule of rules) {
+    const deltaPath = rule.delta.replace("{change}", change);
+    const fullPath = rule.full.replace("{change}", change);
+    const deltaFile = path.join(root, deltaPath);
+    const fullFile = path.join(root, fullPath);
+    if (!fs.existsSync(deltaFile) || !fs.existsSync(fullFile)) {
+      return { ok: false, code: "DELTA_COVERAGE_INPUT_MISSING", message: "无法验证增量覆盖：delta 或全量文档缺失。", delta: deltaPath, full: fullPath };
+    }
+    const delta = fs.readFileSync(deltaFile, "utf8");
+    const full = fs.readFileSync(fullFile, "utf8");
+    const ids = [...new Set([...delta.matchAll(/\bREQ-[A-Z0-9][A-Z0-9._-]*\b/gi)].map((match) => match[0].toUpperCase()))];
+    if (!ids.length) {
+      return { ok: false, code: "DELTA_COVERAGE_IDS_MISSING", message: "delta-spec 必须为每条增量需求提供稳定的 REQ-* 标识，才能验证最终化覆盖。", delta: deltaPath };
+    }
+    const fullUpper = full.toUpperCase();
+    const missing = ids.filter((id) => !fullUpper.includes(id));
+    if (missing.length) {
+      return { ok: false, code: "DELTA_COVERAGE_MISSING", message: "全量规格尚未覆盖所有 delta requirement 标识。", delta: deltaPath, full: fullPath, missing };
+    }
+  }
+  return { ok: true };
+}
+
 function workflowForFile(workflow) {
   return {
     version: workflow.version,
+    ...(workflow.profile ? { profile: workflow.profile } : {}),
     ...(workflow.extends ? { extends: workflow.extends } : {}),
     stages: workflow.stages.map(({ templateRef, commandRef, ...stage }) => ({ ...stage, templateRef, commandRef })),
     finalization: workflow.finalization

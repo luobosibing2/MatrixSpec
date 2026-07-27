@@ -1,1 +1,1 @@
-Run `matspec go --json`. As stage-generator, review implementation evidence against all confirmed documents and write only review.md.
+Run `matspec go --json`. As stage-generator, review implementation evidence against all confirmed documents and write only review.md. Preserve YAML front matter. Use `approved` only when the implementation is acceptable; otherwise use `changes-required`, list blockers, and set `repairTarget` to `implementation` or the earliest document stage that must change.

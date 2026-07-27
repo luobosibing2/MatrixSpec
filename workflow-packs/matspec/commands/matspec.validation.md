@@ -1,1 +1,1 @@
-Run `matspec go --json`. As stage-generator, independently validate proposal, deltas, tasks, and full documents; write only validation.md.
+Run `matspec go --json`. As stage-generator, independently validate proposal, deltas, tasks, and full documents; write only validation.md. Preserve YAML front matter. Set `matspec.verdict` to `allow` only when implementation may start; otherwise use `revise`, list concrete blockers, and route repair with `repairTarget` and `reviseStages`.

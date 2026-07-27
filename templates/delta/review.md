@@ -1,3 +1,13 @@
+---
+matspec:
+  stage: review
+  verdict: changes-required
+  blockers:
+    - REPLACE_WITH_A_CONCRETE_BLOCKER_OR_EMPTY_THE_LIST
+  repairTarget: implementation
+  reviseStages: []
+---
+
 # [AR编号] 实现审查
 
 ## 1. 审查范围
@@ -19,6 +29,8 @@
 ## 4. 审查决策
 
 Decision: [Approved / Changes Required]
+
+Repair target: [implementation, or an earlier document stage]
 
 ## 5. 结论
 

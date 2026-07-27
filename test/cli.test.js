@@ -182,6 +182,7 @@ test("init is idempotent and does not copy business templates", () => {
   const root = tempProject();
   const first = json(run(["init", root, "--integration", "none", "--json"]));
   assert.equal(first.ok, true);
+  assert.deepEqual(first.next, ["matspec start AR-feature-name"]);
   assert.ok(fs.existsSync(path.join(root, "matspec/specs")));
   assert.ok(fs.existsSync(path.join(root, ".matspec-cli/config.yaml")));
   assert.equal(fs.existsSync(path.join(root, "matspec/specs/spec.md")), false);
@@ -250,14 +251,23 @@ test("start creates only change directory and state", () => {
   json(run(["init", root, "--integration", "none", "--json"]));
   const result = json(run(["--path", root, "start", "REQ20260428-user-login", "--json"]));
   assert.equal(result.change, "REQ20260428-user-login");
+  assert.equal(result.profile, "light");
   assert.ok(fs.existsSync(path.join(root, "matspec/changes/REQ20260428-user-login/.matspec-state.json")));
   assert.equal(fs.existsSync(path.join(root, "matspec/changes/REQ20260428-user-login/proposal.md")), false);
+  const state = JSON.parse(fs.readFileSync(path.join(root, "matspec/changes/REQ20260428-user-login/.matspec-state.json"), "utf8"));
+  assert.equal(state.profile, "light");
+  assert.equal(state.workflow.stages.some((stage) => stage.key === "delta-design"), false);
+  const configFile = path.join(root, ".matspec-cli/config.yaml");
+  fs.writeFileSync(configFile, fs.readFileSync(configFile, "utf8").replace("workflowProfile: light", "workflowProfile: full"), "utf8");
+  const frozen = json(run(["--path", root, "status", "REQ20260428-user-login", "--json"]));
+  assert.equal(frozen.profile, "light");
+  assert.equal(frozen.stages.some((stage) => stage.key === "delta-design"), false);
 });
 
 test("status, go, accept, and archive follow the stage model", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
-  json(run(["--path", root, "start", "REQ20260428-user-login", "--json"]));
+  json(run(["--path", root, "start", "REQ20260428-user-login", "--profile", "full", "--json"]));
   let status = json(run(["--path", root, "status", "--json"]));
   assert.equal(status.stages[0].status, "pending");
   assert.equal(status.stages[1].status, "blocked");
@@ -270,6 +280,11 @@ test("status, go, accept, and archive follow the stage model", () => {
   assert.equal(go.stage.requiresUserGenerationApproval, true);
   assert.equal(go.stage.requiresFullSpec, false);
   assert.ok(go.stage.inputs.some((input) => input.path === "matspec/specs/spec.md" && input.required === false));
+  assert.equal(go.stage.templateContent, undefined);
+  assert.match(go.stage.templateCommand, /matspec go .* --with-template/);
+  assert.ok(Buffer.byteLength(JSON.stringify(go), "utf8") <= 3000);
+  const verboseGo = json(run(["--path", root, "go", "--with-template", "--json"]));
+  assert.ok(verboseGo.stage.templateContent.content.length > 100);
 
   const accepted = json(run(["--path", root, "accept", "--json"]));
   assert.equal(accepted.acceptedStage, "proposal");
@@ -309,6 +324,191 @@ test("status, go, accept, and archive follow the stage model", () => {
   assert.match(archived.archive, /matspec\/changes\/archives\/\d{4}-\d{2}-\d{2}-REQ20260428-user-login/);
 });
 
+test("light profile freezes a five-stage workflow without standalone validation", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+  const change = "REQ20260726-light-profile";
+  const result = json(run(["--path", root, "start", change, "--profile", "light", "--json"]));
+  assert.equal(result.profile, "light");
+  const state = JSON.parse(fs.readFileSync(path.join(root, `matspec/changes/${change}/.matspec-state.json`), "utf8"));
+  assert.deepEqual(state.workflow.stages.map((stage) => stage.key), [
+    "proposal", "delta-spec", "tasks", "implementation", "review"
+  ]);
+  assert.equal(state.workflow.stages.some((stage) => stage.key === "validation"), false);
+  assert.equal(state.workflow.finalization.coverage[0].delta, "matspec/changes/{change}/delta-spec.md");
+});
+
+test("structured verdicts block progression, back invalidates downstream stages, and baseline starts before implementation", () => {
+  const root = tempProject();
+  const change = "REQ20260725-verdict-back";
+  json(run(["init", root, "--integration", "none", "--json"]));
+  writeProjectFile(root, "matspec/specs/spec.md", "# Existing SPEC\n\nOriginal product behavior.\n");
+  writeProjectFile(root, "matspec/specs/design.md", "# Existing DESIGN\n\nOriginal architecture.\n");
+  json(run(["--path", root, "start", change, "--profile", "full", "--json"]));
+  const changeDir = path.join(root, "matspec/changes", change);
+
+  for (const [file, body] of [
+    ["proposal.md", "# Proposal\n\nConfirmed need and scope.\n"],
+    ["delta-spec.md", "# Delta Spec\n\n## ADDED Requirements\n- REQ-VERDICT-001 Rule.\n## MODIFIED Requirements\nNone\n## REMOVED Requirements\nNone\n"],
+    ["delta-design.md", "# Delta Design\n\nDesign covers the rule.\n"],
+    ["tasks.md", "# Tasks\n\n- Implement the rule.\n- Add tests.\n"]
+  ]) {
+    fs.writeFileSync(path.join(changeDir, file), body, "utf8");
+    json(run(["--path", root, "accept", "--json"]));
+  }
+
+  fs.writeFileSync(
+    path.join(changeDir, "validation.md"),
+    [
+      "---",
+      "matspec:",
+      "  verdict: revise",
+      "  blockers:",
+      "    - id: AC-001",
+      "      description: Acceptance criterion is not decidable.",
+      "  repairTarget: delta-spec",
+      "  reviseStages:",
+      "    - delta-spec",
+      "---",
+      "# Validation",
+      "",
+      "Implementation must not start."
+    ].join("\n"),
+    "utf8"
+  );
+  let result = run(["--path", root, "accept", "--json"]);
+  assert.equal(result.status, 1);
+  let payload = JSON.parse(result.stdout);
+  assert.equal(payload.code, "STAGE_VERDICT_BLOCKED");
+  assert.equal(payload.repairTarget, "delta-spec");
+  assert.deepEqual(payload.blockers, [{ id: "AC-001", description: "Acceptance criterion is not decidable." }]);
+  assert.match(payload.next[0], /matspec back --to delta-spec/);
+  let state = JSON.parse(fs.readFileSync(path.join(changeDir, ".matspec-state.json"), "utf8"));
+  assert.equal(state.currentStage, "validation");
+  assert.equal(state.stages.validation.confirmed, false);
+  assert.equal(state.implementationBaseline, undefined);
+
+  payload = json(run(["--path", root, "back", "--to", "delta-spec", "--reason", "Make acceptance criterion decidable", "--json"]));
+  assert.equal(payload.currentStage, "delta-spec");
+  assert.deepEqual(payload.invalidated, ["delta-spec", "delta-design", "tasks", "validation", "implementation", "review"]);
+  state = JSON.parse(fs.readFileSync(path.join(changeDir, ".matspec-state.json"), "utf8"));
+  assert.equal(state.history.at(-1).action, "backtrack");
+  assert.equal(state.history.at(-1).reason, "Make acceptance criterion decidable");
+
+  fs.appendFileSync(path.join(changeDir, "delta-spec.md"), "\nAcceptance: observable output equals expected output.\n", "utf8");
+  json(run(["--path", root, "accept", "--json"]));
+  json(run(["--path", root, "accept", "--json"]));
+  json(run(["--path", root, "accept", "--json"]));
+  fs.writeFileSync(
+    path.join(changeDir, "validation.md"),
+    [
+      "---",
+      "matspec:",
+      "  stage: validation",
+      "  verdict: allow",
+      "  blockers: []",
+      "  repairTarget: null",
+      "  reviseStages: []",
+      "---",
+      "# Validation",
+      "",
+      "Implementation may start."
+    ].join("\n"),
+    "utf8"
+  );
+  payload = json(run(["--path", root, "accept", "--json"]));
+  assert.equal(payload.nextStage.key, "implementation");
+  state = JSON.parse(fs.readFileSync(path.join(changeDir, ".matspec-state.json"), "utf8"));
+  assert.ok(state.implementationBaseline?.documents?.["matspec/specs/spec.md"]?.sha256);
+  assert.equal(state.stages.validation.verdict, "allow");
+
+  json(run(["--path", root, "accept", "--json"]));
+  fs.writeFileSync(
+    path.join(changeDir, "review.md"),
+    [
+      "---",
+      "matspec:",
+      "  stage: review",
+      "  verdict: changes-required",
+      "  blockers:",
+      "    - The regression test is missing.",
+      "  repairTarget: implementation",
+      "  reviseStages: []",
+      "---",
+      "# Review",
+      "",
+      "Decision: Changes Required"
+    ].join("\n"),
+    "utf8"
+  );
+  result = run(["--path", root, "accept", "--json"]);
+  assert.equal(result.status, 1);
+  payload = JSON.parse(result.stdout);
+  assert.equal(payload.code, "STAGE_VERDICT_BLOCKED");
+  assert.equal(payload.repairTarget, "implementation");
+  json(run(["--path", root, "back", "--to", "implementation", "--reason", "Add the missing regression test", "--json"]));
+  state = JSON.parse(fs.readFileSync(path.join(changeDir, ".matspec-state.json"), "utf8"));
+  assert.ok(state.implementationBaseline, "implementation repair must retain the original pre-implementation baseline");
+
+  json(run(["--path", root, "accept", "--json"]));
+  fs.writeFileSync(
+    path.join(changeDir, "review.md"),
+    [
+      "---",
+      "matspec:",
+      "  stage: review",
+      "  verdict: approved",
+      "  blockers: []",
+      "  repairTarget: null",
+      "  reviseStages: []",
+      "---",
+      "# Review",
+      "",
+      "Decision: Approved"
+    ].join("\n"),
+    "utf8"
+  );
+  json(run(["--path", root, "accept", "--json"]));
+  fs.appendFileSync(path.join(root, "matspec/specs/spec.md"), "\nImplemented REQ-VERDICT-001 rule.\n", "utf8");
+  fs.appendFileSync(path.join(root, "matspec/specs/design.md"), "\nImplemented design.\n", "utf8");
+  payload = json(run(["--path", root, "done", change, "--json"]));
+  assert.ok(payload.ok);
+});
+
+test("back requires an audited reason and an earlier valid target", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+  json(run(["--path", root, "start", "REQ20260725-back-validation", "--json"]));
+  let result = run(["--path", root, "back", "--to", "proposal", "--json"]);
+  assert.equal(result.status, 1);
+  assert.equal(JSON.parse(result.stdout).code, "BACK_REASON_REQUIRED");
+  result = run(["--path", root, "back", "--to", "proposal", "--reason", "No-op", "--json"]);
+  assert.equal(result.status, 1);
+  assert.equal(JSON.parse(result.stdout).code, "BACK_TARGET_NOT_EARLIER");
+});
+
+test("local metrics separate CLI and agent cost by component", () => {
+  const root = tempProject();
+  const localMetrics = { env: { MATSPEC_NO_LOCAL_METRICS: "" } };
+  json(run(["init", root, "--integration", "none", "--json"], localMetrics));
+  json(run(["--path", root, "start", "REQ20260725-metrics", "--json"], localMetrics));
+  json(run(["--path", root, "go", "--json"], localMetrics));
+  json(run([
+    "--path", root, "metrics", "record", "--component", "validation", "--label", "validator-1",
+    "--turns", "2", "--tool-calls", "7", "--input-tokens", "1200", "--cached-input-tokens", "800",
+    "--output-tokens", "300", "--cost", "0.42", "--duration-ms", "1500", "--json"
+  ], localMetrics));
+  const metrics = json(run(["--path", root, "metrics", "show", "--json"], localMetrics));
+  assert.ok(metrics.totals.cliCalls >= 3);
+  assert.equal(metrics.totals.agentEvents, 1);
+  assert.equal(metrics.byComponent.validation.turns, 2);
+  assert.equal(metrics.byComponent.validation.toolCalls, 7);
+  assert.equal(metrics.byComponent.validation.inputTokens, 1200);
+  assert.equal(metrics.byComponent.validation.cachedInputTokens, 800);
+  assert.equal(metrics.byComponent.validation.outputTokens, 300);
+  assert.equal(metrics.byComponent.validation.costUsd, 0.42);
+});
+
 test("integration install/remove preserves modified files", () => {
   const root = tempProject();
   json(run(["init", root, "--integration", "none", "--json"]));
@@ -328,23 +528,18 @@ test("integration install supports Claude Code and Codex repository commands", (
   const claude = json(run(["--path", root, "integration", "install", "claude-code", "--json"]));
   assert.equal(claude.integration, "claude-code");
   const mainCommand = fs.readFileSync(path.join(root, ".claude/commands/matspec.md"), "utf8");
-  assert.match(mainCommand, /MatSpec SDD/);
-  assert.match(mainCommand, /Stage switch card/);
+  assert.match(mainCommand, /workflow authority/);
+  assert.match(mainCommand, /frozen profile/);
   assert.match(mainCommand, /matspec accept --json/);
-  assert.match(mainCommand, /nextAction is `implementation`|nextAction`? is `implementation`|If nextAction is `implementation`/);
-  assert.match(mainCommand, /do not rush to `matspec done --json`/);
-  assert.match(mainCommand, /matspec generate && matspec apply/);
-  assert.match(mainCommand, /Clarification guardrails/);
-  assert.match(mainCommand, /vague language/);
-  assert.match(mainCommand, /done finalization/);
+  assert.match(mainCommand, /stage\.templateCommand/);
+  assert.match(mainCommand, /matspec back --to/);
+  assert.match(mainCommand, /REQ-\*/);
   const proposalCommand = fs.readFileSync(path.join(root, ".claude/commands/matspec-proposal.md"), "utf8");
   assert.match(proposalCommand, /generate/);
-  assert.match(proposalCommand, /stage.allowedWritePath/);
-  assert.match(proposalCommand, /Clarification question card/);
-  assert.match(proposalCommand, /decision ledger/);
-  assert.match(proposalCommand, /agent inference|agent-inferred/);
+  assert.match(proposalCommand, /stage\.allowedWritePath/);
+  assert.match(proposalCommand, /confirmed and inferred decisions/);
   assert.match(proposalCommand, /Requested Change vs Real Need/);
-  assert.match(proposalCommand, /search, filter, sort, form input/);
+  assert.ok(Buffer.byteLength(proposalCommand, "utf8") <= 2500);
   assert.ok(fs.existsSync(path.join(root, ".claude/skills/matspec/SKILL.md")));
 
   const codex = json(run(["--path", root, "integration", "install", "codex", "--json"]));
@@ -352,21 +547,26 @@ test("integration install supports Claude Code and Codex repository commands", (
   assert.ok(fs.existsSync(path.join(root, ".agents/skills/matspec/SKILL.md")));
   const proposalSkill = fs.readFileSync(path.join(root, ".agents/skills/matspec-proposal/SKILL.md"), "utf8");
   assert.match(proposalSkill, /real-need discovery/);
-  assert.match(proposalSkill, /exact vs partial matching/);
+  assert.ok(Buffer.byteLength(proposalSkill, "utf8") <= 2500);
   const designSkill = fs.readFileSync(path.join(root, ".agents/skills/matspec-delta-design/SKILL.md"), "utf8");
   assert.match(designSkill, /generate/);
+  const skillFiles = fs.readdirSync(path.join(root, ".agents/skills"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(root, ".agents/skills", entry.name, "SKILL.md"))
+    .filter((file) => fs.existsSync(file));
+  assert.ok(skillFiles.reduce((sum, file) => sum + fs.statSync(file).size, 0) < 20000);
   assert.match(designSkill, /full design\.md is missing/);
   assert.match(designSkill, /Do not invent|do not invent/);
-  assert.match(designSkill, /data model\/schema, migration/);
+  assert.match(designSkill, /data model/);
+  assert.ok(Buffer.byteLength(designSkill, "utf8") <= 2500);
   const tasksSkill = fs.readFileSync(path.join(root, ".agents/skills/matspec-tasks/SKILL.md"), "utf8");
-  assert.match(tasksSkill, /Ask at most 3 clarification questions per turn/);
-  assert.match(tasksSkill, /task boundaries, file scope/);
-  assert.match(tasksSkill, /Do not use matspec generate\/apply for accepted-change evolution/);
+  assert.match(tasksSkill, /up to three high-value clarification questions/);
+  assert.match(tasksSkill, /file boundaries/);
+  assert.match(tasksSkill, /Implementation Approach/);
   const validationSkill = fs.readFileSync(path.join(root, ".agents/skills/matspec-validation/SKILL.md"), "utf8");
   assert.match(validationSkill, /whether implementation may start/);
-  assert.match(validationSkill, /Generation approval|generation approval/);
-  assert.match(validationSkill, /Validation-specific rules/);
-  assert.match(validationSkill, /needs revision before implementation/);
+  assert.match(validationSkill, /verdict=allow\|revise/);
+  assert.match(validationSkill, /Never bypass a validation blocker/);
   assert.ok(fs.existsSync(path.join(root, ".agents/skills/matspec-validation/SKILL.md")));
 
   const list = json(run(["--path", root, "integration", "list", "--json"]));
@@ -397,7 +597,7 @@ test("validate reports lightweight proposal quality warnings", () => {
   const root = tempProject();
   const change = "REQ20260428-owner-phone-search";
   json(run(["init", root, "--integration", "none", "--json"]));
-  json(run(["--path", root, "start", change, "--json"]));
+  json(run(["--path", root, "start", change, "--profile", "full", "--json"]));
 
   const proposalFile = path.join(root, "matspec/changes", change, "proposal.md");
   fs.writeFileSync(proposalFile, "# Proposal\n\nAdd phone search.\n", "utf8");
@@ -449,7 +649,7 @@ test("done requires full spec and design to be refreshed after validation", () =
   json(run(["init", root, "--integration", "none", "--json"]));
   writeProjectFile(root, "matspec/specs/spec.md", "# Existing SPEC\n\n## 1. Component Purpose\nExisting.\n");
   writeProjectFile(root, "matspec/specs/design.md", "# Existing DESIGN\n\n## 1. Design Overview\nExisting.\n");
-  json(run(["--path", root, "start", change, "--json"]));
+  json(run(["--path", root, "start", change, "--profile", "full", "--json"]));
 
   const changeDir = path.join(root, "matspec/changes", change);
   const files = [
@@ -476,7 +676,7 @@ test("done requires full spec and design to be refreshed after validation", () =
         "- None"
       ].join("\n")
     ],
-    ["delta-spec.md", "# Delta Spec\n\n## ADDED Requirements\n- Phone lookup.\n## MODIFIED Requirements\nNone\n## REMOVED Requirements\nNone\n"],
+    ["delta-spec.md", "# Delta Spec\n\n## ADDED Requirements\n- REQ-PHONE-LOOKUP Phone lookup.\n## MODIFIED Requirements\nNone\n## REMOVED Requirements\nNone\n"],
     ["delta-design.md", "# Delta Design\n\nUse existing owner repository pattern.\n"],
     [
       "tasks.md",
@@ -519,6 +719,13 @@ test("done requires full spec and design to be refreshed after validation", () =
   fs.appendFileSync(path.join(root, "matspec/specs/design.md"), "\n## Phone Lookup Design\nMerged from delta-design.\n", "utf8");
 
   result = run(["--path", root, "done", change, "--json"]);
+  assert.equal(result.status, 1);
+  payload = JSON.parse(result.stdout);
+  assert.equal(payload.code, "DELTA_COVERAGE_MISSING");
+  assert.deepEqual(payload.missing, ["REQ-PHONE-LOOKUP"]);
+
+  fs.appendFileSync(path.join(root, "matspec/specs/spec.md"), "\nTraceability: REQ-PHONE-LOOKUP.\n", "utf8");
+  result = run(["--path", root, "done", change, "--json"]);
   assert.equal(result.status, 0, result.stderr);
   payload = JSON.parse(result.stdout);
   assert.ok(payload.ok);
@@ -531,12 +738,12 @@ test("archive enforces done finalization unless force is used", () => {
   json(run(["init", root, "--integration", "none", "--json"]));
   writeProjectFile(root, "matspec/specs/spec.md", "# Existing SPEC\n\n## 1. Component Purpose\nExisting.\n");
   writeProjectFile(root, "matspec/specs/design.md", "# Existing DESIGN\n\n## 1. Design Overview\nExisting.\n");
-  json(run(["--path", root, "start", change, "--json"]));
+  json(run(["--path", root, "start", change, "--profile", "full", "--json"]));
 
   const changeDir = path.join(root, "matspec/changes", change);
   for (const [file, body] of [
     ["proposal.md", "# Proposal\n\n## 1. Requested Change vs Real Need\nReal need.\n## 5. Scope Boundary\nScope.\n## 6. Non-Goals\nNone.\n## 7. Confirmed Decisions\nConfirmed.\n## 8. Assumptions and Open Questions\nNone.\n## 0. User Clarification Log\n### 0.3 Decision Ledger\nLedger.\n"],
-    ["delta-spec.md", "# Delta Spec\n\n## ADDED Requirements\n- Rule.\n## MODIFIED Requirements\nNone\n## REMOVED Requirements\nNone\n"],
+    ["delta-spec.md", "# Delta Spec\n\n## ADDED Requirements\n- REQ-ARCHIVE-001 Rule.\n## MODIFIED Requirements\nNone\n## REMOVED Requirements\nNone\n"],
     ["delta-design.md", "# Delta Design\n\nDesign.\n"],
     ["tasks.md", "# Tasks\n\n- Add validation tests.\n- Done finalization refreshes matspec/specs/spec.md from delta-spec.md.\n- Done finalization refreshes matspec/specs/design.md from delta-design.md.\n"],
     ["validation.md", "# Validation\n\nImplementation may start.\n"]
@@ -2315,6 +2522,21 @@ test("apply rejects runner environment chatter in generated artifacts", () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.code, "APPLY_QUALITY_FAILED");
   assert.ok(payload.findings.some((finding) => finding.code === "RUNNER_ENVIRONMENT_TEXT"));
+});
+
+test("apply permits architecture prose that mentions filesystem access", () => {
+  const root = tempProject();
+  json(run(["init", root, "--integration", "none", "--json"]));
+  const generated = json(run(["--path", root, "generate", "--json"]));
+  fs.appendFileSync(
+    path.join(root, ".matspec-cli/runs", generated.runId, "design.md"),
+    "\nThe in-memory Linter boundary must remain independent of filesystem access so callers can provide source text directly.\n",
+    "utf8"
+  );
+
+  const result = run(["--path", root, "apply", "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(JSON.parse(result.stdout).ok);
 });
 
 test("generate module writes a focused run with full artifacts", () => {
