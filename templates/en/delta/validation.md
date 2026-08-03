@@ -11,7 +11,9 @@ matspec:
 
 # [REQ ID] Consistency Validation
 
-> This document checks coverage and conflicts across proposal, delta-spec, delta-design, tasks, and the full documents before implementation.
+> This document checks consistency across proposal, delta-spec, delta-design, and tasks before implementation, using the full documents as the pre-change compatibility baseline.
+>
+> Delta documents are the source of truth for this change. New requirements being absent from the pre-change full documents is expected and non-blocking; refreshing the full documents belongs to post-implementation done finalization.
 
 ## 1. Validation Summary
 
@@ -20,8 +22,8 @@ matspec:
 | Proposal <-> Delta-Spec | [pass/warn/fail] | [count] | [summary] |
 | Delta-Spec <-> Delta-Design | [pass/warn/fail] | [count] | [summary] |
 | Delta-Design <-> Tasks | [pass/warn/fail] | [count] | [summary] |
-| Delta <-> Full Documents | [pass/warn/fail] | [count] | [summary] |
-| Planned Done Finalization | [pass/warn/fail] | [count] | [spec.md/design.md refresh tasks] |
+| Delta vs Pre-Change Baseline Compatibility | [pass/warn/fail] | [count] | [real conflicts or regressions only] |
+| Post-Implementation Baseline Refresh Plan (Non-Blocking) | [planned/missing] | [count] | [spec.md/design.md done-finalization tasks] |
 | Decision Clarification Gate | [pass/warn/fail] | [count] | [unconfirmed decisions] |
 | Pre-Implementation Risk Gate | [pass/warn/fail] | [count] | [worktree, tests, migration, compatibility, concurrency] |
 
@@ -68,6 +70,8 @@ matspec:
 
 ## 5. Full Document Compatibility
 
+> Check only whether the delta conflicts with existing constraints or causes an unhandled regression. Do not fail because the full documents do not yet contain the added or modified requirements, and do not require baseline refresh before implementation.
+
 ### 5.1 spec.md
 
 | Check | Status | Notes |
@@ -92,14 +96,16 @@ matspec:
 | Boundary conditions | [yes/no/partial] | [notes] |
 | DFX constraints | [yes/no/partial] | [notes] |
 | Tests and verification | [yes/no/partial] | [notes] |
-| Done-stage spec.md refresh task | [yes/no/partial] | [notes] |
-| Done-stage design.md refresh task | [yes/no/partial] | [notes] |
+| Post-implementation done-stage spec.md refresh task | [yes/no/partial] | [add to tasks if missing; never require an early baseline refresh] |
+| Post-implementation done-stage design.md refresh task | [yes/no/partial] | [add to tasks if missing; never require an early baseline refresh] |
 
 ## 7. Issues and Fixes
 
 ### 7.1 Must Fix
 
 - [Issue]: [fix]
+
+> Valid blockers are limited to an inconsistent delta chain, missing requirement/design/task coverage, unconfirmed key decisions, non-executable verification, or a real conflict/regression against the baseline. "The baseline does not yet contain the delta" is not a valid blocker.
 
 ### 7.2 Should Fix
 

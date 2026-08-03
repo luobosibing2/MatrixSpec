@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { projectPaths } from "./project.js";
 import { listChanges, loadState, stageStatus, stagesOf, templateMarker } from "./state.js";
-import { workflowDrift } from "./workflow.js";
+import { evaluateStageChecks, workflowDrift } from "./workflow.js";
 import { tr } from "./i18n.js";
 
 const finding = (level, code, filePath, message, extra = {}) => ({ level, code, path: filePath, message, ...extra });
@@ -68,14 +68,7 @@ function validateChange(root, change, findings) {
 
 function validateChecks(file, relative, checks, findings) {
   const content = fs.readFileSync(file, "utf8");
-  for (const check of checks) {
-    let passed = true;
-    if (check.type === "file_not_empty") passed = Boolean(content.trim());
-    if (check.type === "must_contain_heading") {
-      const expected = String(check.value).replace(/\s+/g, "").toLowerCase();
-      passed = content.split(/\r?\n/).some((line) => /^#{1,6}\s+/.test(line) && line.replace(/\s+/g, "").toLowerCase().includes(expected.replace(/^#+/, "")));
-    }
-    if (check.type === "must_match_regex") passed = new RegExp(check.value, "i").test(content);
-    if (!passed) findings.push(finding("warn", check.code || "WORKFLOW_CHECK", relative, check.message || `未满足检查：${check.type}`));
+  for (const check of evaluateStageChecks(content, checks)) {
+    findings.push(finding("warn", check.code, relative, check.message));
   }
 }

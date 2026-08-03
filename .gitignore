@@ -1,3 +1,4 @@
 runs/
+.scratch/
 benchmark/doc-quality/work/
 node_modules/

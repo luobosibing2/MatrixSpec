@@ -16,6 +16,7 @@
     "test:e2e": "pwsh -NoLogo -NoProfile -File ./scripts/psmux-workflow-e2e.ps1",
     "test:e2e:codex-history": "pwsh -NoLogo -NoProfile -File ./scripts/psmux-codex-history-e2e.ps1",
     "test:e2e:codex-revision": "pwsh -NoLogo -NoProfile -File ./scripts/psmux-codex-history-e2e.ps1 -ExerciseRevision -Profile standard -Model gpt-5.6-terra -ReasoningEffort high -AllowDangerFullAccess -KeepArtifacts",
+    "test:e2e:codex-lean-smoke": "pwsh -NoLogo -NoProfile -File ./scripts/codex-lean-smoke.ps1",
     "prepare": "node ./scripts/fix-bin-perms.js",
     "postinstall": "node ./scripts/fix-bin-perms.js"
   },

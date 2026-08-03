@@ -135,11 +135,13 @@ Agent：需求已确认，接下来会继续拆解任务、实现和验证。
 | 模式 | 适合场景 | 区别 |
 |---|---|---|
 | Light，默认 | 普通功能、Bug 修复、中小型改动 | 不要求项目已经维护全量规格，澄清后直接进入任务和实现 |
+| Lean | 边界较清楚、希望减少流程开销的功能或修复 | 只确认一份高密度增量规格，然后由 Agent 直接实现和验证 |
 | Standard | 已有全量规格，需要实现前一致性检查 | 在写代码前增加规格、任务和现有基线的一致性验证 |
 | Full | 架构变化、安全、数据迁移、跨系统改动 | 增加独立设计阶段和实现前验证 |
 
 ```bash
 matspec start REQ-normal-change
+matspec start REQ-focused-change --profile lean
 matspec start REQ-validated-change --profile standard
 matspec start REQ-high-risk-change --profile full
 ```
@@ -148,9 +150,12 @@ matspec start REQ-high-risk-change --profile full
 
 ```text
 light（默认）: proposal → delta-spec → tasks → implementation → review → finalization/archive
+lean:          delta-spec → implementation/verification → archive
 standard:     proposal → delta-spec → tasks → validation → implementation → review → finalization/archive
 full:         proposal → delta-spec → delta-design → tasks → validation → implementation → review → finalization/archive
 ```
+
+Lean 会把会改变实现结果的问题一次性问完，将新增、修改、保持不变、失败处理、端到端传递和验收示例集中写入 `delta-spec.md`。你确认后，Agent 直接按这份规格修改代码并运行验证；不会额外生成 proposal、design、tasks、validation 或 review 文档。
 
 ## MatSpec 会替你守住什么
 
@@ -159,7 +164,7 @@ full:         proposal → delta-spec → delta-design → tasks → validation 
 - 工作流、模板和命令会随 change 冻结，发生漂移后阻断推进。
 - validation 或 review 给出 `revise` / `changes-required` 时不能继续完成。
 - 后续发现需求或设计问题时，可以带审计原因回退到更早阶段。
-- 完成前必须更新全量 `spec.md` / `design.md`，并通过项目验证。
+- Light、Standard 和 Full 在完成前必须更新全量 `spec.md` / `design.md`；Lean 以已确认的 `delta-spec.md` 和项目验证结果作为交付证据。
 - 每次变更最终归档到仓库，保留需求、实现和审查链路。
 
 ## 切换或增加 Coding Agent
@@ -220,7 +225,7 @@ matspec/
   changes/
     {change}/                    # 当前变更的文档、状态和冻结工作流
       proposal.md
-      delta-spec.md
+      delta-spec.md                 # Lean 只生成这一份变更文档
       delta-design.md            # Full 使用
       tasks.md
       validation.md              # Standard / Full 使用
@@ -250,7 +255,7 @@ matspec status
 matspec go --json
 matspec accept
 matspec back --to delta-spec --reason "validation blocker"
-matspec implement --run --json
+matspec implement --run --json      # Light / Standard / Full
 matspec review
 matspec done
 ```

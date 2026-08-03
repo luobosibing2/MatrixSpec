@@ -75,7 +75,7 @@ export function initProject(targetPath, options = {}) {
       ...existingDocs.map((item) => tr(options, `Existing full doc. Use matspec apply --force to overwrite: ${item}`, `已存在真实全量文档，如需覆盖请执行 matspec apply --force：${item}`))
     ],
     message: tr(options, `Checked MatSpec project: ${root}`, `已检查 matspec 项目：${root}`),
-    next: existingDocs.length || workflowProfile === "light"
+    next: existingDocs.length || ["light", "light-gpt56", "lean"].includes(workflowProfile)
       ? ["matspec start REQ-feature-name"]
       : ["matspec generate", "matspec show", "matspec apply"]
   };

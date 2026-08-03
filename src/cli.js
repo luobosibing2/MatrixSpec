@@ -198,11 +198,14 @@ function goCommand(options, explicit) {
   }
   const current = stagesOf(state).find((stage) => stage.key === state.currentStage);
   if (!current || state.currentStage === "completed") {
+    const requiresFullDocumentFinalization = (state.workflow?.finalization?.require_updated || []).length > 0;
     return {
       ok: true,
       change,
       nextAction: "done",
-      message: tr(options, "All workflow stages are confirmed. Complete finalization, then run matspec done.", "所有工作流阶段均已确认。完成全量文档最终化后执行 matspec done。"),
+      message: requiresFullDocumentFinalization
+        ? tr(options, "All workflow stages are confirmed. Complete finalization, then run matspec done.", "所有工作流阶段均已确认。完成全量文档最终化后执行 matspec done。")
+        : tr(options, "All workflow stages are confirmed. Run matspec done after verification and archive authorization.", "所有工作流阶段均已确认。验证通过并获得归档授权后执行 matspec done。"),
       next: ["matspec done"]
     };
   }
@@ -224,6 +227,7 @@ function goCommand(options, explicit) {
   const stage = currentStagePayload(paths.root, change, state, current, options);
   let nextAction;
   if (current.delegate) nextAction = "delegate-subagent";
+  else if (current.noFile && current.manualAccept) nextAction = "execute-stage";
   else nextAction = stage.status === "draft" ? "await_user_accept" : stage.status === "blocked" ? "complete_previous_stage" : "open_agent_stage";
   return {
     ok: true,
@@ -242,7 +246,13 @@ function goCommand(options, explicit) {
     next: nextAction === "await_user_accept"
       ? [tr(options, "Run matspec accept after user confirmation", "确认后执行 matspec accept")]
       : nextAction === "delegate-subagent"
-        ? [current.key === "implementation" ? "matspec implement --run --json" : `委托 ${current.delegate}`]
+        ? [current.key === "implementation" && state.workflow?.optimization?.implementationMode === "spec-driven"
+            ? `Delegate ${current.delegate} with the confirmed delta-spec; do not call matspec implement`
+            : current.key === "implementation"
+              ? "matspec implement --run --json"
+              : `委托 ${current.delegate}`]
+        : nextAction === "execute-stage"
+          ? [tr(options, "Execute the current stage from stage.inputs and stage.stageContract", "按 stage.inputs 与 stage.stageContract 直接执行当前阶段")]
         : [tr(options, "Run /matspec in your coding agent", "在 Coding Agent 中执行 /matspec")]
   };
 }
@@ -351,7 +361,7 @@ function helpText(commandLabel, optionLabel) {
 
 ${commandLabel}:
   matspec init [path]
-  matspec start|new <change> [--profile light|standard|full]
+  matspec start|new <change> [--profile light|light-gpt56|lean|standard|full]
   matspec list|status|go|next|accept|confirm
   matspec implement [--run|--task N|--complete N|--block N]
   matspec review [change]
@@ -376,7 +386,7 @@ ${optionLabel}:
   --design-template path
   --spec-template path
   --knowledge path
-  --profile light|standard|full (start only; default light)
+  --profile light|light-gpt56|lean|standard|full (start only; default light)
   --with-template (include the active template in go JSON)
   --json
   --force

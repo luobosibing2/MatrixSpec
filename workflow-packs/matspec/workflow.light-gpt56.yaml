@@ -1,0 +1,117 @@
+version: 1
+optimization:
+  targetModel: gpt-5.6-terra
+  targetReasoningEffort: high
+  interactionMode: decisive
+  draftWithoutGenerationApproval: true
+  clarificationMode: single-batch-product-decisions-only
+  implementationMode: batch
+  reviewMode: risk-surface-verification-ladder
+  enforceStageChecksOnAccept: true
+  continueAfterAccept: true
+  skillLoadMode: main-only-after-go
+  evidenceReuse: content-fingerprint
+  discoveryMode: symbol-first-bounded
+  verificationLadder:
+    - prove-tool-provenance
+    - static-contract-and-diff
+    - cheapest-external-consumer
+    - focused-risk-tests
+    - impacted-suite-once
+  questionPacket:
+    maxQuestions: 5
+    fields: [decision, why it matters, recommended default, alternatives]
+    repeatOnlyAfterNewUserEvidence: true
+  stageContracts:
+    proposal:
+      coverage: [actor, trigger, current behavior, expected behavior, boundaries, failures, non-goals]
+      discovery: Start at user-named symbols and one analogous path; open only matched regions.
+    delta-spec:
+      riskSurfaces: [entry points, execution routes, mode combinations, state or chunk boundaries, outputs, failures, compatibility]
+      oracleRule: Every requirement and applicable risk surface needs an observable oracle.
+      requiredHeading: "## Risk Surface Coverage"
+    tasks:
+      riskSurfaces: [entry points, execution routes, mode combinations, state or chunk boundaries, public consumers, failures]
+      mappingRule: Every applicable surface needs a requirement, file owner, and cheapest verification check.
+      requiredHeading: "## Risk-to-Verification Map"
+    implementation:
+      executionRule: Implement dependent behavior clusters in one session; record each task without go/status between tasks.
+      verificationRule: Follow verificationLadder; rerun only after relevant change; run the impacted suite once.
+    review:
+      riskSurfaces: [entry points, execution routes, mode combinations, state or chunk boundaries, public consumers, failures]
+      evidenceOrder: delta and criteria, diff and changed paths, tool provenance, cheapest external check, focused tests
+      requiredHeading: "## Risk Surface Audit"
+stages:
+  - key: proposal
+    file: proposal.md
+    label: 需求澄清
+    command: matspec.proposal
+    template: templates/delta/proposal.md
+    required_for_done: true
+  - key: delta-spec
+    file: delta-spec.md
+    label: 规格增量
+    command: matspec.delta-spec
+    template: templates/delta/delta-spec.md
+    requiresFullSpec: false
+    requiresFullDesign: false
+    required_for_done: true
+    additionalChecks:
+      - code: G56201
+        type: must_match_regex
+        value: "^##\\s+Risk Surface Coverage\\s*$"
+        message: delta-spec.md must include the risk-surface coverage matrix.
+      - code: G56202
+        type: must_match_regex
+        value: "\\bREQ-[A-Z0-9][A-Z0-9._-]*\\b"
+        message: delta-spec.md must contain stable REQ-* identifiers.
+  - key: tasks
+    file: tasks.md
+    label: 任务拆解
+    command: matspec.tasks
+    template: templates/delta/tasks.md
+    inputs:
+      - matspec/specs/spec.md
+      - matspec/specs/design.md
+      - delta-spec.md
+    requiresFullSpec: false
+    requiresFullDesign: false
+    required_for_done: true
+    additionalChecks:
+      - code: G56301
+        type: must_match_regex
+        value: "^##\\s+Risk-to-Verification Map\\s*$"
+        message: tasks.md must map risk surfaces to implementation and verification.
+  - key: implementation
+    label: 实现
+    command: matspec.implement
+    delegate: task-executor
+    noFile: true
+    inputs:
+      - tasks.md
+    required_for_done: true
+  - key: review
+    file: review.md
+    label: 实现审查
+    command: matspec.review
+    template: templates/delta/review.md
+    inputs:
+      - proposal.md
+      - delta-spec.md
+      - tasks.md
+    requiresFullSpec: false
+    requiresFullDesign: false
+    delegate: stage-generator
+    required_for_done: true
+    additionalChecks:
+      - code: G56501
+        type: must_match_regex
+        value: "^##\\s+Risk Surface Audit\\s*$"
+        message: review.md must audit every applicable risk surface.
+finalization:
+  require_updated:
+    - matspec/specs/spec.md
+    - matspec/specs/design.md
+  coverage:
+    - delta: matspec/changes/{change}/delta-spec.md
+      full: matspec/specs/spec.md

@@ -1,0 +1,105 @@
+version: 1
+optimization:
+  targetModel: gpt-5.6-terra
+  targetReasoningEffort: high
+  interactionMode: decisive
+  draftWithoutGenerationApproval: true
+  clarificationMode: single-batch-decision-changing-only
+  implementationMode: spec-driven
+  reviewMode: none
+  enforceStageChecksOnAccept: true
+  continueAfterAccept: true
+  contextHandoff: confirmed-delta-spec-only
+  rereadPolicy: reread-only-after-requirement-change-or-unresolved-ambiguity
+  questionPacket:
+    maxQuestions: 12
+    fields: [decision, why-it-matters, recommended-default, alternatives]
+    repeatOnlyAfterNewUserEvidence: true
+  stageContracts:
+    delta-spec:
+      discoveryRule: Inspect only enough repository evidence to distinguish changed behavior, preserved behavior, and real integration seams.
+      coverage:
+        - goal-and-scope
+        - added-modified-removed
+        - preserved-behavior
+        - inputs-defaults-ordering-precedence
+        - failures-and-fallback
+        - end-to-end-propagation
+        - public-contract
+        - acceptance-examples
+        - non-goals
+      requirementRule: Every changed behavior must have a stable REQ-* identifier and a decidable observable oracle.
+      decisionRule: Ask one comprehensive batch containing only questions whose answer can change the product contract.
+      implementationBoundary: Specify observable behavior and architectural seams, not file paths, helper names, or a patch.
+    implementation:
+      executionRule: Read the confirmed delta-spec once, derive a compact requirement checklist, then implement directly in the current repository.
+      contextRule: Carry only the confirmed delta-spec and current repository into implementation; do not create proposal, design, tasks, validation, or review artifacts.
+      rereadRule: Reopen the delta-spec only when the user changes a requirement or an unresolved ambiguity blocks implementation.
+      verificationRule: Verify every applicable REQ-* oracle and run the smallest relevant regression suite before accepting implementation.
+stages:
+  - key: delta-spec
+    file: delta-spec.md
+    label: 增量规格
+    command: matspec.lean-spec
+    agentCommand: /matspec.lean-spec
+    objective: Produce one confirmed, high-density behavioral delta contract for direct implementation.
+    template: templates/delta/lean-spec.md
+    inputs: []
+    requiresFullSpec: false
+    requiresFullDesign: false
+    required_for_done: true
+    checks:
+      - code: LEAN001
+        type: must_match_regex
+        value: "\\bREQ-[A-Z0-9][A-Z0-9._-]*\\b"
+        message: delta-spec.md must contain stable REQ-* identifiers.
+        enforceOnAccept: true
+      - code: LEAN002
+        type: must_match_regex
+        value: "^##\\s+(Preserved Behavior|保持不变的行为)\\s*$"
+        message: delta-spec.md must state the behavior that must remain unchanged.
+        enforceOnAccept: true
+      - code: LEAN003
+        type: must_match_regex
+        value: "^##\\s+(Inputs, Defaults, Ordering, and Precedence|输入、默认值、顺序与优先级)\\s*$"
+        message: delta-spec.md must close input, default, ordering, and precedence semantics.
+        enforceOnAccept: true
+      - code: LEAN004
+        type: must_match_regex
+        value: "^##\\s+(Failures and Fallback|失败与回退)\\s*$"
+        message: delta-spec.md must define failure and fallback behavior.
+        enforceOnAccept: true
+      - code: LEAN005
+        type: must_match_regex
+        value: "^##\\s+(End-to-End Propagation|端到端传递)\\s*$"
+        message: delta-spec.md must define how the change crosses its integration seams.
+        enforceOnAccept: true
+      - code: LEAN006
+        type: must_match_regex
+        value: "^##\\s+(Public Contract|对外契约)\\s*$"
+        message: delta-spec.md must define the observable public contract.
+        enforceOnAccept: true
+      - code: LEAN007
+        type: must_match_regex
+        value: "^##\\s+(Acceptance Examples|验收示例)\\s*$"
+        message: delta-spec.md must include concrete acceptance examples.
+        enforceOnAccept: true
+      - code: LEAN008
+        type: must_match_regex
+        value: "^##\\s+(Non-goals|非目标)\\s*$"
+        message: delta-spec.md must state explicit non-goals.
+        enforceOnAccept: true
+  - key: implementation
+    label: 实现与验证
+    command: matspec.lean-implement
+    agentCommand: /matspec.lean-implement
+    objective: Implement the confirmed delta specification directly and verify every applicable oracle.
+    delegate: null
+    noFile: true
+    manualAccept: true
+    inputs:
+      - delta-spec.md
+    required_for_done: true
+finalization:
+  require_updated: []
+  coverage: []

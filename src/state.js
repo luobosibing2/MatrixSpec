@@ -5,7 +5,7 @@ import YAML from "yaml";
 import { FINALIZATION_FILES } from "./constants.js";
 import { projectPaths } from "./project.js";
 import { isZh, tr } from "./i18n.js";
-import { assertNoLocalPackOverride, loadWorkflow, resolveStageTemplate, snapshotWorkflow, workflowDrift } from "./workflow.js";
+import { assertNoLocalPackOverride, evaluateStageChecks, loadWorkflow, resolveStageTemplate, snapshotWorkflow, workflowDrift } from "./workflow.js";
 import { loadTemplateForAgent } from "./customization.js";
 import { parseStageVerdict } from "./stage-verdict.js";
 import { nowStamp, readJson, rel, sha256, slugify, today, writeJson } from "./util.js";
@@ -176,6 +176,25 @@ export function acceptStage(options = {}, explicitChange, explicitStage) {
     if (marker?.strong) {
       throw codedError(tr(options, `Stage file still looks like a template: ${stage.file}`, `阶段文件仍像模板：${stage.file}`), "STAGE_FILE_LOOKS_TEMPLATE", marker);
     }
+    if (state.workflow?.optimization?.enforceStageChecksOnAccept) {
+      // Built-in checks predate acceptance gating and are intentionally
+      // diagnostic: they detect weak structure without forcing every valid
+      // artifact into the default template. Model-specific profiles opt
+      // individual checks into the hard gate with enforceOnAccept.
+      const acceptanceChecks = (stage.checks || []).filter((check) => check.enforceOnAccept === true);
+      const findings = evaluateStageChecks(content, acceptanceChecks);
+      if (findings.length) {
+        return {
+          ok: false,
+          code: "STAGE_CHECKS_FAILED",
+          change,
+          stage: stage.key,
+          findings,
+          message: tr(options, `${stage.key} does not satisfy its frozen acceptance checks.`, `${stage.key} 未满足冻结的阶段验收检查。`),
+          next: [tr(options, `Revise ${stage.file}, then run matspec accept again.`, `修订 ${stage.file} 后再次执行 matspec accept。`)]
+        };
+      }
+    }
     const verdict = parseStageVerdict(stage.key, content);
     if (!verdict.ok) return { ...verdict, change, stage: stage.key };
     if (verdict.required && verdict.blocked) {
@@ -208,6 +227,9 @@ export function acceptStage(options = {}, explicitChange, explicitStage) {
   }
   saveState(paths.root, change, state);
   const next = stagesOf(state).find((item) => item.key === state.currentStage) || null;
+  const continueAfterAccept = Boolean(next && state.workflow?.optimization?.continueAfterAccept);
+  const specDrivenImplementation = next?.key === "implementation" && state.workflow?.optimization?.implementationMode === "spec-driven";
+  const requiresFullDocumentFinalization = (state.workflow?.finalization?.require_updated || []).length > 0;
   return {
     ok: true,
     change,
@@ -215,12 +237,35 @@ export function acceptStage(options = {}, explicitChange, explicitStage) {
     acceptedStage: stage.key,
     acceptedLabel: stage.label || stage.name,
     nextStage: next,
+    ...(continueAfterAccept ? {
+      continuation: {
+        enabled: true,
+        nextAction: next.key === "review"
+          ? "enter-review"
+          : next.key === "implementation"
+            ? specDrivenImplementation ? "implement-from-spec" : "execute-task-batch"
+            : "draft-next-stage",
+        stage: currentStagePayload(paths.root, change, state, next, options)
+      }
+    } : {}),
     completed: state.currentStage === "completed",
     waitForImplementation: next?.key === "implementation",
     message: next
       ? tr(options, `Accepted ${stage.key}; moving to ${next.label || next.name}.`, `已确认 ${stage.key}，进入 ${next.label || next.name}。`)
-      : tr(options, `Accepted ${stage.key}; run matspec done after finalization.`, `已确认 ${stage.key}；完成全量文档最终化后执行 matspec done。`),
-    next: next ? ["matspec go --json"] : ["更新全量 spec/design", "matspec done"]
+      : requiresFullDocumentFinalization
+        ? tr(options, `Accepted ${stage.key}; run matspec done after finalization.`, `已确认 ${stage.key}；完成全量文档最终化后执行 matspec done。`)
+        : tr(options, `Accepted ${stage.key}; run matspec done after verification and archive authorization.`, `已确认 ${stage.key}；验证通过并获得归档授权后执行 matspec done。`),
+    next: next
+      ? continueAfterAccept
+        ? [next.key === "review"
+            ? "matspec review --json"
+            : next.key === "implementation"
+              ? specDrivenImplementation
+                ? "Implement from continuation.stage inputs; do not call matspec implement"
+                : "matspec implement --run --json"
+              : "Continue with continuation.stage without another matspec go"]
+        : ["matspec go --json"]
+      : requiresFullDocumentFinalization ? ["更新全量 spec/design", "matspec done"] : ["matspec done"]
   };
 }
 
@@ -379,6 +424,9 @@ export function currentStagePayload(root, change, state, stage, options = {}) {
   const includeTemplate = Boolean(options.with_template || options.verbose);
   const template = includeTemplate ? (resolveStageTemplate(root, stage) || loadTemplateForAgent(root, stage.key)) : null;
   const filePath = stage.file ? `matspec/changes/${change}/${stage.file}` : null;
+  const optimization = state.workflow?.optimization || null;
+  const { stageContracts = null, ...profileOptimization } = optimization || {};
+  const stageRecord = ensureStageRecord(state, stage);
   return {
     index: index + 1,
     total: stagesOf(state).length,
@@ -388,7 +436,8 @@ export function currentStagePayload(root, change, state, stage, options = {}) {
     ...(stage.file ? {
       file: filePath,
       filePath,
-      allowedWritePath: filePath
+      allowedWritePath: filePath,
+      artifact: documentEvidence(root, filePath, stageRecord)
     } : {}),
     command: stage.command,
     agentCommand: stage.agentCommand || `/${stage.command}`,
@@ -399,23 +448,44 @@ export function currentStagePayload(root, change, state, stage, options = {}) {
     objective: stage.objective,
     delegate: stage.delegate,
     noFile: stage.noFile,
+    manualAccept: stage.manualAccept,
     requiresFullSpec: Boolean(stage.requiresFullSpec),
     requiresFullDesign: Boolean(stage.requiresFullDesign),
-    requiresUserGenerationApproval: !stage.noFile,
+    requiresUserGenerationApproval: !stage.noFile && !optimization?.draftWithoutGenerationApproval,
+    ...(optimization ? { optimization: profileOptimization } : {}),
+    ...(stageContracts?.[stage.key] ? { stageContract: stageContracts[stage.key] } : {}),
     inputs: (stage.inputs || []).map((input) => {
       const inputPath = input.endsWith(".md") && !input.startsWith("matspec/")
         ? `matspec/changes/${change}/${input}`
         : input;
+      const inputStage = stagesOf(state).find((item) => item.file && inputPath === `matspec/changes/${change}/${item.file}`);
+      const inputRecord = inputStage ? ensureStageRecord(state, inputStage) : null;
       return {
-        path: inputPath,
+        ...documentEvidence(root, inputPath, inputRecord),
         required: inputPath === "matspec/specs/spec.md"
           ? Boolean(stage.requiresFullSpec)
           : inputPath === "matspec/specs/design.md"
             ? Boolean(stage.requiresFullDesign)
-            : inputPath !== "matspec/service-context.md",
-        exists: fs.existsSync(path.join(root, inputPath))
+            : inputPath !== "matspec/service-context.md"
       };
     })
+  };
+}
+
+function documentEvidence(root, relativePath, record = null) {
+  const absolute = path.join(root, relativePath);
+  const exists = fs.existsSync(absolute);
+  return {
+    path: relativePath,
+    exists,
+    ...(exists ? {
+      sha256: sha256(absolute),
+      bytes: fs.statSync(absolute).size
+    } : {}),
+    ...(record?.confirmedAt ? {
+      confirmed: Boolean(record.confirmed),
+      confirmedAt: record.confirmedAt
+    } : {})
   };
 }
 
@@ -435,7 +505,7 @@ function confirmStageInState(state, stage, verdict = null) {
   state.history.push({ action: "confirm-stage", stage: stage.key, timestamp });
   const stages = stagesOf(state);
   let index = stages.indexOf(stage) + 1;
-  while (index < stages.length && stages[index].noFile && !stages[index].delegate) {
+  while (index < stages.length && stages[index].noFile && !stages[index].delegate && !stages[index].manualAccept) {
     const auto = ensureStageRecord(state, stages[index]);
     Object.assign(auto, { status: "confirmed", clarified: true, confirmed: true, confirmedAt: timestamp });
     state.history.push({ action: "auto-confirm-stage", stage: stages[index].key, timestamp });
@@ -496,6 +566,7 @@ function workflowForFile(workflow) {
   return {
     version: workflow.version,
     ...(workflow.profile ? { profile: workflow.profile } : {}),
+    ...(workflow.optimization ? { optimization: workflow.optimization } : {}),
     ...(workflow.extends ? { extends: workflow.extends } : {}),
     stages: workflow.stages.map(({ templateRef, commandRef, ...stage }) => ({ ...stage, templateRef, commandRef })),
     finalization: workflow.finalization

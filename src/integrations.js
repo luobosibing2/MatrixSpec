@@ -42,6 +42,8 @@ function opencodeFiles(options = {}) {
   "matspec.proposal.md": opencodeCommand("matspec.proposal", "MatSpec Requirement Clarification", stageCommandBody(stageDefinitions.proposal, options)),
   "matspec.delta-spec.md": opencodeCommand("matspec.delta-spec", "MatSpec Spec Delta", stageCommandBody(stageDefinitions["delta-spec"], options)),
   "matspec.delta-design.md": opencodeCommand("matspec.delta-design", "MatSpec Design Delta", stageCommandBody(stageDefinitions["delta-design"], options)),
+  "matspec.lean-spec.md": opencodeCommand("matspec.lean-spec", "MatSpec Lean Delta Spec", leanSpecBody()),
+  "matspec.lean-implement.md": opencodeCommand("matspec.lean-implement", "MatSpec Lean Implementation", leanImplementBody()),
   "matspec.tasks.md": opencodeCommand("matspec.tasks", "MatSpec Task Breakdown", stageCommandBody(stageDefinitions.tasks, options)),
   "matspec.validation.md": opencodeCommand("matspec.validation", "MatSpec Consistency Validation", stageCommandBody(stageDefinitions.validation, options))
   ,"matspec.implement.md": opencodeCommand("matspec.implement", "MatSpec Implementation", "Run `matspec implement --run --json`, execute one returned task at a time, and report DONE, DONE_WITH_CONCERNS, BLOCKED, or NEEDS_CONTEXT."),
@@ -188,11 +190,11 @@ const stageDefinitions = {
     name: "Consistency validation",
     file: "validation.md",
     command: "/matspec.validation",
-    objective: "Check coverage and conflicts across proposal, delta-spec, tasks, optional delta-design, and the full baseline docs.",
+    objective: "Validate the change delta chain: proposal, delta-spec, optional delta-design, and tasks. Use full baseline docs only to detect real conflicts or regressions.",
     inputs: ["full spec.md", "full design.md", "proposal.md", "delta-spec.md", "optional delta-design.md in full profile", "tasks.md"],
     nextName: "Implementation",
-    artifactRule: "Check document-chain coverage, conflicts, missing scenarios, DFX constraints, and test tasks. Begin with YAML front matter containing matspec.stage=validation, matspec.verdict=allow|revise, blockers, repairTarget, and reviseStages. Use allow only when implementation may start; otherwise use revise, list blockers, and route repair.",
-    contextRule: "If full spec.md or design.md is missing, block validation or mark it as high risk. Do not invent context.",
+    artifactRule: "Check proposal -> delta-spec -> optional delta-design (or the tasks Implementation Approach in standard profile) -> tasks coverage, missing scenarios, DFX constraints, and executable verification. Treat delta artifacts as the source of truth for this change. Use the full baseline only for compatibility: a new requirement being absent from the pre-change baseline is expected and MUST NOT be reported as a blocker. Begin with YAML front matter containing matspec.stage=validation, matspec.verdict=allow|revise, blockers, repairTarget, and reviseStages. Use allow when the delta chain is consistent and implementable; otherwise use revise, list blockers, and route repair.",
+    contextRule: "Read stage.inputs.required. Missing required full docs in standard/full still blocks because compatibility cannot be checked; when full docs exist, treat them as the pre-change baseline. Do not require them to already contain the delta. Baseline refresh belongs to done finalization after implementation; validation MUST NOT require it before implementation. Block only on a real baseline conflict/regression or an inconsistent, incomplete, ambiguous, or non-executable delta chain. Do not invent context.",
     clarificationFocus: "coverage, conflict criteria, missing scenarios, verification standard, and whether implementation may start",
     generationFocus: "the validation checks and expected conclusion standard",
     completionFocus: "coverage conclusion, conflicts, blockers, and whether implementation may start"
@@ -209,11 +211,48 @@ ${body}
 }
 
 function reviewCommandBody() {
-  return "Run `matspec review --json`, then `matspec go --json`; independently review implementation evidence and write only review.md. Preserve YAML front matter. In light no-baseline mode, review against confirmed change documents, repository behavior, and executed tests; missing optional full docs are not a blocker. Set `matspec.verdict` to `approved` only when acceptable; otherwise use `changes-required`, list blockers, and set `repairTarget` to implementation or the earliest document stage that must change.";
+  return "Run `matspec review --json`, then `matspec go --json`; independently review implementation evidence and write only review.md. Preserve YAML front matter. In light no-baseline mode, missing optional full docs are not a blocker. For `light-gpt56`, turn stage.stageContract.riskSurfaces into a checklist, follow stageContract.evidenceOrder and optimization.verificationLadder, and expand only for an unresolved item. Approve only when every applicable item has diff and verification evidence; otherwise use `changes-required`, list blockers, and set `repairTarget`.";
 }
 
 function backCommandBody() {
   return "Run `matspec status --json`, explain which confirmed stages will be invalidated, obtain the user's reason, then run `matspec back --to <stage> --reason \"<reason>\" --json`. Never edit `.matspec-state.json` directly.";
+}
+
+function strongModelFastPath() {
+  return `Strong-model fast path (only when matspec go returns profile=light-gpt56):
+Use stageContract and optimization; load no other stage skill. Ask one questionPacket, reuse input hashes, bound search, map risks to oracles, and draft if approval=false. After accept, continue from continuation.stage without go. Follow taskBatch and verificationLadder; preserve confirmation, review, repair, verification, and done guards.`;
+}
+
+function strongModelStageRule() {
+  return "For light-gpt56, obey go.stageContract. Batch product questions; reuse hashes; bound search; map risks to oracles; draft if approval=false.";
+}
+
+function leanFlowPath() {
+  return `Lean two-stage path (only when matspec go returns profile=lean; this overrides the generic document, implementation, review, and finalization steps below):
+1. At delta-spec, inspect only enough repository evidence to distinguish changed behavior, preserved behavior, and real integration seams. Ask one comprehensive batch of at most stage.optimization.questionPacket.maxQuestions questions, and include only decisions whose answers can change the product contract.
+2. Draft immediately without a pre-generation handshake. Write only the high-density delta-spec required by stage.stageContract. Use stable REQ-* IDs and observable oracles; do not prescribe file paths, helper names, or a patch. The user must still explicitly confirm the completed delta-spec before matspec accept.
+3. At implementation, do not call matspec implement and do not create proposal, design, tasks, validation, review, or full-spec artifacts. The implementation session receives only the confirmed delta-spec and current repository as workflow context. Execute directly in that session; do not spawn another agent solely to recreate the handoff. Read the spec once, derive a compact REQ-* checklist, and reopen it only after a requirement change or a blocking ambiguity.
+4. Verify each applicable oracle and the smallest relevant regression suite. Accept implementation only after explicit user acceptance. With explicit archive authorization, call matspec done; Lean has no full-document finalization.`;
+}
+
+function leanSpecBody() {
+  return `Execute only the Lean delta-spec stage.
+
+1. Call \`matspec go --json\`; require profile=lean and stage.key=delta-spec.
+2. Follow stage.stageContract and stage.optimization.questionPacket. Inspect only enough code to separate changed behavior, preserved behavior, and real integration seams. Ask one comprehensive batch containing only decision-changing product questions.
+3. Fetch stage.templateCommand when ready, then write only stage.allowedWritePath. Every changed behavior needs a stable REQ-* ID and decidable observable oracle. Cover scope, changed and preserved behavior, input/default/order/precedence rules, failure/fallback, propagation, public contract, acceptance examples, and non-goals.
+4. Do not prescribe file paths, helper names, or a patch. Do not create proposal, design, tasks, validation, or review artifacts.
+5. Ask the user to review the complete artifact. Run \`matspec accept --json\` only after explicit confirmation.`;
+}
+
+function leanImplementBody() {
+  return `Execute only the Lean implementation stage.
+
+1. Call \`matspec go --json\`; require profile=lean and stage.key=implementation. Do not call \`matspec implement\`; Lean has no tasks.md.
+2. Read the one confirmed delta-spec input once, derive a compact REQ-* checklist, and implement directly in the current repository. Reopen the spec only after a requirement change or when an unresolved ambiguity blocks implementation.
+3. Do not create proposal, design, tasks, validation, review, or full-spec artifacts. Modify only product code and tests required by the confirmed contract.
+4. Verify every applicable REQ-* oracle and run the smallest relevant regression suite. Report concrete commands and outcomes.
+5. After explicit acceptance, call \`matspec accept --json\`. Call \`matspec done --json\` only after explicit archive authorization.`;
 }
 
 function mainFlowBody(options = {}) {
@@ -221,8 +260,12 @@ function mainFlowBody(options = {}) {
 
 ${languagePolicy(options)}
 
+${strongModelFastPath()}
+
+${leanFlowPath()}
+
 1. Call \`matspec go --json\` first. Obey its frozen profile, current stage, inputs, nextAction, and allowedWritePath. Show the returned \`items\` verbatim when status is useful; the CLI owns fixed UI.
-2. For a document stage, read required inputs. Fetch the template only when needed with stage.templateCommand. Ask up to three questions that can change scope, behavior, data, compatibility, failure handling, or acceptance. If no blocker remains, list confirmed versus inferred decisions and request explicit "generate" authorization.
+2. For a document stage, read required inputs and fetch the template with stage.templateCommand only when needed. For ordinary profiles, ask up to three questions that can change scope, behavior, data, compatibility, failure handling, or acceptance; for light-gpt56, follow the fast path above. If no blocker remains, list confirmed versus inferred decisions. Request explicit "generate" authorization only when stage.requiresUserGenerationApproval is true; otherwise draft immediately.
 3. Write only allowedWritePath, remove placeholders, and do not edit implementation code or .matspec-state.json. Explicit "confirm/next" accepts only the displayed artifact; then call \`matspec accept --json\`.
 4. A validation \`revise\` or review \`changes-required\` verdict must route repair with \`matspec back --to ... --reason ... --json\`. Never bypass a structured blocker.
 5. At implementation, follow tasks.md, change code/tests, run verification, and confirm implementation before review. At review, independently test observable behavior and use the required structured verdict.
@@ -236,8 +279,10 @@ function stageCommandBody(stage, options = {}) {
 
 ${languagePolicy(options)}
 
+${strongModelStageRule()}
+
 1. Call \`matspec go --json\`. If stage.key is not \`${stage.key}\`, stop. Obey stage.inputs and stage.allowedWritePath; never infer a change directory.
-2. Read required inputs and call stage.templateCommand only when ready to draft. Ask up to three high-value clarification questions. Otherwise list confirmed and inferred decisions and require a fresh explicit "generate" reply; entering this stage is not generation approval.
+2. Read required inputs and call stage.templateCommand only when ready to draft. For ordinary profiles, ask up to three high-value clarification questions; for light-gpt56, ask only unresolved product decisions. Otherwise list confirmed and inferred decisions. Require a fresh explicit "generate" reply only when stage.requiresUserGenerationApproval is true; when false, draft immediately.
 3. Objective: ${stage.objective}
 4. Artifact rule: ${stage.artifactRule}
 5. Baseline rule: ${stage.contextRule}
@@ -253,7 +298,7 @@ function sharedClarificationGate(stage = null) {
     stageSpecific = `\nProposal-specific rules:\n1. Treat surface requests such as add a field, add a button, support search, optimize, improve, or make faster as proposed solutions until the user confirms the workflow problem, affected actor, success signal, scope boundary, and non-goals.\n2. Do not write implementation choices in proposal.md. Proposal owns why, what, boundaries, confirmation status, and impact preview only.\n3. The user can confirm proposal.md only when the real problem, boundaries, non-goals, and assumptions/open questions are explicit.`;
   }
   if (stage?.key === "validation") {
-    stageSpecific = `\nValidation-specific rules:\n1. Check proposal, delta-spec, delta-design, and tasks for unconfirmed decisions, agent-inferred decisions, or pending questions.\n2. Begin validation.md with a matspec YAML object containing stage: validation, verdict: allow|revise, blockers, repairTarget, and reviseStages. Set verdict to allow only when implementation may start. Otherwise use revise, list concrete blockers, and route to the earliest stages that must change.\n3. If any unconfirmed decision affects scope, business rules, data model, migration, compatibility, or test executability, the conclusion must be "needs revision before implementation", not "implementation may start".\n4. Check whether the current worktree has unrelated dirty files. If it does, record it as a pre-implementation risk and state whether it blocks implementation.`;
+    stageSpecific = `\nValidation-specific rules:\n1. Validate the change chain: proposal -> delta-spec -> delta-design when present (otherwise the tasks Implementation Approach) -> tasks. Check it for coverage, consistency, unconfirmed decisions, agent-inferred decisions, pending questions, and executable verification.\n2. Delta artifacts are the source of truth for the requested change. Full spec/design are pre-change compatibility references. The delta's new requirements being absent from full baseline documents is expected and MUST NOT be reported as a blocker.\n3. Baseline refresh belongs to done finalization after implementation. A task that plans that refresh is sufficient at validation time; validation MUST NOT require the full baseline to be refreshed before implementation.\n4. Begin validation.md with a matspec YAML object containing stage: validation, verdict: allow|revise, blockers, repairTarget, and reviseStages. Set verdict to allow when the delta chain is consistent, compatible, and implementable. Otherwise use revise, list concrete blockers, and route to the earliest delta stage that must change.\n5. If any unconfirmed decision affects scope, business rules, data model, migration, compatibility, or test executability, the conclusion must be "needs revision before implementation", not "implementation may start".\n6. Check whether the current worktree has unrelated dirty files. Record it as a pre-implementation risk and block only when it makes the planned implementation unsafe.`;
   }
 
   return `Clarification guardrails:
@@ -623,6 +668,6 @@ Explore the repository independently, read all confirmed MatSpec documents, and 
 function taskExecutorAsset() {
   return `# MatSpec task-executor
 
-Execute exactly one Task returned by \`matspec implement --task N --json\`. Verify it and report DONE, DONE_WITH_CONCERNS, BLOCKED, or NEEDS_CONTEXT.
+When \`matspec implement --run --json\` returns taskBatch, execute that batch in dependency order in the same session and record each task with the returned completion or blocking command. Otherwise execute exactly one Task returned by \`matspec implement --task N --json\`. Verify every task and report DONE, DONE_WITH_CONCERNS, BLOCKED, or NEEDS_CONTEXT.
 `;
 }

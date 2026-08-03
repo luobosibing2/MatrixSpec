@@ -69,7 +69,10 @@ export function loadPack(packKey = "matspec", requestedProfile) {
     const stage = normalizeStage({
       ...defaults,
       ...raw,
-      checks: raw.checks || (DEFAULT_CHECKS[raw.key] || []).map(([code, type, value, message]) => ({ code, type, value, message }))
+      checks: raw.checks || [
+        ...(DEFAULT_CHECKS[raw.key] || []).map(([code, type, value, message]) => ({ code, type, value, message })),
+        ...(raw.additionalChecks || []).map((check) => ({ ...check, enforceOnAccept: true }))
+      ]
     });
     if (!stage.noFile) {
       const template = safePackPath(packRoot, stage.template);
@@ -92,6 +95,7 @@ export function loadPack(packKey = "matspec", requestedProfile) {
     version: parsed.version || 1,
     source: "builtin",
     profile: profile.key,
+    ...(parsed.optimization ? { optimization: structuredClone(parsed.optimization) } : {}),
     pack: { key: manifest.key, name: manifest.name, description: manifest.description, utilityCommands: [...utilities] },
     extends: null,
     stages,
@@ -115,6 +119,7 @@ export function loadWorkflow(root, requestedProfile) {
         version: parsed.version || 1,
         source: "project",
         profile: "custom",
+        ...(parsed.optimization ? { optimization: structuredClone(parsed.optimization) } : {}),
         pack: null,
         extends: null,
         stages: (parsed.stages || []).map(normalizeStage),
@@ -142,6 +147,7 @@ export function loadWorkflow(root, requestedProfile) {
     version: parsed.version || 1,
     source: migrated ? "project-migrated" : parsed.extends ? "pack-extended" : "project",
     profile: parsed.extends ? base.profile : "custom",
+    ...((parsed.optimization || base.optimization) ? { optimization: structuredClone(parsed.optimization || base.optimization) } : {}),
     pack: parsed.extends ? base.pack : null,
     extends: parsed.extends || null,
     stages,
@@ -238,6 +244,26 @@ export function validateWorkflow(workflow, root = process.cwd()) {
   return workflow;
 }
 
+export function evaluateStageChecks(content, checks = []) {
+  const findings = [];
+  for (const check of checks) {
+    let passed = true;
+    if (check.type === "file_not_empty") passed = Boolean(String(content).trim());
+    if (check.type === "must_contain_heading") {
+      const expected = String(check.value).replace(/\s+/g, "").toLowerCase();
+      passed = String(content).split(/\r?\n/).some((line) => /^#{1,6}\s+/.test(line) && line.replace(/\s+/g, "").toLowerCase().includes(expected.replace(/^#+/, "")));
+    }
+    if (check.type === "must_match_regex") passed = new RegExp(check.value, "im").test(String(content));
+    if (!passed) findings.push({
+      code: check.code || "WORKFLOW_CHECK",
+      type: check.type,
+      value: check.value,
+      message: check.message || `Stage check failed: ${check.type}`
+    });
+  }
+  return findings;
+}
+
 export function snapshotWorkflow(root, workflow = loadWorkflow(root)) {
   return JSON.parse(JSON.stringify(workflow));
 }
@@ -324,6 +350,7 @@ function normalizeStage(stage) {
     required_for_done: stage.required_for_done ?? stage.required ?? false,
     ...(stage.delegate ? { delegate: stage.delegate } : {}),
     noFile: Boolean(stage.noFile),
+    manualAccept: Boolean(stage.manualAccept),
     checks: stage.checks || [],
     inputs: stage.inputs || [],
     requiresFullSpec: Boolean(stage.requiresFullSpec),

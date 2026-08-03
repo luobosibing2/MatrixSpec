@@ -4,6 +4,8 @@ description: Official MatSpec SDD workflow pack.
 defaultProfile: light
 profiles:
   light: workflow.light.yaml
+  light-gpt56: workflow.light-gpt56.yaml
+  lean: workflow.lean.yaml
   standard: workflow.standard.yaml
   full: workflow.yaml
 templatesRoot: templates

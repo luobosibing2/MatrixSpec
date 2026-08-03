@@ -56,13 +56,30 @@ export function implementCommand(options = {}, explicitChange) {
     record.status = "in_progress";
     state.history.push({ action: "enter-implementation", stage: "implementation", timestamp: new Date().toISOString() });
     saveState(paths.root, change, state);
+    const batchMode = state.workflow?.optimization?.implementationMode === "batch";
+    const verificationLadder = state.workflow?.optimization?.verificationLadder || [];
     return {
       ok: true,
       change,
-      nextAction: "delegate-subagent",
+      nextAction: batchMode ? "execute-task-batch" : "delegate-subagent",
       delegate: implementation.delegate || "task-executor",
       tasks: summarize(tasks),
-      next: ["matspec implement --task N --json"]
+      ...(batchMode ? {
+        executionMode: "single-session-batch",
+        taskBatch: tasks.filter((task) => task.status !== "done").map(compactTask),
+        verificationLadder,
+        verificationRules: [
+          "Prove the executable, module, or tool comes from this worktree before trusting test output.",
+          "Run the cheapest externally observable check before broad suites.",
+          "Rerun a command only after a relevant code, test, configuration, or environment change.",
+          "Run the impacted suite once after the batch; expand further only for a concrete risk or failure."
+        ],
+        completionCommand: "matspec implement --complete N --json",
+        blockingCommand: "matspec implement --block N \"reason\" --json"
+      } : {}),
+      next: batchMode
+        ? ["Execute taskBatch in dependency order in this session", "Record each task with matspec implement --complete N --json"]
+        : ["matspec implement --task N --json"]
     };
   }
 
@@ -207,6 +224,18 @@ function placeholderViolation(content) {
 
 function summarize(tasks) {
   return Object.fromEntries(["pending", "in_progress", "done", "blocked"].map((status) => [status, tasks.filter((task) => task.status === status).length]));
+}
+
+function compactTask(task) {
+  return {
+    id: task.id,
+    title: task.title,
+    files: task.files,
+    context: task.context || task.description,
+    do: task.do,
+    verify: task.verify,
+    status: task.status
+  };
 }
 
 function changeDocuments(change) {
